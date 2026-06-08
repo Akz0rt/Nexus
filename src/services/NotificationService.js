@@ -41,8 +41,16 @@ class NotificationService {
         }
 
         if (birthdayUsers.length > 0) {
+            const todayStr = CosmosDBService.getTodayDateString();
             for (const userId of birthdayUsers) {
                 try {
+                    // Idempotency: skip anyone already congratulated today so restarts,
+                    // the startup catch-up check, and the scheduled run don't duplicate.
+                    if (await CosmosDBService.wasCongratulatedOn(userId, todayStr)) {
+                        console.log(`Already congratulated ${userId} on ${todayStr}, skipping`);
+                        continue;
+                    }
+
                     const member = await targetChannel.guild.members.fetch(userId);
                     const displayName = member.displayName || member.user.username;
                     
@@ -73,6 +81,10 @@ class NotificationService {
                         content: `@everyone Внимание! Сегодня у <@${userId}> день рождения! 🎉🎂`,
                         embeds: [embed]
                     });
+
+                    // Mark only after a successful send so a send failure is retried,
+                    // not silently swallowed.
+                    await CosmosDBService.markCongratulated(userId, todayStr);
                 } catch (error) {
                     console.error(`Error sending birthday notification for user ${userId}:`, error);
                 }

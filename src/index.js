@@ -152,9 +152,9 @@ client.on(Events.MessageCreate, async message => {
     if (message.author.bot) return;
     if (!message.guild) return;
 
-    const isAIChannel = message.channelId === config.aiChannelId;
-    const isMentioned = message.mentions.has(client.user);
-    if (!isAIChannel && !isMentioned) return;
+    // Only respond in the dedicated AI channel — ignore everything else,
+    // even direct @mentions. Slash commands are unaffected (handled separately).
+    if (!config.aiChannelId || message.channelId !== config.aiChannelId) return;
 
     let userContent = message.content
         .replace(`<@${client.user.id}>`, '')

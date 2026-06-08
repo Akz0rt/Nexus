@@ -163,6 +163,47 @@ class CosmosDBService {
         return await this.getBirthdaysByDate(month, day);
     }
 
+    // Today's calendar date as "YYYY-MM-DD" in the configured timezone.
+    // Used as the idempotency key for daily congratulations.
+    getTodayDateString() {
+        const formatter = new Intl.DateTimeFormat('en-CA', {
+            timeZone: config.timezone,
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit'
+        });
+        return formatter.format(new Date()); // en-CA formats as YYYY-MM-DD
+    }
+
+    // True if this user has already been congratulated on the given date.
+    async wasCongratulatedOn(userId, dateStr) {
+        await this.initialize();
+
+        try {
+            const { resource: item } = await this.container.item(userId, userId).read();
+            return !!item && item.lastCongratulatedOn === dateStr;
+        } catch (error) {
+            if (error.code === 404) return false;
+            // Fail open (treat as "not congratulated") so a transient read error
+            // never silently skips a real birthday.
+            console.error(`Failed to read congratulation state for ${userId}:`, error);
+            return false;
+        }
+    }
+
+    // Record that this user was congratulated on the given date (idempotency marker).
+    async markCongratulated(userId, dateStr) {
+        await this.initialize();
+
+        try {
+            await this.container.item(userId, userId).patch([
+                { op: 'set', path: '/lastCongratulatedOn', value: dateStr }
+            ]);
+        } catch (error) {
+            console.error(`Failed to mark congratulation for ${userId}:`, error);
+        }
+    }
+
     async deleteBirthday(userId) {
         await this.initialize();
 
