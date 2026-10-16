@@ -28,6 +28,11 @@ module.exports = {
     adminPassword: process.env.ADMIN_PASSWORD || '',
     port: parseInt(process.env.PORT || process.env.WEBSITES_PORT || '3000', 10),
 
+    // Verification queue (defaults for GUILD_ID; per-guild overrides live in Cosmos guild_settings)
+    unverifiedRoleId: process.env.UNVERIFIED_ROLE_ID,
+    verifyQueueChannelId: process.env.VERIFY_QUEUE_CHANNEL_ID,
+    moduleVerificationEnabled: process.env.MODULE_VERIFICATION_ENABLED,
+
     // Activity sync
     activitySyncIntervalMinutes: parseInt(process.env.ACTIVITY_SYNC_INTERVAL_MINUTES || '5', 10),
     activityBackfillDays: parseInt(process.env.ACTIVITY_BACKFILL_DAYS || '30', 10),

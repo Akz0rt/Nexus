@@ -541,11 +541,9 @@ function startServer() {
     const app = createApp();
     const port = config.port;
 
-    app.listen(port, () => {
+    return app.listen(port, () => {
         console.log(`🌐 Admin dashboard listening on port ${port}`);
     });
-
-    return app;
 }
 
 module.exports = { startServer };

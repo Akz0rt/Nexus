@@ -1,0 +1,335 @@
+const { PermissionFlagsBits } = require('discord.js');
+const GuildSettingsService = require('../../services/GuildSettingsService');
+const AuditLogService = require('../../services/AuditLogService');
+const QueueCardService = require('./QueueCardService');
+const { buildCardMessage } = require('./card');
+const { computeNewRoles } = require('./roles');
+
+const UNKNOWN_MESSAGE = 10008;
+const UNKNOWN_MEMBER = 10007;
+const LOCK_WAIT_MS = 8000;
+const LOCK_POLL_MS = 100;
+
+/**
+ * Verification queue logic shared by Discord buttons and (later) the web panel.
+ * Discord is the source of truth: a member is in the queue iff they hold @unverified.
+ */
+class VerificationService {
+    constructor() {
+        // guildId:userId pairs with an action in flight — also tells event handlers
+        // to ignore the guildMemberUpdate/Remove our own action triggers.
+        this.locks = new Set();
+    }
+
+    lockKey(guildId, userId) {
+        return `${guildId}:${userId}`;
+    }
+
+    isLocked(guildId, userId) {
+        return this.locks.has(this.lockKey(guildId, userId));
+    }
+
+    /** Settings needed for the queue, or null if the module is off / not configured. */
+    async getQueueSettings(guildId) {
+        const settings = await GuildSettingsService.get(guildId);
+        if (!settings.modules.verification || !settings.unverifiedRoleId || !settings.verifyQueueChannelId) {
+            return null;
+        }
+        return settings;
+    }
+
+    async fetchMember(guild, userId) {
+        try {
+            return await guild.members.fetch({ user: userId, force: true });
+        } catch (error) {
+            if (error.code === UNKNOWN_MEMBER) return null;
+            throw error;
+        }
+    }
+
+    async fetchQueueChannel(guild, settings) {
+        const channel = await guild.client.channels.fetch(settings.verifyQueueChannelId);
+        if (!channel?.isTextBased?.()) {
+            throw new Error(`VERIFY_QUEUE_CHANNEL_ID (${settings.verifyQueueChannelId}) is not a text channel`);
+        }
+        return channel;
+    }
+
+    /** Edit the card message in place; resend it if the message was deleted. */
+    async renderCard(guild, card, member) {
+        const settings = await GuildSettingsService.get(guild.id);
+        const channelId = card.channelId || settings.verifyQueueChannelId;
+        const channel = await guild.client.channels.fetch(channelId);
+        const payload = buildCardMessage(member, card);
+
+        if (card.messageId) {
+            try {
+                await channel.messages.edit(card.messageId, payload);
+                return card;
+            } catch (error) {
+                if (error.code !== UNKNOWN_MESSAGE) throw error;
+            }
+        }
+
+        // Only pending cards are worth resending; closed ones can stay gone
+        if (card.status !== 'pending') return card;
+        const message = await channel.send(payload);
+        return QueueCardService.upsert({ ...card, channelId: channel.id, messageId: message.id });
+    }
+
+    /**
+     * Make sure a pending card exists for a member holding @unverified.
+     * Creates a new card (and logs it) or repairs a deleted message.
+     */
+    async ensureCard(guild, member, source = 'bot') {
+        if (member.user.bot) return null;
+        const settings = await this.getQueueSettings(guild.id);
+        if (!settings) return null;
+
+        // Startup reconcile and guildMemberUpdate can race for the same member
+        const key = this.lockKey(guild.id, member.id);
+        if (this.locks.has(key)) return null;
+        this.locks.add(key);
+        try {
+            return await this.ensureCardUnlocked(guild, member, settings, source);
+        } finally {
+            this.locks.delete(key);
+        }
+    }
+
+    async ensureCardUnlocked(guild, member, settings, source) {
+        const existing = await QueueCardService.get(guild.id, member.id);
+        if (existing?.status === 'pending') {
+            return this.renderCard(guild, existing, member);
+        }
+
+        const channel = await this.fetchQueueChannel(guild, settings);
+        const card = {
+            guildId: guild.id,
+            userId: member.id,
+            status: 'pending',
+            channelId: channel.id,
+            messageId: null,
+            createdAt: new Date().toISOString(),
+            handledBy: null,
+            handledAt: null,
+            gender: null,
+            reason: null
+        };
+        const message = await channel.send(buildCardMessage(member, card));
+        card.messageId = message.id;
+        await QueueCardService.upsert(card);
+
+        await AuditLogService.log({
+            guildId: guild.id,
+            action: 'verification.queued',
+            targetIds: [member.id],
+            source
+        });
+        return card;
+    }
+
+    /** Close a pending card without an action from us (role removed elsewhere, member left). */
+    async closeCard(guild, userId, status, member = null) {
+        const card = await QueueCardService.get(guild.id, userId);
+        if (!card || card.status !== 'pending') return null;
+
+        const updated = await QueueCardService.upsert({
+            ...card,
+            status,
+            handledAt: new Date().toISOString()
+        });
+        try {
+            await this.renderCard(guild, updated, member);
+        } catch (error) {
+            console.error(`Verification: failed to update card for ${userId}:`, error.message || error);
+        }
+
+        await AuditLogService.log({
+            guildId: guild.id,
+            action: status === 'left' ? 'verification.left' : 'verification.role_removed',
+            targetIds: [userId],
+            source: 'discord'
+        });
+        return updated;
+    }
+
+    async assertPermission(guild, actorId, permission) {
+        const actor = await guild.members.fetch(actorId).catch(() => null);
+        return Boolean(actor?.permissions.has(permission));
+    }
+
+    alreadyHandled(card) {
+        return { ok: false, code: 'already_handled', card };
+    }
+
+    /**
+     * Run fn under the per-member lock after checking the card is still pending.
+     * Returns fn's result or an { ok: false } object.
+     */
+    async withPendingCard(guild, userId, fn) {
+        const key = this.lockKey(guild.id, userId);
+        // A concurrent click waits for the first one, then sees its outcome
+        // ("already approved by X") — or proceeds if the first one failed.
+        const deadline = Date.now() + LOCK_WAIT_MS;
+        while (this.locks.has(key)) {
+            if (Date.now() > deadline) return { ok: false, code: 'in_progress' };
+            await new Promise(resolve => setTimeout(resolve, LOCK_POLL_MS));
+        }
+        this.locks.add(key);
+        try {
+            const card = await QueueCardService.get(guild.id, userId);
+            if (!card || card.status !== 'pending') return this.alreadyHandled(card);
+            return await fn(card);
+        } finally {
+            this.locks.delete(key);
+        }
+    }
+
+    /**
+     * Approve: swap @unverified for the gender role in one roles.set call.
+     * @param {{ id: string, tag?: string }} actor
+     */
+    async approve(guild, userId, gender, actor, source) {
+        const settings = await this.getQueueSettings(guild.id);
+        if (!settings) return { ok: false, code: 'not_configured' };
+        if (!(await this.assertPermission(guild, actor.id, PermissionFlagsBits.ManageRoles))) {
+            return { ok: false, code: 'forbidden' };
+        }
+
+        return this.withPendingCard(guild, userId, async (card) => {
+            const member = await this.fetchMember(guild, userId);
+            if (!member) {
+                await this.closeCardUnlocked(guild, card, 'left');
+                return { ok: false, code: 'member_left' };
+            }
+
+            const roles = computeNewRoles(member.roles.cache.keys(), {
+                unverifiedId: settings.unverifiedRoleId,
+                maleId: settings.maleRoleId,
+                femaleId: settings.femaleRoleId
+            }, gender);
+            await member.roles.set(roles, `Пропуск: ${gender === 'male' ? 'парень' : 'девушка'} · ${actor.tag || actor.id}`);
+
+            const updated = await QueueCardService.upsert({
+                ...card,
+                status: 'approved',
+                gender,
+                handledBy: actor.id,
+                handledAt: new Date().toISOString()
+            });
+            await this.safeRender(guild, updated, member);
+
+            await AuditLogService.log({
+                guildId: guild.id,
+                action: 'verification.approved',
+                actorId: actor.id,
+                actorTag: actor.tag,
+                targetIds: [userId],
+                source,
+                details: { gender }
+            });
+            return { ok: true, card: updated };
+        });
+    }
+
+    async kick(guild, userId, reason, actor, source) {
+        const settings = await this.getQueueSettings(guild.id);
+        if (!settings) return { ok: false, code: 'not_configured' };
+        if (!(await this.assertPermission(guild, actor.id, PermissionFlagsBits.KickMembers))) {
+            return { ok: false, code: 'forbidden' };
+        }
+
+        return this.withPendingCard(guild, userId, async (card) => {
+            const member = await this.fetchMember(guild, userId);
+            if (!member) {
+                await this.closeCardUnlocked(guild, card, 'left');
+                return { ok: false, code: 'member_left' };
+            }
+
+            await member.kick(`${reason} · ${actor.tag || actor.id}`);
+
+            const updated = await QueueCardService.upsert({
+                ...card,
+                status: 'kicked',
+                reason,
+                handledBy: actor.id,
+                handledAt: new Date().toISOString()
+            });
+            await this.safeRender(guild, updated, member);
+
+            await AuditLogService.log({
+                guildId: guild.id,
+                action: 'verification.kicked',
+                actorId: actor.id,
+                actorTag: actor.tag,
+                targetIds: [userId],
+                reason,
+                source
+            });
+            return { ok: true, card: updated };
+        });
+    }
+
+    // Used inside withPendingCard, where the card is already known to be pending
+    async closeCardUnlocked(guild, card, status) {
+        const updated = await QueueCardService.upsert({ ...card, status, handledAt: new Date().toISOString() });
+        await this.safeRender(guild, updated, null);
+        await AuditLogService.log({
+            guildId: guild.id,
+            action: 'verification.left',
+            targetIds: [card.userId],
+            source: 'discord'
+        });
+    }
+
+    async safeRender(guild, card, member) {
+        try {
+            await this.renderCard(guild, card, member);
+        } catch (error) {
+            console.error(`Verification: failed to update card for ${card.userId}:`, error.message || error);
+        }
+    }
+
+    /**
+     * Startup reconciliation: Discord roles vs. stored cards.
+     * Creates cards for members who got @unverified while the bot was down,
+     * closes cards whose member lost the role or left.
+     */
+    async reconcile(guild) {
+        const settings = await this.getQueueSettings(guild.id);
+        if (!settings) return { skipped: true };
+
+        const members = await guild.members.fetch();
+        const pending = await QueueCardService.listPending(guild.id);
+        const pendingIds = new Set(pending.map(c => c.userId));
+        let created = 0;
+        let closed = 0;
+
+        for (const member of members.values()) {
+            if (member.user.bot || !member.roles.cache.has(settings.unverifiedRoleId)) continue;
+            try {
+                const wasPending = pendingIds.has(member.id);
+                await this.ensureCard(guild, member, 'bot');
+                if (!wasPending) created++;
+            } catch (error) {
+                console.error(`Verification reconcile: card for ${member.id} failed:`, error.message || error);
+            }
+        }
+
+        for (const card of pending) {
+            const member = members.get(card.userId);
+            if (member && member.roles.cache.has(settings.unverifiedRoleId)) continue;
+            try {
+                await this.closeCard(guild, card.userId, member ? 'closed' : 'left', member || null);
+                closed++;
+            } catch (error) {
+                console.error(`Verification reconcile: closing ${card.userId} failed:`, error.message || error);
+            }
+        }
+
+        return { created, closed, queued: pendingIds.size + created - closed };
+    }
+}
+
+module.exports = new VerificationService();

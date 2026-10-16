@@ -11,6 +11,8 @@ A Discord bot that manages and celebrates server members' birthdays, with an AI 
 - Role assignment on a member's birthday
 - Daily birthday checks at a configurable time and timezone
 - AI assistant that responds to @mentions or in a dedicated channel, with natural language support for querying and setting birthdays
+- Verification queue: members holding the unverified role get a card in the moderators' channel with **Male / Female / Kick** buttons; approving swaps the unverified role for the gender role in one call
+- Action log in Cosmos DB (`audit_log`, kept 30 days); it will be shown in the new admin panel
 
 ## Slash Commands
 
@@ -85,6 +87,8 @@ COSMOS_KEY=
 COSMOS_DB_NAME=BirthdayBotDB
 OPENAI_API_KEY=
 OPENAI_MODEL=gpt-4o-mini
+UNVERIFIED_ROLE_ID=
+VERIFY_QUEUE_CHANNEL_ID=
 ```
 
 ### 3. Enable Message Content Intent
@@ -97,6 +101,10 @@ In the [Discord Developer Portal](https://discord.com/developers/applications):
 4. Save changes
 
 The AI assistant will not receive message content without this intent.
+
+Also enable **Server Members Intent** on the same page. The bot requests `GuildMembers` for the verification queue, and **login fails ("disallowed intents") if it is not enabled** — this takes down every feature, not just the queue.
+
+For the verification queue the bot needs **Manage Roles** and **Kick Members**, and its role must sit above the unverified role and both gender roles.
 
 ### 4. Register slash commands
 
@@ -129,6 +137,11 @@ node src/index.js
 | `COSMOS_DB_NAME` | No | `BirthdayBotDB` | Cosmos DB database name |
 | `OPENAI_API_KEY` | Yes | — | OpenAI API key |
 | `OPENAI_MODEL` | No | `gpt-4o-mini` | OpenAI model name |
+| `UNVERIFIED_ROLE_ID` | No | — | Unverified role (set by a third-party bot); enables the verification queue |
+| `VERIFY_QUEUE_CHANNEL_ID` | No | — | Moderators' channel for queue cards |
+| `MODULE_VERIFICATION_ENABLED` | No | `true` if `UNVERIFIED_ROLE_ID` is set | Set `false` to turn the queue off |
+
+The verification variables are defaults for `GUILD_ID`. Per-guild values can override them in the Cosmos `guild_settings` container (document `id` = guild ID), which the new panel will edit.
 
 ## Project Structure
 
@@ -139,10 +152,18 @@ Birthday-Bot/
 │   │   ├── birthday-set.js        # /birthday-set slash command
 │   │   ├── birthday.js            # /birthday @user slash command
 │   │   └── birthdays-coming.js    # /birthdays-coming slash command
+│   ├── modules/                   # Bot features: each registers its own event handlers
+│   │   ├── index.js               # Module loader + interaction routing by customId prefix
+│   │   ├── birthdays/             # Notification channels + daily scheduler
+│   │   ├── ai/                    # AI channel message handler
+│   │   ├── activity/              # Voice sessions + activity sync crons
+│   │   └── verification/          # Verification queue: cards, buttons, startup rebuild
 │   ├── services/
 │   │   ├── AIService.js           # OpenAI assistant + function calling
 │   │   ├── BirthdayService.js     # Deprecated, unused
 │   │   ├── CosmosDBService.js     # Cosmos DB read/write operations
+│   │   ├── AuditLogService.js     # Action log (audit_log, TTL 30 days)
+│   │   ├── GuildSettingsService.js # Per-guild settings (guild_settings) with env fallback
 │   │   ├── NotificationService.js # Birthday announcement logic
 │   │   └── SchedulerService.js    # Daily birthday check scheduler
 │   ├── utils/
