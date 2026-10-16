@@ -68,3 +68,6 @@ latest_logs/
 
 # Claude temp files
 tmpclaude-*
+
+# Desktop panel build output
+desktop/dist/

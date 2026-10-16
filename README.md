@@ -144,6 +144,21 @@ node src/index.js
 
 The verification variables are defaults for `GUILD_ID`. Per-guild values can override them in the Cosmos `guild_settings` container (document `id` = guild ID), which the new panel will edit.
 
+## Desktop panel (stage 2)
+
+A separate Electron app in `desktop/` talks to the bot through `/api/v2` (the old web dashboard at `/` is unrelated and unchanged). See `desktop/README.md`.
+
+Server setup:
+
+| Variable | Description |
+|----------|-------------|
+| `DISCORD_CLIENT_SECRET` | OAuth2 client secret from the Developer Portal |
+| `PUBLIC_URL` | Public base URL of the App Service, e.g. `https://birthday-bot-….azurewebsites.net` |
+
+In the Developer Portal → OAuth2 → Redirects add `<PUBLIC_URL>/api/v2/auth/callback`.
+
+Panel access follows Discord permissions: **Administrator** → senior admin, **Manage Roles** or **Kick Members** → admin.
+
 ## Project Structure
 
 ```

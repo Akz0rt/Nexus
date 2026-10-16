@@ -10,6 +10,7 @@ const ActivitySyncService = require('./services/ActivitySyncService');
 const VoiceActivityService = require('./services/VoiceActivityService');
 const BirthdayService = require('./services/BirthdayService');
 const state = require('./state');
+const { createV2Router } = require('./web/v2');
 
 const BANNER_MODE_KEY = 'BANNER_MODE';
 const ACTIVITY_PERIOD_KEY = 'ACTIVITY_PERIOD';
@@ -88,6 +89,9 @@ const chatRateLimit = {
 
 function createApp() {
     const app = express();
+
+    // Desktop panel API — own Discord login, so it goes before the dashboard's Basic Auth
+    app.use('/api/v2', createV2Router());
 
     if (!config.adminPassword) {
         console.error('❌ ADMIN_PASSWORD is not set. Admin dashboard is disabled — set this env var in Azure App Settings.');
@@ -546,4 +550,4 @@ function startServer() {
     });
 }
 
-module.exports = { startServer };
+module.exports = { startServer, createApp };

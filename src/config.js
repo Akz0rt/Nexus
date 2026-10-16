@@ -28,6 +28,10 @@ module.exports = {
     adminPassword: process.env.ADMIN_PASSWORD || '',
     port: parseInt(process.env.PORT || process.env.WEBSITES_PORT || '3000', 10),
 
+    // New panel: Discord OAuth login (redirect URI = PUBLIC_URL + /auth/callback)
+    discordClientSecret: process.env.DISCORD_CLIENT_SECRET || '',
+    publicUrl: (process.env.PUBLIC_URL || '').replace(/\/+$/, ''),
+
     // Verification queue (defaults for GUILD_ID; per-guild overrides live in Cosmos guild_settings)
     unverifiedRoleId: process.env.UNVERIFIED_ROLE_ID,
     verifyQueueChannelId: process.env.VERIFY_QUEUE_CHANNEL_ID,

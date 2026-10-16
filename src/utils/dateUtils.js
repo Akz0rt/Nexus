@@ -27,8 +27,17 @@ function getDaysUntilBirthday(birthMonth, birthDay) {
     return Math.floor(diffTime / (1000 * 60 * 60 * 24));
 }
 
+// Midnight of the current day in the given IANA timezone, as a UTC Date.
+function startOfToday(timeZone, now = new Date()) {
+    const local = new Date(now.toLocaleString('en-US', { timeZone }));
+    const offsetMs = now.getTime() - local.getTime();
+    local.setHours(0, 0, 0, 0);
+    return new Date(local.getTime() + offsetMs);
+}
+
 module.exports = {
     formatDate,
     isValidDate,
-    getDaysUntilBirthday
+    getDaysUntilBirthday,
+    startOfToday
 };

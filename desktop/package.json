@@ -1,0 +1,22 @@
+{
+  "name": "birthdaybot-panel",
+  "productName": "BirthdayBot Panel",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Desktop moderation panel for Birthday-Bot",
+  "main": "electron/main.js",
+  "scripts": {
+    "dev": "node scripts/dev.js",
+    "build": "vite build",
+    "start": "vite build && electron ."
+  },
+  "dependencies": {
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "4.7.0",
+    "electron": "44.5.1",
+    "vite": "5.4.21"
+  }
+}

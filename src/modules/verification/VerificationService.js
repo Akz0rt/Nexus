@@ -57,6 +57,9 @@ class VerificationService {
 
     /** Edit the card message in place; resend it if the message was deleted. */
     async renderCard(guild, card, member) {
+        // Cards created from the panel for members without a Discord card have nothing to edit
+        if (!card.messageId && card.status !== 'pending') return card;
+
         const settings = await GuildSettingsService.get(guild.id);
         const channelId = card.channelId || settings.verifyQueueChannelId;
         const channel = await guild.client.channels.fetch(channelId);
@@ -191,10 +194,13 @@ class VerificationService {
     }
 
     /**
-     * Run fn under the per-member lock after checking the card is still pending.
+     * Run fn(card, member) under the per-member lock if the member is still in the queue.
+     * Discord is the source of truth: in the queue = holds @unverified. The card is
+     * optional metadata — members who got the role before stage 1 or while the bot
+     * was down have none, so a fresh one (without a Discord message) is made up.
      * Returns fn's result or an { ok: false } object.
      */
-    async withPendingCard(guild, userId, fn) {
+    async withQueuedMember(guild, userId, settings, fn) {
         const key = this.lockKey(guild.id, userId);
         // A concurrent click waits for the first one, then sees its outcome
         // ("already approved by X") — or proceeds if the first one failed.
@@ -206,8 +212,26 @@ class VerificationService {
         this.locks.add(key);
         try {
             const card = await QueueCardService.get(guild.id, userId);
-            if (!card || card.status !== 'pending') return this.alreadyHandled(card);
-            return await fn(card);
+            const member = await this.fetchMember(guild, userId);
+            if (!member) {
+                if (card?.status === 'pending') await this.markLeftUnlocked(guild, card);
+                return { ok: false, code: 'member_left' };
+            }
+            if (!member.roles.cache.has(settings.unverifiedRoleId)) return this.alreadyHandled(card);
+
+            const queuedCard = card?.status === 'pending' ? card : {
+                guildId: guild.id,
+                userId,
+                status: 'pending',
+                channelId: null,
+                messageId: null,
+                createdAt: new Date().toISOString(),
+                handledBy: null,
+                handledAt: null,
+                gender: null,
+                reason: null
+            };
+            return await fn(queuedCard, member);
         } finally {
             this.locks.delete(key);
         }
@@ -224,13 +248,7 @@ class VerificationService {
             return { ok: false, code: 'forbidden' };
         }
 
-        return this.withPendingCard(guild, userId, async (card) => {
-            const member = await this.fetchMember(guild, userId);
-            if (!member) {
-                await this.closeCardUnlocked(guild, card, 'left');
-                return { ok: false, code: 'member_left' };
-            }
-
+        return this.withQueuedMember(guild, userId, settings, async (card, member) => {
             const roles = computeNewRoles(member.roles.cache.keys(), {
                 unverifiedId: settings.unverifiedRoleId,
                 maleId: settings.maleRoleId,
@@ -267,13 +285,7 @@ class VerificationService {
             return { ok: false, code: 'forbidden' };
         }
 
-        return this.withPendingCard(guild, userId, async (card) => {
-            const member = await this.fetchMember(guild, userId);
-            if (!member) {
-                await this.closeCardUnlocked(guild, card, 'left');
-                return { ok: false, code: 'member_left' };
-            }
-
+        return this.withQueuedMember(guild, userId, settings, async (card, member) => {
             await member.kick(`${reason} · ${actor.tag || actor.id}`);
 
             const updated = await QueueCardService.upsert({
@@ -298,9 +310,9 @@ class VerificationService {
         });
     }
 
-    // Used inside withPendingCard, where the card is already known to be pending
-    async closeCardUnlocked(guild, card, status) {
-        const updated = await QueueCardService.upsert({ ...card, status, handledAt: new Date().toISOString() });
+    // Used inside withQueuedMember, where the card is already known to be pending
+    async markLeftUnlocked(guild, card) {
+        const updated = await QueueCardService.upsert({ ...card, status: 'left', handledAt: new Date().toISOString() });
         await this.safeRender(guild, updated, null);
         await AuditLogService.log({
             guildId: guild.id,

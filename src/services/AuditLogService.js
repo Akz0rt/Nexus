@@ -1,9 +1,35 @@
 const { CosmosClient } = require('@azure/cosmos');
 const crypto = require('node:crypto');
 const config = require('../config');
+const EventBus = require('./EventBus');
 
 const AUDIT_LOG_CONTAINER = 'audit_log';
 const TTL_30_DAYS = 30 * 24 * 60 * 60; // 2,592,000 seconds
+
+const FILTER_CLAUSES = {
+    action: 'c.action = @action',
+    actorId: 'c.actorId = @actorId',
+    targetId: 'ARRAY_CONTAINS(c.targetIds, @targetId)',
+    source: 'c.source = @source',
+    since: 'c.createdAt >= @since',
+    until: 'c.createdAt < @until'
+};
+
+/** Parameterised Cosmos query for the given filters (empty filters are ignored). */
+function buildAuditQuery(filters) {
+    const where = ['c.guildId = @guildId'];
+    const parameters = [{ name: '@guildId', value: filters.guildId }];
+    for (const [key, clause] of Object.entries(FILTER_CLAUSES)) {
+        const value = filters[key];
+        if (value === undefined || value === null || value === '') continue;
+        where.push(clause);
+        parameters.push({ name: `@${key}`, value: String(value) });
+    }
+    return {
+        query: `SELECT * FROM c WHERE ${where.join(' AND ')} ORDER BY c.createdAt DESC`,
+        parameters
+    };
+}
 
 /**
  * Action log stored only in Cosmos DB (shown in the panel later, not mirrored to Discord).
@@ -73,8 +99,34 @@ class AuditLogService {
             console.error('AuditLogService: failed to write audit_log:', error.message || error);
         }
 
+        // Open panels must see the action even if the DB write failed
+        try {
+            EventBus.emit('audit', doc);
+        } catch (error) {
+            console.error('AuditLogService: event listener failed:', error.message || error);
+        }
+
         return doc;
+    }
+
+    /**
+     * Newest-first page of log entries.
+     * @param {{ guildId: string, action?: string, actorId?: string, targetId?: string,
+     *           source?: string, since?: string, until?: string }} filters
+     * @param {{ limit?: number, cursor?: string }} [page]
+     * @returns {Promise<{ items: object[], cursor: string|null }>}
+     */
+    async query(filters, { limit = 50, cursor } = {}) {
+        await this.initialize();
+        const iterator = this.container.items.query(buildAuditQuery(filters), {
+            partitionKey: filters.guildId,
+            maxItemCount: Math.min(Math.max(limit, 1), 200),
+            continuationToken: cursor || undefined
+        });
+        const { resources, continuationToken } = await iterator.fetchNext();
+        return { items: resources || [], cursor: continuationToken || null };
     }
 }
 
 module.exports = new AuditLogService();
+module.exports.buildAuditQuery = buildAuditQuery;

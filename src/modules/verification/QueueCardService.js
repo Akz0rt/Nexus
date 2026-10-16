@@ -52,6 +52,21 @@ class QueueCardService {
         return resources;
     }
 
+    /** Cards closed with one of the statuses since the given ISO time, newest first. */
+    async listHandled(guildId, statuses, sinceIso) {
+        await this.initialize();
+        const { resources } = await this.container.items.query({
+            query: 'SELECT * FROM c WHERE c.guildId = @guildId AND ARRAY_CONTAINS(@statuses, c.status) ' +
+                'AND c.handledAt >= @since ORDER BY c.handledAt DESC',
+            parameters: [
+                { name: '@guildId', value: guildId },
+                { name: '@statuses', value: statuses },
+                { name: '@since', value: sinceIso }
+            ]
+        }, { partitionKey: guildId }).fetchAll();
+        return resources;
+    }
+
     async upsert(card) {
         await this.initialize();
         const doc = { ...card, id: card.userId };

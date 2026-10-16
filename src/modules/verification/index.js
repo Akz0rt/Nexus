@@ -14,7 +14,7 @@ const ERROR_TEXT = {
 function describeResult(result) {
     if (result.code === 'already_handled') {
         const card = result.card;
-        if (!card) return 'Карточка уже закрыта.';
+        if (!card) return 'Этого человека уже нет в очереди.';
         const who = card.handledBy ? `<@${card.handledBy}>` : 'кто-то вне бота';
         if (card.status === 'approved') {
             return `Уже пропущен: ${who} · ${card.gender === 'male' ? 'Парень' : 'Девушка'}`;

@@ -1,7 +1,8 @@
 // Standalone test (no test framework configured): run with `node test/verification-approve.test.js`
 // Verifies that two moderators clicking at once produce exactly one roles.set,
-// the second one sees "already handled", and our own role change is recognised
-// as ours (member is locked while roles.set runs).
+// the second one sees "already handled", our own role change is recognised
+// as ours (member is locked while roles.set runs), and members without a card
+// (queued before stage 1 / while the bot was down) can still be approved.
 
 const assert = require('assert');
 
@@ -10,8 +11,10 @@ const AuditLogService = require('../src/services/AuditLogService');
 const QueueCardService = require('../src/modules/verification/QueueCardService');
 const VerificationService = require('../src/modules/verification/VerificationService');
 
-async function run() {
-    // --- Arrange: stub settings, cards, audit log and card rendering ---
+let cards;
+let logged;
+
+function setup() {
     GuildSettingsService.get = async guildId => ({
         guildId,
         unverifiedRoleId: 'unv',
@@ -21,25 +24,26 @@ async function run() {
         modules: { verification: true }
     });
 
-    const cards = { u1: { guildId: 'g1', userId: 'u1', status: 'pending', messageId: 'm1', channelId: 'queue' } };
+    cards = {};
     QueueCardService.get = async (guildId, userId) => (cards[userId] ? { ...cards[userId] } : null);
     QueueCardService.upsert = async card => { cards[card.userId] = { ...card }; return card; };
 
-    const logged = [];
+    logged = [];
     AuditLogService.log = async entry => { logged.push(entry); };
-    VerificationService.renderCard = async card => card;
+}
 
-    // --- Arrange: fake guild with one unverified member ---
-    const setCalls = [];
-    let lockedDuringSet = false;
+// Fake guild with one member; roles.set really replaces the role cache, like Discord
+function makeGuild(roleIds) {
+    const state = { setCalls: [], renders: 0, lockedDuringSet: false };
     const member = {
         id: 'u1',
         roles: {
-            cache: new Map([['everyone', {}], ['unv', {}]]),
+            cache: new Map(roleIds.map(id => [id, {}])),
             set: async roles => {
-                lockedDuringSet = VerificationService.isLocked('g1', 'u1');
+                state.lockedDuringSet = VerificationService.isLocked('g1', 'u1');
                 await new Promise(resolve => setTimeout(resolve, 150)); // slow Discord API
-                setCalls.push(roles);
+                state.setCalls.push(roles);
+                member.roles.cache = new Map(roles.map(id => [id, {}]));
             }
         }
     };
@@ -48,29 +52,62 @@ async function run() {
         id: 'g1',
         members: { fetch: async arg => (typeof arg === 'string' ? moderator : member) }
     };
+    VerificationService.renderCard = async card => { state.renders++; return card; };
+    return { guild, state };
+}
 
-    // --- Act: two moderators click at the same time ---
+async function concurrentClicks() {
+    setup();
+    cards.u1 = { guildId: 'g1', userId: 'u1', status: 'pending', messageId: 'm1', channelId: 'queue' };
+    const { guild, state } = makeGuild(['everyone', 'unv']);
+
     const [first, second] = await Promise.all([
         VerificationService.approve(guild, 'u1', 'female', { id: 'kira', tag: 'Kira' }, 'discord'),
         VerificationService.approve(guild, 'u1', 'male', { id: 'bob', tag: 'Bob' }, 'discord')
     ]);
 
-    // --- Assert ---
-    assert.strictEqual(setCalls.length, 1, `Expected exactly 1 roles.set, got ${setCalls.length}`);
-    assert.deepStrictEqual(setCalls[0].sort(), ['everyone', 'female']);
+    assert.strictEqual(state.setCalls.length, 1, `Expected exactly 1 roles.set, got ${state.setCalls.length}`);
+    assert.deepStrictEqual([...state.setCalls[0]].sort(), ['everyone', 'female']);
     assert.strictEqual(first.ok, true);
     assert.strictEqual(second.ok, false);
     assert.strictEqual(second.code, 'already_handled');
     assert.strictEqual(second.card.handledBy, 'kira');
     assert.strictEqual(second.card.gender, 'female');
-    assert.strictEqual(lockedDuringSet, true, 'member must be locked while our roles.set runs');
+    assert.strictEqual(state.lockedDuringSet, true, 'member must be locked while our roles.set runs');
     assert.strictEqual(VerificationService.isLocked('g1', 'u1'), false, 'lock must be released');
     assert.deepStrictEqual(logged.map(e => e.action), ['verification.approved']);
-
-    console.log('PASS: concurrent approve runs once; second click sees who handled it');
 }
 
-run().catch(err => {
+async function cardlessMember() {
+    setup();
+    const { guild, state } = makeGuild(['everyone', 'unv']);
+
+    const result = await VerificationService.approve(guild, 'u1', 'male', { id: 'kira', tag: 'Kira' }, 'panel');
+
+    assert.strictEqual(result.ok, true, `cardless approve failed: ${result.code}`);
+    assert.strictEqual(state.setCalls.length, 1);
+    assert.strictEqual(cards.u1.status, 'approved', 'a card is recorded so the member shows in "handled today"');
+    assert.strictEqual(cards.u1.messageId, null);
+    assert.strictEqual(logged[0].source, 'panel');
+}
+
+async function notInQueue() {
+    setup();
+    const { guild, state } = makeGuild(['everyone', 'female']);
+
+    const result = await VerificationService.approve(guild, 'u1', 'male', { id: 'kira', tag: 'Kira' }, 'panel');
+
+    assert.strictEqual(result.ok, false);
+    assert.strictEqual(result.code, 'already_handled');
+    assert.strictEqual(state.setCalls.length, 0);
+}
+
+(async () => {
+    await concurrentClicks();
+    await cardlessMember();
+    await notInQueue();
+    console.log('PASS: approve runs once per member, works without a card, ignores verified members');
+})().catch(err => {
     console.error('FAIL:', err.message);
     process.exit(1);
 });
