@@ -45,11 +45,11 @@ async function registerCommands() {
     for (const guild of client.guilds.cache.values()) {
         try {
             await guild.commands.set(body);
+            console.log(`Registered ${body.length} slash command(s) in ${guild.name}`);
         } catch (error) {
             console.error(`Failed to register commands in ${guild.id}:`, error.message || error);
         }
     }
-    console.log(`Registered ${body.length} slash command(s)`);
 }
 
 client.once(Events.ClientReady, async () => {
