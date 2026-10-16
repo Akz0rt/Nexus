@@ -78,6 +78,10 @@ class GuildSettingsService {
         const verification = docModules.verification ?? envVerification ?? Boolean(result.unverifiedRoleId);
         result.modules = { ...docModules, verification };
 
+        // Give @unverified on join ourselves (skipped if a third-party bot already did). On by default.
+        const envAssign = useEnv ? parseBool(config.assignUnverifiedOnJoin) : undefined;
+        result.assignUnverifiedOnJoin = doc?.assignUnverifiedOnJoin ?? envAssign ?? true;
+
         return result;
     }
 

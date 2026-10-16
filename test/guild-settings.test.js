@@ -42,6 +42,13 @@ async function run() {
     assert.strictEqual(unknown.unverifiedRoleId, undefined);
     assert.strictEqual(unknown.modules.verification, false);
 
+    // Assigning @unverified on join is on by default; ASSIGN_UNVERIFIED_ON_JOIN=false turns it off
+    assert.strictEqual(def.assignUnverifiedOnJoin, true);
+    config.assignUnverifiedOnJoin = 'false';
+    GuildSettingsService.cache.clear();
+    assert.strictEqual((await GuildSettingsService.get('g-default')).assignUnverifiedOnJoin, false);
+    assert.strictEqual((await GuildSettingsService.get('g-other')).assignUnverifiedOnJoin, true, 'env does not leak');
+
     // MODULE_VERIFICATION_ENABLED=false turns the module off for the default guild
     config.moduleVerificationEnabled = 'false';
     GuildSettingsService.cache.clear();

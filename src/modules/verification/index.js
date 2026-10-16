@@ -91,6 +91,15 @@ module.exports = {
             }
         });
 
+        client.on(Events.GuildMemberAdd, async (member) => {
+            try {
+                const result = await VerificationService.assignOnJoin(member);
+                if (result === 'assigned') console.log(`Verification: gave @unverified to ${member.user.tag}`);
+            } catch (error) {
+                console.error('Verification GuildMemberAdd error:', error.message || error);
+            }
+        });
+
         client.on(Events.GuildMemberRemove, async (member) => {
             try {
                 if (member.user?.bot) return;

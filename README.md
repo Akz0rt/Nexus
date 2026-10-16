@@ -140,6 +140,7 @@ node src/index.js
 | `UNVERIFIED_ROLE_ID` | No | — | Unverified role (set by a third-party bot); enables the verification queue |
 | `VERIFY_QUEUE_CHANNEL_ID` | No | — | Moderators' channel for queue cards |
 | `MODULE_VERIFICATION_ENABLED` | No | `true` if `UNVERIFIED_ROLE_ID` is set | Set `false` to turn the queue off |
+| `ASSIGN_UNVERIFIED_ON_JOIN` | No | `true` | Give the unverified role to new members right on join, unless they already have it (e.g. from a third-party bot) |
 
 The verification variables are defaults for `GUILD_ID`. Per-guild values can override them in the Cosmos `guild_settings` container (document `id` = guild ID), which the new panel will edit.
 

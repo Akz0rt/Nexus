@@ -43,4 +43,16 @@ function diffUnverified(oldMember, newMember, unverifiedId) {
     return null;
 }
 
-module.exports = { computeNewRoles, diffUnverified };
+/**
+ * Should the bot give @unverified to a newly joined member?
+ * No if it's a bot, the member already has @unverified (e.g. from a third-party bot),
+ * or already has a gender role (verified by hand in the meantime).
+ * @returns {boolean}
+ */
+function shouldAssignUnverified(member, { unverifiedId, maleId, femaleId }) {
+    if (!unverifiedId || member.user.bot) return false;
+    const has = id => Boolean(id) && member.roles.cache.has(id);
+    return !has(unverifiedId) && !has(maleId) && !has(femaleId);
+}
+
+module.exports = { computeNewRoles, diffUnverified, shouldAssignUnverified };

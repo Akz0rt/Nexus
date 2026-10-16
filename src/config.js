@@ -32,6 +32,7 @@ module.exports = {
     unverifiedRoleId: process.env.UNVERIFIED_ROLE_ID,
     verifyQueueChannelId: process.env.VERIFY_QUEUE_CHANNEL_ID,
     moduleVerificationEnabled: process.env.MODULE_VERIFICATION_ENABLED,
+    assignUnverifiedOnJoin: process.env.ASSIGN_UNVERIFIED_ON_JOIN,
 
     // Activity sync
     activitySyncIntervalMinutes: parseInt(process.env.ACTIVITY_SYNC_INTERVAL_MINUTES || '5', 10),

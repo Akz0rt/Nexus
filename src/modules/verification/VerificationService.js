@@ -3,7 +3,7 @@ const GuildSettingsService = require('../../services/GuildSettingsService');
 const AuditLogService = require('../../services/AuditLogService');
 const QueueCardService = require('./QueueCardService');
 const { buildCardMessage } = require('./card');
-const { computeNewRoles } = require('./roles');
+const { computeNewRoles, shouldAssignUnverified } = require('./roles');
 
 const UNKNOWN_MESSAGE = 10008;
 const UNKNOWN_MEMBER = 10007;
@@ -127,6 +127,33 @@ class VerificationService {
             source
         });
         return card;
+    }
+
+    /**
+     * New member joined: give @unverified unless someone already did.
+     * The card itself is created by the guildMemberUpdate this role change triggers.
+     * @returns {Promise<'assigned'|'skipped'>}
+     */
+    async assignOnJoin(member) {
+        const settings = await this.getQueueSettings(member.guild.id);
+        if (!settings || !settings.assignUnverifiedOnJoin) return 'skipped';
+
+        const roleIds = {
+            unverifiedId: settings.unverifiedRoleId,
+            maleId: settings.maleRoleId,
+            femaleId: settings.femaleRoleId
+        };
+        if (!shouldAssignUnverified(member, roleIds)) return 'skipped';
+
+        // Adding a role is idempotent, so a race with a third-party bot does no harm
+        await member.roles.add(settings.unverifiedRoleId, 'Новичок: выдача @АНверефи при входе');
+        await AuditLogService.log({
+            guildId: member.guild.id,
+            action: 'verification.role_assigned',
+            targetIds: [member.id],
+            source: 'bot'
+        });
+        return 'assigned';
     }
 
     /** Close a pending card without an action from us (role removed elsewhere, member left). */
