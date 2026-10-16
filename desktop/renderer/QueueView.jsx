@@ -15,6 +15,26 @@ const SORTS = {
     flagged: { label: 'Сначала с флагами', fn: (a, b) => b.member.flags.length - a.member.flags.length }
 };
 
+const HOUR_MS = 60 * 60 * 1000;
+// "Когда зашли": newcomers vs. old accounts that have held the role for months
+const JOINED = {
+    all: { label: 'Зашли когда угодно', test: () => true },
+    day: { label: 'Зашли за последние сутки', test: age => age <= 24 * HOUR_MS },
+    week: { label: 'Зашли за последнюю неделю', test: age => age <= 7 * 24 * HOUR_MS },
+    month: { label: 'Зашли за последний месяц', test: age => age <= 30 * 24 * HOUR_MS },
+    older: { label: 'Ждут больше месяца', test: age => age > 30 * 24 * HOUR_MS }
+};
+const JOINED_KEY = 'panel.queue.joined';
+
+function readJoined() {
+    try {
+        const value = localStorage.getItem(JOINED_KEY);
+        return JOINED[value] ? value : 'all';
+    } catch {
+        return 'all';
+    }
+}
+
 const STAMP_MS = 900;
 const UNDO_TOAST_MS = 10000;
 
@@ -94,6 +114,7 @@ export default function QueueView({ guildId, waiting, revision, onChanged, onOpe
     const [tab, setTab] = useState('waiting');
     const [sort, setSort] = useState('oldest');
     const [onlyFlagged, setOnlyFlagged] = useState(false);
+    const [joined, setJoined] = useState(readJoined);
     const [selectedId, setSelectedId] = useState(null);
     const [busy, setBusy] = useState({});      // userId -> true while a request runs
     const [errors, setErrors] = useState({});  // userId -> message
@@ -120,9 +141,17 @@ export default function QueueView({ guildId, waiting, revision, onChanged, onOpe
         for (const [id, entry] of Object.entries(leaving)) {
             if (!current.some(item => item.member.id === id)) current.push(entry.item);
         }
-        const visible = onlyFlagged ? current.filter(item => item.member.flags.length > 0) : current;
+        const now = Date.now();
+        const visible = current.filter(item =>
+            (!onlyFlagged || item.member.flags.length > 0)
+            && JOINED[joined].test(now - Date.parse(item.member.joinedAt || 0)));
         return [...visible].sort(SORTS[sort].fn);
-    }, [waiting, leaving, errors, sort, onlyFlagged]);
+    }, [waiting, leaving, errors, sort, onlyFlagged, joined]);
+
+    const changeJoined = value => {
+        setJoined(value);
+        try { localStorage.setItem(JOINED_KEY, value); } catch { /* remembered per machine only */ }
+    };
 
     const decide = async (item, action, body) => {
         const id = item.member.id;
@@ -192,6 +221,8 @@ export default function QueueView({ guildId, waiting, revision, onChanged, onOpe
     }, [selectedId]);
 
     const waitingCount = waiting?.items?.length ?? 0;
+    const shownCount = items.filter(item => !leaving[item.member.id]).length;
+    const shownLabel = shownCount === waitingCount ? String(waitingCount) : `${shownCount} из ${waitingCount}`;
 
     return (
         <section className="view">
@@ -201,7 +232,7 @@ export default function QueueView({ guildId, waiting, revision, onChanged, onOpe
                     {TABS.map(t => (
                         <button key={t.id} role="tab" aria-selected={tab === t.id}
                             className={`tab ${tab === t.id ? 'is-active' : ''}`} onClick={() => setTab(t.id)}>
-                            {t.label}{t.id === 'waiting' ? ` · ${waitingCount}` : ''}
+                            {t.label}{t.id === 'waiting' ? ` · ${shownLabel}` : ''}
                         </button>
                     ))}
                 </div>
@@ -213,6 +244,9 @@ export default function QueueView({ guildId, waiting, revision, onChanged, onOpe
                         <select value={sort} onChange={e => setSort(e.target.value)} aria-label="Сортировка">
                             {Object.entries(SORTS).map(([id, s]) => <option key={id} value={id}>{s.label}</option>)}
                         </select>
+                        <select value={joined} onChange={e => changeJoined(e.target.value)} aria-label="Когда зашли">
+                            {Object.entries(JOINED).map(([id, j]) => <option key={id} value={id}>{j.label}</option>)}
+                        </select>
                         <label className="check">
                             <input type="checkbox" checked={onlyFlagged} onChange={e => setOnlyFlagged(e.target.checked)} />
                             Только с флагами
@@ -223,8 +257,10 @@ export default function QueueView({ guildId, waiting, revision, onChanged, onOpe
                     {!waiting && <p className="muted">Загружаем очередь…</p>}
                     {waiting && !waiting.error && items.length === 0 && (
                         <div className="empty">
-                            <h2>{onlyFlagged ? 'Новичков с флагами нет' : 'Очередь пуста'}</h2>
-                            <p>Новые люди появятся здесь сами, как только зайдут на сервер.</p>
+                            <h2>{waitingCount === 0 ? 'Очередь пуста' : 'Под эти фильтры никто не подходит'}</h2>
+                            <p>{waitingCount === 0
+                                ? 'Новые люди появятся здесь сами, как только зайдут на сервер.'
+                                : `Всего в очереди ${waitingCount}. Измените фильтры, чтобы увидеть остальных.`}</p>
                         </div>
                     )}
                     <ul className="passes" ref={listRef}>
