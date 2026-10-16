@@ -11,6 +11,7 @@ const { ApiClient } = require('./api');
 app.setPath('userData', path.join(app.getPath('appData'), 'BirthdayBot Panel'));
 
 const ICON_PATH = path.join(__dirname, 'assets', 'icon.png');
+const TRAY_ICON_PATH = path.join(__dirname, 'assets', 'tray.png'); // logo mark without the square background
 const UPDATE_CHECK_MS = 6 * 60 * 60 * 1000;
 
 let mainWindow = null;
@@ -204,7 +205,7 @@ function startAutoUpdate() {
 // --- Window and tray ------------------------------------------------------------------
 
 function createTray() {
-    tray = new Tray(nativeImage.createFromPath(ICON_PATH).resize({ width: 16, height: 16 }));
+    tray = new Tray(nativeImage.createFromPath(TRAY_ICON_PATH).resize({ width: 16, height: 16, quality: 'best' }));
     tray.setToolTip('Nexus');
     tray.setContextMenu(Menu.buildFromTemplate([
         { label: 'Открыть панель', click: showWindow },
@@ -222,7 +223,7 @@ function createWindow() {
         minHeight: 600,
         title: 'Nexus',
         icon: ICON_PATH,
-        backgroundColor: '#17181f',
+        backgroundColor: '#0f1218',
         autoHideMenuBar: true,
         webPreferences: {
             preload: path.join(__dirname, 'preload.js'),

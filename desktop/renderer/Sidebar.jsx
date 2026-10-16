@@ -11,7 +11,7 @@ export default function Sidebar({ view, onView, waitingCount, presence, version 
     return (
         <aside className="sidebar">
             <div className="brand">
-                <img src="./icon.png" alt="" width="28" height="28" />
+                <img src="./icon.png" alt="" width="32" height="32" />
                 <span>Nexus</span>
             </div>
             <nav className="menu">

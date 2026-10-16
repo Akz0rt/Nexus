@@ -10,8 +10,7 @@
     "dev": "node scripts/dev.js",
     "build": "vite build",
     "start": "vite build && electron .",
-    "dist": "vite build && electron-builder --win --publish never",
-    "icon": "node scripts/make-icon.js"
+    "dist": "vite build && electron-builder --win --publish never"
   },
   "dependencies": {
     "electron-updater": "6.8.10"

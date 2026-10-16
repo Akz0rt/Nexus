@@ -1,67 +1,83 @@
 /*
- * "Пропускной пункт" — the queue is a stack of entry passes: info on the left,
- * a perforated stub with the decision on the right, a stamp when it's decided.
- * The pass is the one bold element; everything around it stays quiet.
+ * Nexus — colours and shapes come from the logo: an isometric cube in three
+ * blues with a hard dark outline, an orange hexagon at its core.
+ * The hexagon is the brand shape (counters, the decision stamp); the outline
+ * replaces soft shadows. The stamp on a decided pass stays the one bold moment.
  */
 
 :root {
-    --bg: #17181f;
-    --rail: #1c1d26;
-    --surface: #23252f;
-    --raised: #2b2e3a;
-    --line: #363a48;
-    --text: #e8e9ef;
-    --muted: #9599a9;
-    --ink: #8b7dff;          /* stamp ink */
-    --ink-strong: #7c6cf2;
-    --on-ink: #ffffff;
-    --danger: #ef5b5f;
-    --ok: #3fb67a;
-    --warn: #e3a63c;
-    --focus: #a99fff;
-    --shadow: 0 1px 0 rgba(0, 0, 0, .35);
-    --toast-action: #4f3fd0; /* toasts are inverted: light on dark theme */
+    --bg: #0f1218;           /* logo background */
+    --rail: #131820;
+    --surface: #1a2029;
+    --raised: #222a35;
+    --line: #2d3644;
+    --outline: #05070a;      /* the logo's hard outline */
+    --text: #e6edf5;
+    --muted: #8b97a8;
+    --ink: #2ec4ff;          /* cube, light face */
+    --ink-strong: #2ec4ff;
+    --on-ink: #0f1218;
+    --accent: #ff7a1a;       /* the hexagon */
+    --amber: #ffb020;        /* the core */
+    --danger: #ff5d5d;
+    --ok: #3ccf8e;
+    --warn: #ffb020;
+    --focus: #8ae6ff;
+    --shadow: 0 0 0 1px var(--outline);
+    --toast-action: #1468c2;
     color-scheme: dark;
 }
 
 :root[data-theme="light"] {
-    --bg: #eef0f5;
-    --rail: #e5e8ef;
+    --bg: #f2f6fa;
+    --rail: #e6edf4;
     --surface: #ffffff;
-    --raised: #f6f7fb;
-    --line: #d8dce6;
-    --text: #1d1f28;
-    --muted: #5d6274;
-    --ink: #5b4bdb;
-    --ink-strong: #4f3fd0;
+    --raised: #f6f9fc;
+    --line: #d3dce7;
+    --outline: #b8c4d3;
+    --text: #0f1218;
+    --muted: #556173;
+    --ink: #1468c2;
+    --ink-strong: #1468c2;
+    --on-ink: #ffffff;
+    --accent: #e0650a;
+    --amber: #a86a08;
     --danger: #d23b40;
-    --ok: #20875a;
+    --ok: #1d8a5a;
     --warn: #a86a08;
-    --focus: #5b4bdb;
-    --shadow: 0 1px 0 rgba(20, 24, 40, .06);
-    --toast-action: #b9b0ff;
+    --focus: #1468c2;
+    --shadow: 0 0 0 1px var(--outline);
+    --toast-action: #8ae6ff;
     color-scheme: light;
 }
 
 @media (prefers-color-scheme: light) {
     :root[data-theme="system"] {
-        --bg: #eef0f5;
-        --rail: #e5e8ef;
+        --bg: #f2f6fa;
+        --rail: #e6edf4;
         --surface: #ffffff;
-        --raised: #f6f7fb;
-        --line: #d8dce6;
-        --text: #1d1f28;
-        --muted: #5d6274;
-        --ink: #5b4bdb;
-        --ink-strong: #4f3fd0;
+        --raised: #f6f9fc;
+        --line: #d3dce7;
+        --outline: #b8c4d3;
+        --text: #0f1218;
+        --muted: #556173;
+        --ink: #1468c2;
+        --ink-strong: #1468c2;
+        --on-ink: #ffffff;
+        --accent: #e0650a;
+        --amber: #a86a08;
         --danger: #d23b40;
-        --ok: #20875a;
+        --ok: #1d8a5a;
         --warn: #a86a08;
-        --focus: #5b4bdb;
-        --shadow: 0 1px 0 rgba(20, 24, 40, .06);
+        --focus: #1468c2;
+        --shadow: 0 0 0 1px var(--outline);
+        --toast-action: #8ae6ff;
         color-scheme: light;
     }
 }
+
+/* the logo hexagon (pointy top), shared by counters and the stamp */
+:root { --hex: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%); }
 
 * { box-sizing: border-box; }
 html, body, #root { height: 100%; }
@@ -107,8 +123,8 @@ input[type="checkbox"] { min-height: 0; accent-color: var(--ink-strong); }
 }
 .btn:hover:not(:disabled) { border-color: var(--muted); }
 .btn:disabled { opacity: .45; cursor: default; }
-.btn-primary { background: var(--ink-strong); border-color: var(--ink-strong); color: var(--on-ink); }
-.btn-primary:hover:not(:disabled) { background: var(--ink); border-color: var(--ink); }
+.btn-primary { background: var(--ink-strong); border-color: var(--outline); color: var(--on-ink); font-weight: 600; }
+.btn-primary:hover:not(:disabled) { filter: brightness(1.1); border-color: var(--outline); }
 .btn-large { min-height: 44px; padding: 10px 22px; font-size: 15px; font-weight: 600; }
 .btn-danger { border-color: var(--danger); color: var(--danger); background: transparent; }
 .btn-quiet { background: transparent; border-color: transparent; color: var(--muted); }
@@ -161,10 +177,12 @@ kbd {
     color: var(--muted); cursor: pointer; text-align: left; font-size: 15px;
 }
 .menu-item:hover { background: var(--surface); color: var(--text); }
-.menu-item.is-active { background: var(--surface); color: var(--text); box-shadow: inset 3px 0 0 var(--ink); }
+.menu-item.is-active { background: var(--surface); color: var(--text); box-shadow: inset 3px 0 0 var(--ink), 0 0 0 1px var(--outline); }
 .counter {
-    min-width: 22px; padding: 1px 7px; border-radius: 999px;
-    background: var(--ink-strong); color: var(--on-ink); font-size: 12px; font-weight: 600; text-align: center;
+    display: inline-grid; place-items: center;
+    min-width: 26px; height: 28px; padding: 0 6px;
+    clip-path: var(--hex);
+    background: var(--accent); color: #0f1218; font-size: 12px; font-weight: 700;
     font-variant-numeric: tabular-nums;
 }
 .on-shift { margin-top: auto; padding: 12px 8px 4px; border-top: 1px solid var(--line); }
@@ -247,11 +265,11 @@ kbd {
     -webkit-mask:
         radial-gradient(circle var(--notch) at calc(100% - 168px) 0, transparent 98%, #000) top / 100% 51% no-repeat,
         radial-gradient(circle var(--notch) at calc(100% - 168px) 100%, transparent 98%, #000) bottom / 100% 51% no-repeat;
-    box-shadow: inset 0 0 0 1px var(--line);
+    box-shadow: inset 0 0 0 1px var(--line), 0 0 0 1px var(--outline);
     cursor: default;
     transition: transform .12s ease;
 }
-.pass.is-selected { box-shadow: inset 0 0 0 2px var(--ink); }
+.pass.is-selected { box-shadow: inset 0 0 0 2px var(--ink), 0 0 0 1px var(--outline); }
 .pass-body { display: flex; gap: 16px; padding: 18px 20px; min-width: 0; }
 .pass-info { display: grid; gap: 8px; min-width: 0; align-content: start; flex: 1; }
 .pass-name { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; font-size: 16px; }
@@ -261,8 +279,8 @@ kbd {
 .pass-facts dd { margin: 0; }
 .flags { list-style: none; margin: 0; padding: 0; display: flex; gap: 6px; flex-wrap: wrap; }
 .flags li {
-    font-size: 12px; color: var(--warn);
-    border: 1px solid color-mix(in srgb, var(--warn) 45%, transparent); border-radius: 999px; padding: 2px 10px;
+    font-size: 12px; color: var(--accent);
+    border: 1px solid color-mix(in srgb, var(--accent) 50%, transparent); border-radius: 999px; padding: 2px 10px;
 }
 .pass-stub {
     display: grid; gap: 8px; align-content: center;
@@ -272,6 +290,7 @@ kbd {
 }
 .btn-stub { justify-content: space-between; width: 100%; background: var(--surface); }
 .btn-stub:hover:not(:disabled) { border-color: var(--ink); color: var(--ink); }
+.btn-stub:active:not(:disabled) { background: var(--ink); color: var(--on-ink); }
 .btn-stub-danger { color: var(--danger); }
 .btn-stub-danger:hover:not(:disabled) { border-color: var(--danger) !important; color: var(--danger) !important; }
 .kick-form { display: flex; gap: 8px; }
@@ -282,11 +301,18 @@ kbd {
 .stamp {
     position: absolute; left: 50%; top: 50%;
     transform: translate(-50%, -50%) rotate(-8deg);
-    padding: 6px 18px;
-    border: 3px solid var(--ink); border-radius: 8px;
-    color: var(--ink); font: 700 26px/1 "Segoe UI Variable Display", "Segoe UI", sans-serif; letter-spacing: .04em;
-    background: color-mix(in srgb, var(--surface) 70%, transparent);
+    display: grid; place-items: center;
+    width: 184px; height: 128px;
+    clip-path: polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%);
+    background: var(--accent);
     animation: stamp-in .22s cubic-bezier(.2, 1.6, .4, 1) both;
+}
+.stamp span {
+    display: grid; place-items: center;
+    width: calc(100% - 12px); height: calc(100% - 10px);
+    clip-path: polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%);
+    background: var(--bg);
+    color: var(--amber); font: 700 22px/1 "Segoe UI Variable Display", "Segoe UI", sans-serif; letter-spacing: .03em;
 }
 @keyframes stamp-in {
     from { opacity: 0; transform: translate(-50%, -50%) rotate(-8deg) scale(1.8); }
@@ -400,8 +426,9 @@ kbd {
 .warn-groups { list-style: none; margin: 0; padding: 0; display: grid; }
 .warn-groups li { display: flex; align-items: baseline; gap: 12px; padding: 10px 4px; border-bottom: 1px solid var(--line); }
 .warn-count {
-    min-width: 28px; text-align: center; font-weight: 700; font-size: 16px;
-    color: var(--warn); border: 1px solid var(--warn); border-radius: 6px; padding: 0 6px;
+    display: inline-grid; place-items: center; flex: none;
+    width: 28px; height: 32px; clip-path: var(--hex);
+    background: var(--amber); color: #0f1218; font-weight: 700; font-size: 14px;
 }
 .warn-count-inline { margin-left: 8px; font-size: 12px; color: var(--warn); }
 .warn-count-inline::before { content: "×"; }

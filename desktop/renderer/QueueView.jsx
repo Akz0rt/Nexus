@@ -89,7 +89,7 @@ function Pass({ item, selected, busy, stamp, onSelect, onApprove, onKick, onOpen
                     Кик
                 </button>
             </div>
-            {stamp && <div className="stamp" aria-hidden="true">{stamp}</div>}
+            {stamp && <div className="stamp" aria-hidden="true"><span>{stamp}</span></div>}
         </li>
     );
 }
