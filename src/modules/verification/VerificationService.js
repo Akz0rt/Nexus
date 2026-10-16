@@ -292,9 +292,10 @@ class VerificationService {
     }
 
     /**
-     * Startup reconciliation: Discord roles vs. stored cards.
-     * Creates cards for members who got @unverified while the bot was down,
-     * closes cards whose member lost the role or left.
+     * Startup reconciliation: closes pending cards whose member lost @unverified
+     * or left while the bot was down. Never posts to the queue channel — cards
+     * are created only when the role appears (guildMemberUpdate).
+     * The full member fetch also fills the cache so guildMemberUpdate has old snapshots.
      */
     async reconcile(guild) {
         const settings = await this.getQueueSettings(guild.id);
@@ -302,20 +303,7 @@ class VerificationService {
 
         const members = await guild.members.fetch();
         const pending = await QueueCardService.listPending(guild.id);
-        const pendingIds = new Set(pending.map(c => c.userId));
-        let created = 0;
         let closed = 0;
-
-        for (const member of members.values()) {
-            if (member.user.bot || !member.roles.cache.has(settings.unverifiedRoleId)) continue;
-            try {
-                const wasPending = pendingIds.has(member.id);
-                await this.ensureCard(guild, member, 'bot');
-                if (!wasPending) created++;
-            } catch (error) {
-                console.error(`Verification reconcile: card for ${member.id} failed:`, error.message || error);
-            }
-        }
 
         for (const card of pending) {
             const member = members.get(card.userId);
@@ -328,7 +316,7 @@ class VerificationService {
             }
         }
 
-        return { created, closed, queued: pendingIds.size + created - closed };
+        return { closed, queued: pending.length - closed };
     }
 }
 
