@@ -1,22 +1,60 @@
 {
   "name": "birthdaybot-panel",
   "productName": "BirthdayBot Panel",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "Desktop moderation panel for Birthday-Bot",
+  "author": "Akz0rt",
   "main": "electron/main.js",
   "scripts": {
     "dev": "node scripts/dev.js",
     "build": "vite build",
-    "start": "vite build && electron ."
+    "start": "vite build && electron .",
+    "dist": "vite build && electron-builder --win --publish never",
+    "icon": "node scripts/make-icon.js"
   },
   "dependencies": {
-    "react": "18.3.1",
-    "react-dom": "18.3.1"
+    "electron-updater": "6.8.10"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "4.7.0",
     "electron": "44.5.1",
+    "electron-builder": "26.17.0",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
     "vite": "5.4.21"
+  },
+  "build": {
+    "appId": "com.akz0rt.birthdaybot.panel",
+    "productName": "BirthdayBot Panel",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "electron/**/*",
+      "dist/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "electron/assets/icon.png"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "artifactName": "BirthdayBot-Panel-Setup-${version}.${ext}"
+    },
+    "protocols": [
+      {
+        "name": "BirthdayBot Panel",
+        "schemes": ["birthdaybot-panel"]
+      }
+    ],
+    "publish": [
+      {
+        "provider": "generic",
+        "url": "https://github.com/Akz0rt/Birthday-Bot/releases/latest/download"
+      }
+    ]
   }
 }

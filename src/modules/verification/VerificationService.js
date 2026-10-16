@@ -9,6 +9,8 @@ const UNKNOWN_MESSAGE = 10008;
 const UNKNOWN_MEMBER = 10007;
 const LOCK_WAIT_MS = 8000;
 const LOCK_POLL_MS = 100;
+// The app offers "Undo" for 10 s after approving; allow some slack for latency
+const UNDO_WINDOW_MS = 15 * 1000;
 
 /**
  * Verification queue logic shared by Discord buttons and (later) the web panel.
@@ -276,6 +278,56 @@ class VerificationService {
             });
             return { ok: true, card: updated };
         });
+    }
+
+    /**
+     * Undo a fresh approval: give @unverified back, drop the gender role and
+     * reopen the card. Only the moderator who approved, only within UNDO_WINDOW_MS.
+     */
+    async undoApprove(guild, userId, actor, source) {
+        const settings = await this.getQueueSettings(guild.id);
+        if (!settings) return { ok: false, code: 'not_configured' };
+
+        const key = this.lockKey(guild.id, userId);
+        if (this.locks.has(key)) return { ok: false, code: 'in_progress' };
+        this.locks.add(key);
+        try {
+            const card = await QueueCardService.get(guild.id, userId);
+            if (!card || card.status !== 'approved') return { ok: false, code: 'nothing_to_undo', card };
+            if (card.handledBy !== actor.id) return { ok: false, code: 'forbidden', card };
+            if (Date.now() - Date.parse(card.handledAt) > UNDO_WINDOW_MS) return { ok: false, code: 'undo_expired', card };
+
+            const member = await this.fetchMember(guild, userId);
+            if (!member) return { ok: false, code: 'member_left', card };
+
+            const genderRoleId = card.gender === 'male' ? settings.maleRoleId : settings.femaleRoleId;
+            const roles = new Set(member.roles.cache.keys());
+            if (genderRoleId) roles.delete(genderRoleId);
+            roles.add(settings.unverifiedRoleId);
+            await member.roles.set([...roles], `Отмена пропуска · ${actor.tag || actor.id}`);
+
+            const reopened = await QueueCardService.upsert({
+                ...card,
+                status: 'pending',
+                gender: null,
+                handledBy: null,
+                handledAt: null
+            });
+            await this.safeRender(guild, reopened, member);
+
+            await AuditLogService.log({
+                guildId: guild.id,
+                action: 'verification.undone',
+                actorId: actor.id,
+                actorTag: actor.tag,
+                targetIds: [userId],
+                source,
+                details: { gender: card.gender }
+            });
+            return { ok: true, card: reopened };
+        } finally {
+            this.locks.delete(key);
+        }
     }
 
     async kick(guild, userId, reason, actor, source) {

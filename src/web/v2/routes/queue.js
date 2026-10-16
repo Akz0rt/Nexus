@@ -12,7 +12,9 @@ const RESULT_STATUS = {
     forbidden: 403,
     in_progress: 409,
     member_left: 410,
-    already_handled: 409
+    already_handled: 409,
+    nothing_to_undo: 409,
+    undo_expired: 409
 };
 
 function sendResult(res, guild, result) {
@@ -74,6 +76,16 @@ router.post('/:userId/approve', async (req, res, next) => {
         const gender = req.body?.gender;
         if (gender !== 'male' && gender !== 'female') return res.status(400).json({ error: 'invalid_gender' });
         const result = await VerificationService.approve(req.guild, req.params.userId, gender, actorOf(req), 'panel');
+        sendResult(res, req.guild, result);
+    } catch (error) {
+        next(error);
+    }
+});
+
+// POST /queue/:userId/undo — revert own approval within the undo window
+router.post('/:userId/undo', async (req, res, next) => {
+    try {
+        const result = await VerificationService.undoApprove(req.guild, req.params.userId, actorOf(req), 'panel');
         sendResult(res, req.guild, result);
     } catch (error) {
         next(error);

@@ -111,7 +111,11 @@ async function run() {
         // Live events: arrive for g1 only
         const received = [];
         const states = [];
-        const stream = admin.stream('g1', (event, data) => received.push({ event, data }), s => states.push(s));
+        const presence = [];
+        const stream = admin.stream('g1', (event, data) => {
+            if (event === 'presence') presence.push(data.users.map(u => u.id));
+            else received.push({ event, data });
+        }, s => states.push(s));
         const deadline = Date.now() + 5000;
         while (!states.includes('open')) {
             if (Date.now() > deadline) throw new Error('stream never opened');
@@ -126,6 +130,7 @@ async function run() {
         await new Promise(resolve => setTimeout(resolve, 100));
         assert.deepStrictEqual(received.map(r => r.data.id), ['mine']);
         assert.strictEqual(received[0].event, 'audit');
+        assert.deepStrictEqual(presence[0], ['mod'], 'own presence is announced on connect');
         stream.close();
 
         assert.strictEqual(unauthorized, 0);

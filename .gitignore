@@ -71,3 +71,6 @@ tmpclaude-*
 
 # Desktop panel build output
 desktop/dist/
+
+# Desktop installer output
+desktop/release/

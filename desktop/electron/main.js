@@ -1,19 +1,35 @@
+const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
-const { app, BrowserWindow, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, Menu, Notification, Tray, dialog, ipcMain, nativeImage, shell } = require('electron');
 const config = require('./config');
 const tokenStore = require('./tokenStore');
+const settings = require('./settings');
 const { ApiClient } = require('./api');
 
+const ICON_PATH = path.join(__dirname, 'assets', 'icon.png');
+const UPDATE_CHECK_MS = 6 * 60 * 60 * 1000;
+
 let mainWindow = null;
+let tray = null;
+let quitting = false;
+let trayHintShown = false;
 let token = null;
 let pendingVerifier = null; // PKCE verifier of the login in progress
 let stream = null;
+let updater = null;
 
 const api = new ApiClient(config.apiUrl, () => token, () => setToken(null));
 
 function send(channel, payload) {
     if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(channel, payload);
+}
+
+function showWindow() {
+    if (!mainWindow) return createWindow();
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
 }
 
 function setToken(value) {
@@ -48,8 +64,9 @@ async function handleDeepLink(rawUrl) {
     const code = url.searchParams.get('code');
     const verifier = pendingVerifier;
     pendingVerifier = null;
+    showWindow();
     if (!code || !verifier) {
-        send('auth:error', { message: 'Вход не был начат в этом окне. Попробуйте ещё раз.' });
+        send('auth:error', { message: 'Вход начат не из этого окна. Нажмите «Войти через Discord» ещё раз.' });
         return;
     }
 
@@ -59,10 +76,6 @@ async function handleDeepLink(rawUrl) {
     } catch (error) {
         send('auth:error', { message: `Не удалось войти: ${error.message}` });
     }
-    if (mainWindow) {
-        if (mainWindow.isMinimized()) mainWindow.restore();
-        mainWindow.focus();
-    }
 }
 
 const findDeepLink = argv => argv.find(arg => arg.startsWith(`${config.appScheme}://`));
@@ -71,10 +84,11 @@ const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
     app.quit();
 } else {
-    // Windows/Linux: the deep link starts a second instance — forward it here
+    // Windows/Linux: a deep link or a second launch starts another instance — hand over here
     app.on('second-instance', (event, argv) => {
         const link = findDeepLink(argv);
         if (link) handleDeepLink(link);
+        else showWindow();
     });
     // macOS
     app.on('open-url', (event, link) => {
@@ -83,9 +97,42 @@ if (!gotLock) {
     });
 }
 
-// --- IPC: the renderer's only door to the network ----------------------------------
+// --- Live events: forwarded to the UI, newcomers also raise a notification --------
 
-ipcMain.handle('auth:status', () => ({ loggedIn: Boolean(token), apiUrl: config.apiUrl }));
+function notifyNewcomer() {
+    if (!settings.get().notifications || !Notification.isSupported()) return;
+    if (mainWindow?.isVisible() && mainWindow.isFocused()) return;
+    const notification = new Notification({
+        title: 'Новичок ждёт пропуска',
+        body: 'Нажмите, чтобы открыть очередь.',
+        icon: ICON_PATH
+    });
+    notification.on('click', () => {
+        showWindow();
+        send('app:navigate', { view: 'queue' });
+    });
+    notification.show();
+}
+
+function subscribe(guildId) {
+    stream?.close();
+    stream = guildId
+        ? api.stream(guildId,
+            (name, data) => {
+                send('events:message', { guildId, event: name, data });
+                if (name === 'audit' && data.action === 'verification.queued') notifyNewcomer();
+            },
+            stateName => send('events:state', { guildId, state: stateName }))
+        : null;
+}
+
+// --- IPC: the renderer's only door to the outside -----------------------------------
+
+ipcMain.handle('auth:status', () => ({
+    loggedIn: Boolean(token),
+    apiUrl: config.apiUrl,
+    version: app.getVersion()
+}));
 
 ipcMain.handle('auth:login', async () => {
     pendingVerifier = crypto.randomBytes(32).toString('base64url');
@@ -111,24 +158,64 @@ ipcMain.handle('api:request', async (event, { method, path: apiPath, body }) => 
     }
 });
 
-ipcMain.handle('events:subscribe', (event, guildId) => {
-    stream?.close();
-    stream = guildId
-        ? api.stream(guildId,
-            (name, data) => send('events:message', { guildId, event: name, data }),
-            stateName => send('events:state', { guildId, state: stateName }))
-        : null;
+ipcMain.handle('events:subscribe', (event, guildId) => subscribe(guildId));
+
+ipcMain.handle('settings:get', () => settings.get());
+ipcMain.handle('settings:update', (event, patch) => settings.update(patch));
+
+ipcMain.handle('file:saveCsv', async (event, { fileName, content }) => {
+    const { canceled, filePath } = await dialog.showSaveDialog(mainWindow, {
+        defaultPath: String(fileName || 'export.csv').replace(/[\\/:*?"<>|]/g, '_'),
+        filters: [{ name: 'CSV', extensions: ['csv'] }]
+    });
+    if (canceled || !filePath) return { saved: false };
+    // BOM so Excel opens Cyrillic correctly
+    fs.writeFileSync(filePath, '﻿' + String(content), 'utf8');
+    return { saved: true, filePath };
 });
 
-// --- Window -------------------------------------------------------------------------
+ipcMain.handle('update:install', () => {
+    quitting = true;
+    updater?.quitAndInstall();
+});
+
+// --- Auto-update from GitHub Releases (installed builds only) ---------------------
+
+function startAutoUpdate() {
+    if (!app.isPackaged) return;
+    ({ autoUpdater: updater } = require('electron-updater'));
+    updater.autoDownload = true;
+    updater.autoInstallOnAppQuit = true;
+    updater.on('update-downloaded', info => send('update:ready', { version: info.version }));
+    updater.on('error', error => console.error('Auto-update error:', error?.message || error));
+    const check = () => updater.checkForUpdates().catch(() => {});
+    check();
+    setInterval(check, UPDATE_CHECK_MS).unref?.();
+}
+
+// --- Window and tray ------------------------------------------------------------------
+
+function createTray() {
+    tray = new Tray(nativeImage.createFromPath(ICON_PATH).resize({ width: 16, height: 16 }));
+    tray.setToolTip('BirthdayBot Panel');
+    tray.setContextMenu(Menu.buildFromTemplate([
+        { label: 'Открыть панель', click: showWindow },
+        { type: 'separator' },
+        { label: 'Выйти', click: () => { quitting = true; app.quit(); } }
+    ]));
+    tray.on('click', showWindow);
+}
 
 function createWindow() {
     mainWindow = new BrowserWindow({
-        width: 1200,
-        height: 800,
-        minWidth: 800,
-        minHeight: 560,
+        width: 1280,
+        height: 820,
+        minWidth: 900,
+        minHeight: 600,
         title: 'BirthdayBot Panel',
+        icon: ICON_PATH,
+        backgroundColor: '#17181f',
+        autoHideMenuBar: true,
         webPreferences: {
             preload: path.join(__dirname, 'preload.js'),
             contextIsolation: true,
@@ -143,29 +230,49 @@ function createWindow() {
         return { action: 'deny' };
     });
 
+    // Close → hide to tray (the live queue and notifications keep working)
+    mainWindow.on('close', event => {
+        if (quitting || !settings.get().closeToTray || !tray) return;
+        event.preventDefault();
+        mainWindow.hide();
+        if (!trayHintShown && Notification.isSupported()) {
+            trayHintShown = true;
+            new Notification({
+                title: 'Панель работает в трее',
+                body: 'Выйти можно через значок в трее → «Выйти».',
+                icon: ICON_PATH
+            }).show();
+        }
+    });
+    mainWindow.on('closed', () => { mainWindow = null; });
+
     if (process.env.VITE_DEV_SERVER_URL) {
         mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL);
     } else {
         mainWindow.loadFile(path.join(__dirname, '..', 'dist', 'index.html'));
     }
-    mainWindow.on('closed', () => { mainWindow = null; });
 }
 
 app.whenReady().then(() => {
     if (!gotLock) return;
+    app.setAppUserModelId('com.akz0rt.birthdaybot.panel'); // notifications on Windows
     token = tokenStore.load();
     createWindow();
+    createTray();
+    startAutoUpdate();
 
     // Cold start from a deep link (Windows passes it in argv)
     const link = findDeepLink(process.argv);
     if (link) handleDeepLink(link);
 });
 
+app.on('before-quit', () => { quitting = true; });
+
 app.on('window-all-closed', () => {
-    stream?.close();
-    if (process.platform !== 'darwin') app.quit();
+    if (quitting || !tray) {
+        stream?.close();
+        if (process.platform !== 'darwin') app.quit();
+    }
 });
 
-app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
-});
+app.on('activate', showWindow);

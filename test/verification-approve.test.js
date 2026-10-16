@@ -102,11 +102,39 @@ async function notInQueue() {
     assert.strictEqual(state.setCalls.length, 0);
 }
 
+async function undo() {
+    setup();
+    cards.u1 = { guildId: 'g1', userId: 'u1', status: 'pending', messageId: 'm1', channelId: 'queue' };
+    const { guild, state } = makeGuild(['everyone', 'unv', 'booster']);
+    const kira = { id: 'kira', tag: 'Kira' };
+
+    await VerificationService.approve(guild, 'u1', 'female', kira, 'panel');
+
+    // someone else can't undo Kira's decision
+    const foreign = await VerificationService.undoApprove(guild, 'u1', { id: 'bob', tag: 'Bob' }, 'panel');
+    assert.strictEqual(foreign.code, 'forbidden');
+
+    const result = await VerificationService.undoApprove(guild, 'u1', kira, 'panel');
+    assert.strictEqual(result.ok, true, `undo failed: ${result.code}`);
+    assert.deepStrictEqual([...state.setCalls[1]].sort(), ['booster', 'everyone', 'unv'], 'gender role off, @unverified back');
+    assert.strictEqual(cards.u1.status, 'pending');
+    assert.strictEqual(cards.u1.messageId, 'm1', 'the Discord card is reopened, not replaced');
+    assert.deepStrictEqual(logged.map(e => e.action), ['verification.approved', 'verification.undone']);
+
+    // nothing left to undo
+    assert.strictEqual((await VerificationService.undoApprove(guild, 'u1', kira, 'panel')).code, 'nothing_to_undo');
+
+    // too late
+    cards.u1 = { ...cards.u1, status: 'approved', gender: 'male', handledBy: 'kira', handledAt: new Date(Date.now() - 60000).toISOString() };
+    assert.strictEqual((await VerificationService.undoApprove(guild, 'u1', kira, 'panel')).code, 'undo_expired');
+}
+
 (async () => {
     await concurrentClicks();
+    await undo();
     await cardlessMember();
     await notInQueue();
-    console.log('PASS: approve runs once per member, works without a card, ignores verified members');
+    console.log('PASS: approve runs once per member, works without a card, ignores verified members, undo within window');
 })().catch(err => {
     console.error('FAIL:', err.message);
     process.exit(1);

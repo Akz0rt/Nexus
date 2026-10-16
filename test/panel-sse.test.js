@@ -22,9 +22,15 @@ function run() {
     const a1 = fakeRes();
     const a2 = fakeRes();
     const b1 = fakeRes();
-    hub.subscribe('guildA', a1);
-    hub.subscribe('guildA', a2);
-    hub.subscribe('guildB', b1);
+    hub.subscribe('guildA', a1, { id: 'kira', displayName: 'Kira' });
+    hub.subscribe('guildA', a2, { id: 'kira', displayName: 'Kira' }); // same moderator, second window
+    hub.subscribe('guildB', b1, { id: 'bob', displayName: 'Bob' });
+
+    // presence: distinct users per guild, pushed to that guild's streams
+    assert.deepStrictEqual(hub.presence('guildA').map(u => u.id), ['kira']);
+    assert.deepStrictEqual(hub.presence('guildB').map(u => u.id), ['bob']);
+    assert.ok(a1.frames.some(f => f.startsWith('event: presence')));
+    assert.ok(!b1.frames.some(f => f.includes('kira')), 'presence must not leak across guilds');
 
     assert.strictEqual(a1.headers['Content-Type'], 'text/event-stream');
 
@@ -38,13 +44,16 @@ function run() {
     a2.emit('close');
     assert.strictEqual(hub.broadcast('guildA', 'audit', {}), 1);
 
+    // kira still has a1 open → still on shift
+    assert.deepStrictEqual(hub.presence('guildA').map(u => u.id), ['kira']);
+
     // last stream gone → heartbeat stops
     a1.emit('close');
     b1.emit('close');
     assert.strictEqual(hub.clients.size, 0);
     assert.strictEqual(hub.heartbeat, null);
 
-    console.log('PASS: SSE hub per-guild fan-out');
+    console.log('PASS: SSE hub per-guild fan-out and presence');
 }
 
 try {

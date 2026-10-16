@@ -3,6 +3,7 @@ const PanelSessionService = require('../../services/PanelSessionService');
 const { createAuthRouter, isConfigured, bearerToken, publicUser } = require('./auth');
 const { requireGuildAccess } = require('./access');
 const { SseHub } = require('./events');
+const { userRef } = require('./serialize');
 
 /**
  * API for the desktop panel app, mounted at /api/v2 — independent of the old
@@ -34,7 +35,14 @@ function createV2Router({ hub = new SseHub().attach() } = {}) {
     guildRouter.use('/queue', require('./routes/queue'));
     guildRouter.use('/audit', require('./routes/audit'));
     guildRouter.use('/members', require('./routes/members'));
-    guildRouter.get('/events', (req, res) => hub.subscribe(req.guild.id, res));
+    guildRouter.get('/events', (req, res) => {
+        const ref = userRef(req.guild, req.session.userId);
+        hub.subscribe(req.guild.id, res, {
+            id: req.session.userId,
+            displayName: ref.displayName || req.session.globalName || req.session.username,
+            avatarURL: ref.avatarURL
+        });
+    });
     router.use('/guilds/:guildId', requireGuildAccess('admin'), guildRouter);
 
     router.use((req, res) => res.status(404).json({ error: 'not_found' }));
