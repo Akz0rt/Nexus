@@ -22,7 +22,6 @@ Birthday-Bot/
 ├── CI/CD
 │   └── .github/
 │       └── workflows/
-│           ├── azure-webapp.yml          Azure deployment workflow
 │           └── main_birthday-bot.yml     Auto-deploy on push to main
 │
 └── src/

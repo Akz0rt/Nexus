@@ -173,7 +173,6 @@ Birthday-Bot/
 │   └── index.js                   # Bot entry point
 ├── .github/
 │   └── workflows/
-│       ├── azure-webapp.yml
 │       └── main_birthday-bot.yml  # CI/CD: auto-deploy on push to main
 ├── .env                           # Local secrets (never commit)
 ├── .gitignore
