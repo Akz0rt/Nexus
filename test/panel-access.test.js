@@ -14,6 +14,8 @@ function run() {
     assert.strictEqual(panelRoleFromPermissions(perms(PermissionFlagsBits.Administrator)), 'senior');
     assert.strictEqual(panelRoleFromPermissions(perms(PermissionFlagsBits.ManageRoles)), 'admin');
     assert.strictEqual(panelRoleFromPermissions(perms(PermissionFlagsBits.KickMembers)), 'admin');
+    assert.strictEqual(panelRoleFromPermissions(perms(PermissionFlagsBits.ModerateMembers)), 'admin');
+    assert.strictEqual(panelRoleFromPermissions(perms(PermissionFlagsBits.BanMembers)), 'admin');
     assert.strictEqual(panelRoleFromPermissions(perms(PermissionFlagsBits.SendMessages)), 'none');
     assert.strictEqual(panelRoleFromPermissions(perms()), 'none');
     assert.strictEqual(panelRoleFromPermissions(null), 'none');

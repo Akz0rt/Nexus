@@ -35,6 +35,7 @@ function createV2Router({ hub = new SseHub().attach() } = {}) {
     guildRouter.use('/queue', require('./routes/queue'));
     guildRouter.use('/audit', require('./routes/audit'));
     guildRouter.use('/members', require('./routes/members'));
+    guildRouter.use('/moderation', require('./routes/moderation'));
     guildRouter.get('/events', (req, res) => {
         const ref = userRef(req.guild, req.session.userId);
         hub.subscribe(req.guild.id, res, {

@@ -1,5 +1,6 @@
 const { CosmosClient } = require('@azure/cosmos');
 const config = require('../config');
+const { DEFAULT_REASONS, DEFAULT_ESCALATION } = require('../modules/moderation/templates');
 
 const GUILD_SETTINGS_CONTAINER = 'guild_settings';
 const CACHE_TTL_MS = 60 * 1000;
@@ -81,6 +82,13 @@ class GuildSettingsService {
         // Give @unverified on join ourselves (skipped if a third-party bot already did). On by default.
         const envAssign = useEnv ? parseBool(config.assignUnverifiedOnJoin) : undefined;
         result.assignUnverifiedOnJoin = doc?.assignUnverifiedOnJoin ?? envAssign ?? true;
+
+        // Moderation: reason templates and warn escalation (edited from the panel's Settings later)
+        const moderation = doc?.moderation || {};
+        result.moderation = {
+            reasons: Array.isArray(moderation.reasons) && moderation.reasons.length ? moderation.reasons : DEFAULT_REASONS,
+            escalation: Array.isArray(moderation.escalation) ? moderation.escalation : DEFAULT_ESCALATION
+        };
 
         return result;
     }

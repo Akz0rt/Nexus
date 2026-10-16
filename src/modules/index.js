@@ -8,7 +8,8 @@ const modules = [
     require('./birthdays'),
     require('./ai'),
     require('./activity'),
-    require('./verification')
+    require('./verification'),
+    require('./moderation')
 ];
 
 function registerModules(client) {

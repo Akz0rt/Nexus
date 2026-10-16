@@ -1,7 +1,9 @@
 const express = require('express');
+const { PermissionFlagsBits } = require('discord.js');
 const AuditLogService = require('../../../services/AuditLogService');
 const QueueCardService = require('../../../modules/verification/QueueCardService');
-const { describeMember, serializeCard } = require('../serialize');
+const WarningService = require('../../../modules/moderation/WarningService');
+const { describeMember, serializeCard, userRef } = require('../serialize');
 
 const router = express.Router({ mergeParams: true });
 
@@ -70,12 +72,44 @@ router.get('/:userId', async (req, res, next) => {
             ? { id: member.voice.channel.id, name: member.voice.channel.name }
             : null;
 
-        const [history, card] = await Promise.all([
+        const [history, card, warnings] = await Promise.all([
             AuditLogService.query({ guildId: guild.id, targetId: userId }, { limit: 50 }).then(r => r.items),
-            QueueCardService.get(guild.id, userId)
+            QueueCardService.get(guild.id, userId),
+            WarningService.listActive(guild.id, userId)
         ]);
 
-        res.json({ member: describeMember(member), roles, voice, card: serializeCard(card), history });
+        const mutedUntil = (member.communicationDisabledUntilTimestamp || 0) > Date.now()
+            ? new Date(member.communicationDisabledUntilTimestamp).toISOString()
+            : null;
+
+        // Which punishment buttons the viewer gets (the service re-checks on every action)
+        const viewer = guild.members.cache.get(req.session.userId);
+        const has = flag => Boolean(viewer?.permissions.has(flag));
+        const can = {
+            warn: has(PermissionFlagsBits.ModerateMembers),
+            mute: has(PermissionFlagsBits.ModerateMembers),
+            kick: has(PermissionFlagsBits.KickMembers),
+            ban: has(PermissionFlagsBits.BanMembers)
+        };
+
+        res.json({
+            member: describeMember(member),
+            roles,
+            voice,
+            card: serializeCard(card),
+            history,
+            moderation: {
+                mutedUntil,
+                warnings: warnings.map(warn => ({
+                    id: warn.id,
+                    reason: warn.reason,
+                    actor: warn.actorId ? userRef(guild, warn.actorId) : null,
+                    createdAt: warn.createdAt,
+                    expiresAt: warn.expiresAt
+                })),
+                can
+            }
+        });
     } catch (error) {
         next(error);
     }

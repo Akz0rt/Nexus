@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { apiGet, describeError } from './api.js';
-import { ACTION_LABELS, GENDER_LABELS, SOURCE_LABELS, formatDateTime, toCsv } from './format.js';
+import { ACTION_LABELS, SOURCE_LABELS, describeAction, formatDateTime, toCsv } from './format.js';
 import { MemberLink } from './Avatar.jsx';
 
 const EMPTY_FILTERS = { action: '', source: '', actorId: '', targetId: '', since: '', until: '' };
@@ -28,12 +28,6 @@ function matches(entry, filters) {
     if (filters.since && entry.createdAt < new Date(`${filters.since}T00:00:00`).toISOString()) return false;
     if (filters.until && entry.createdAt > new Date(`${filters.until}T23:59:59.999`).toISOString()) return false;
     return true;
-}
-
-function describeAction(entry) {
-    const label = ACTION_LABELS[entry.action] || entry.action;
-    const gender = GENDER_LABELS[entry.details?.gender];
-    return gender ? `${label} · ${gender}` : label;
 }
 
 export default function JournalView({ guildId, liveEvents, onOpenMember, toast }) {

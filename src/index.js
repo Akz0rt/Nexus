@@ -38,6 +38,20 @@ for (const file of commandFiles) {
 
 registerModules(client);
 
+// Slash commands are registered per guild on every start, so new commands
+// appear without running `npm run deploy` by hand (guild commands update instantly).
+async function registerCommands() {
+    const body = client.commands.map(command => command.data.toJSON());
+    for (const guild of client.guilds.cache.values()) {
+        try {
+            await guild.commands.set(body);
+        } catch (error) {
+            console.error(`Failed to register commands in ${guild.id}:`, error.message || error);
+        }
+    }
+    console.log(`Registered ${body.length} slash command(s)`);
+}
+
 client.once(Events.ClientReady, async () => {
     console.log('Discord bot is ready! 🎉');
 
@@ -45,6 +59,7 @@ client.once(Events.ClientReady, async () => {
     state.guild = client.guilds.cache.first() || null;
     state.client = client;
 
+    await registerCommands();
     await runReadyHooks(client);
 });
 
@@ -61,6 +76,16 @@ async function replyWithError(interaction, content) {
 }
 
 client.on(Events.InteractionCreate, async interaction => {
+    if (interaction.isAutocomplete()) {
+        const command = client.commands.get(interaction.commandName);
+        try {
+            await command?.autocomplete?.(interaction);
+        } catch (error) {
+            console.error(`Autocomplete ${interaction.commandName} error:`, error.message || error);
+        }
+        return;
+    }
+
     if (interaction.isChatInputCommand()) {
         const command = client.commands.get(interaction.commandName);
         if (!command) return;

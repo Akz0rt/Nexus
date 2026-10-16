@@ -103,20 +103,24 @@ if (!gotLock) {
 
 // --- Live events: forwarded to the UI, newcomers also raise a notification --------
 
-function notifyNewcomer() {
+function notify(title, body, view) {
     if (!settings.get().notifications || !Notification.isSupported()) return;
     if (mainWindow?.isVisible() && mainWindow.isFocused()) return;
-    const notification = new Notification({
-        title: 'Новичок ждёт пропуска',
-        body: 'Нажмите, чтобы открыть очередь.',
-        icon: ICON_PATH
-    });
+    const notification = new Notification({ title, body, icon: ICON_PATH });
     notification.on('click', () => {
         showWindow();
-        send('app:navigate', { view: 'queue' });
+        send('app:navigate', { view });
     });
     notification.show();
 }
+
+const NOTIFICATIONS = {
+    'verification.queued': () => notify('Новичок ждёт пропуска', 'Нажмите, чтобы открыть очередь.', 'queue'),
+    'moderation.ban_proposed': entry => notify(
+        'Предложен бан',
+        `У участника ${entry.reason || 'много варнов'}. Решение — кнопкой в канале модераторов.`,
+        'moderation')
+};
 
 function subscribe(guildId) {
     stream?.close();
@@ -124,7 +128,7 @@ function subscribe(guildId) {
         ? api.stream(guildId,
             (name, data) => {
                 send('events:message', { guildId, event: name, data });
-                if (name === 'audit' && data.action === 'verification.queued') notifyNewcomer();
+                if (name === 'audit') NOTIFICATIONS[data.action]?.(data);
             },
             stateName => send('events:state', { guildId, state: stateName }))
         : null;

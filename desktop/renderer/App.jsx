@@ -4,6 +4,7 @@ import Sidebar from './Sidebar.jsx';
 import Header from './Header.jsx';
 import QueueView from './QueueView.jsx';
 import JournalView from './JournalView.jsx';
+import ModerationView from './ModerationView.jsx';
 import MemberDrawer from './MemberDrawer.jsx';
 import Toasts from './Toasts.jsx';
 
@@ -106,7 +107,7 @@ export default function App() {
                 <div className="login-pass">
                     <img src="./icon.png" alt="" width="72" height="72" />
                     <h1>Nexus</h1>
-                    <p>Панель модераторов сервера: очередь новичков, журнал действий и карточки участников.</p>
+                    <p>Панель модераторов сервера: очередь новичков, наказания, журнал действий и карточки участников.</p>
                     <button className="btn btn-primary btn-large" onClick={() => window.panel.login()}>Войти через Discord</button>
                     <p className="muted small">Вход откроется в браузере, затем вернёт вас сюда.</p>
                     {authError && <p className="error">{authError}</p>}
@@ -148,7 +149,7 @@ export default function App() {
                     {!guildId && (
                         <div className="empty">
                             <h2>Нет серверов с доступом</h2>
-                            <p>Панель открывается на серверах, где есть бот и у вас есть права Manage Roles, Kick Members или Administrator.</p>
+                            <p>Панель открывается на серверах, где есть бот и у вас есть одно из прав: «Управлять ролями», «Выгонять», «Отправлять подумать о поведении», «Банить» или «Администратор».</p>
                         </div>
                     )}
                     {guildId && view === 'queue' && (
@@ -160,6 +161,9 @@ export default function App() {
                             onOpenMember={setDrawerUserId}
                             toast={toast}
                         />
+                    )}
+                    {guildId && view === 'moderation' && (
+                        <ModerationView guildId={guildId} revision={revision} onOpenMember={setDrawerUserId} toast={toast} />
                     )}
                     {guildId && view === 'journal' && (
                         <JournalView guildId={guildId} liveEvents={liveEvents} onOpenMember={setDrawerUserId} toast={toast} />

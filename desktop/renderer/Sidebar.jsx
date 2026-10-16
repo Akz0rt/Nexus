@@ -3,6 +3,7 @@ import Avatar from './Avatar.jsx';
 
 const ITEMS = [
     { id: 'queue', label: 'Пропуск' },
+    { id: 'moderation', label: 'Модерация' },
     { id: 'journal', label: 'Журнал' }
 ];
 

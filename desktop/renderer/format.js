@@ -5,7 +5,15 @@ export const ACTION_LABELS = {
     'verification.kicked': 'Кик из очереди',
     'verification.role_removed': '@АНверефи снята вручную',
     'verification.left': 'Вышел из очереди',
-    'verification.role_assigned': 'Выдана @АНверефи при входе'
+    'verification.role_assigned': 'Выдана @АНверефи при входе',
+    'moderation.warned': 'Варн',
+    'moderation.unwarned': 'Варн снят',
+    'moderation.muted': 'Мут',
+    'moderation.unmuted': 'Мут снят',
+    'moderation.kicked': 'Кик',
+    'moderation.banned': 'Бан',
+    'moderation.unbanned': 'Разбан',
+    'moderation.ban_proposed': 'Предложен бан'
 };
 
 export const SOURCE_LABELS = { discord: 'Discord', bot: 'Бот', panel: 'Панель', auto: 'Авто' };
@@ -37,6 +45,26 @@ export function timeAgo(iso) {
     return `${Math.round(hours / 24)} дн. назад`;
 }
 
+/** "осталось 42 мин", "осталось 5 ч", "осталось 3 дн." */
+export function timeLeft(iso) {
+    if (!iso) return '';
+    const minutes = Math.ceil((Date.parse(iso) - Date.now()) / 60000);
+    if (minutes <= 0) return 'истекает';
+    if (minutes < 60) return `осталось ${minutes} мин`;
+    const hours = Math.round(minutes / 60);
+    if (hours < 48) return `осталось ${hours} ч`;
+    return `осталось ${Math.round(hours / 24)} дн.`;
+}
+
+/** Duration of a mute/ban from the log: "1 ч", "7 дн.", "навсегда" */
+export function formatDurationMs(ms) {
+    if (!ms) return 'навсегда';
+    const minutes = Math.round(ms / 60000);
+    if (minutes < 60) return `${minutes} мин`;
+    if (minutes < 24 * 60) return `${Math.round(minutes / 60)} ч`;
+    return `${Math.round(minutes / 1440)} дн.`;
+}
+
 export function accountAge(iso) {
     const days = Math.floor((Date.now() - Date.parse(iso)) / DAY_MS);
     if (days < 1) return 'меньше дня';
@@ -53,4 +81,18 @@ export function toCsv(rows) {
         return /[";\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
     };
     return rows.map(row => row.map(cell).join(';')).join('\r\n');
+}
+
+/** Journal line: "Пропуск · Девушка", "Мут · 1 ч", "Бан · навсегда" */
+export function describeAction(entry) {
+    const label = ACTION_LABELS[entry.action] || entry.action;
+    const gender = GENDER_LABELS[entry.details?.gender];
+    if (gender) return `${label} · ${gender}`;
+    if (entry.action === 'moderation.muted' || entry.action === 'moderation.banned') {
+        return `${label} · ${formatDurationMs(entry.details?.durationMs)}`;
+    }
+    if (entry.action === 'moderation.warned' && entry.details?.activeWarns) {
+        return `${label} · ${entry.details.activeWarns}-й активный`;
+    }
+    return label;
 }

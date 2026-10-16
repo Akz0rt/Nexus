@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { apiGet, describeError } from './api.js';
-import { ACTION_LABELS, GENDER_LABELS, SOURCE_LABELS, accountAge, formatDateTime } from './format.js';
+import { apiDelete, apiGet, apiPost, describeError } from './api.js';
+import { GENDER_LABELS, SOURCE_LABELS, accountAge, describeAction, formatDateTime, timeLeft } from './format.js';
 import Avatar, { MemberLink } from './Avatar.jsx';
+import PunishDialog from './PunishDialog.jsx';
 
 const CARD_STATUS = {
     pending: 'Ждёт пропуска',
@@ -14,6 +15,7 @@ const CARD_STATUS = {
 export default function MemberDrawer({ guildId, userId, revision, onClose, onOpenMember, toast }) {
     const [data, setData] = useState(null);
     const [error, setError] = useState(null);
+    const [dialog, setDialog] = useState(null); // 'warn' | 'mute' | 'kick' | 'ban'
 
     useEffect(() => {
         let cancelled = false;
@@ -28,10 +30,13 @@ export default function MemberDrawer({ guildId, userId, revision, onClose, onOpe
     }, [guildId, userId, revision]);
 
     useEffect(() => {
-        const onKey = event => { if (event.key === 'Escape' && !event.target.closest('input, select')) onClose(); };
+        const onKey = event => {
+            // The punishment dialog handles its own Escape
+            if (event.key === 'Escape' && !dialog && !event.target.closest('input, select')) onClose();
+        };
         window.addEventListener('keydown', onKey);
         return () => window.removeEventListener('keydown', onKey);
-    }, [onClose]);
+    }, [onClose, dialog]);
 
     const copyId = async () => {
         try {
@@ -43,6 +48,16 @@ export default function MemberDrawer({ guildId, userId, revision, onClose, onOpe
     };
 
     const member = data?.member;
+    const moderation = data?.moderation;
+
+    const unmute = async () => {
+        const result = await apiPost(`/guilds/${guildId}/moderation/${userId}/unmute`);
+        toast(result.ok ? 'Мут снят' : describeError(result), result.ok ? {} : { tone: 'error' });
+    };
+    const unwarn = async warn => {
+        const result = await apiDelete(`/guilds/${guildId}/moderation/warnings/${warn.id}`);
+        toast(result.ok ? 'Варн снят' : describeError(result), result.ok ? {} : { tone: 'error' });
+    };
 
     return (
         <aside className="drawer" aria-label="Карточка участника">
@@ -81,6 +96,42 @@ export default function MemberDrawer({ guildId, userId, revision, onClose, onOpe
                         <ul className="flags">{member.flags.map(flag => <li key={flag}>{flag.replace(/^⚠️\s*/, '')}</li>)}</ul>
                     )}
 
+                    {moderation && (
+                        <>
+                            <h3>Модерация</h3>
+                            {moderation.mutedUntil && (
+                                <p className="mute-state">
+                                    Мут до {formatDateTime(moderation.mutedUntil)} · {timeLeft(moderation.mutedUntil)}
+                                </p>
+                            )}
+                            {moderation.warnings.length === 0
+                                ? <p className="muted small">Активных варнов нет.</p>
+                                : (
+                                    <ul className="drawer-warns">
+                                        {moderation.warnings.map(warn => (
+                                            <li key={warn.id}>
+                                                <span>{warn.reason}</span>
+                                                <span className="muted small">
+                                                    {warn.actor?.displayName || 'бот'} · {formatDateTime(warn.createdAt)} · сгорит {formatDateTime(warn.expiresAt)}
+                                                </span>
+                                                {moderation.can.warn && (
+                                                    <button className="btn btn-quiet" onClick={() => unwarn(warn)}>Снять</button>
+                                                )}
+                                            </li>
+                                        ))}
+                                    </ul>
+                                )}
+                            <div className="punish-row">
+                                <button className="btn" disabled={!moderation.can.warn} onClick={() => setDialog('warn')}>Варн</button>
+                                {moderation.mutedUntil
+                                    ? <button className="btn" disabled={!moderation.can.mute} onClick={unmute}>Снять мут</button>
+                                    : <button className="btn" disabled={!moderation.can.mute} onClick={() => setDialog('mute')}>Мут</button>}
+                                <button className="btn btn-danger" disabled={!moderation.can.kick} onClick={() => setDialog('kick')}>Кик</button>
+                                <button className="btn btn-danger" disabled={!moderation.can.ban} onClick={() => setDialog('ban')}>Бан</button>
+                            </div>
+                        </>
+                    )}
+
                     <h3>Роли</h3>
                     {data.roles.length === 0 && <p className="muted small">Ролей нет.</p>}
                     <ul className="roles">
@@ -98,8 +149,7 @@ export default function MemberDrawer({ guildId, userId, revision, onClose, onOpe
                             <li key={entry.id}>
                                 <span className="numeric muted small">{formatDateTime(entry.createdAt)}</span>
                                 <span>
-                                    {ACTION_LABELS[entry.action] || entry.action}
-                                    {entry.details?.gender && ` · ${GENDER_LABELS[entry.details.gender]}`}
+                                    {describeAction(entry)}
                                     {entry.reason && ` — ${entry.reason}`}
                                 </span>
                                 <span className="muted small">
@@ -112,6 +162,10 @@ export default function MemberDrawer({ guildId, userId, revision, onClose, onOpe
                         ))}
                     </ol>
                 </div>
+            )}
+            {dialog && member && (
+                <PunishDialog guildId={guildId} kind={dialog} target={{ id: member.id, displayName: member.displayName }}
+                    onClose={() => setDialog(null)} toast={toast} />
             )}
         </aside>
     );
