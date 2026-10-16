@@ -156,7 +156,9 @@ async function escalation() {
     assert.deepStrictEqual(second.escalation, { action: 'timeout', ok: true, durationMs: HOUR_MS });
     assert.deepStrictEqual(target.timeouts, [HOUR_MS]);
     assert.strictEqual(target.user.dms.length, 1, 'the escalation mute DMs the user');
-    assert.ok(target.user.dms[0].includes('1 час') && target.user.dms[0].includes('Эскалация: 2 варна'));
+    assert.ok(target.user.dms[0].includes('1 час') && target.user.dms[0].includes('Повторные нарушения правил'));
+    assert.ok(!/варн/i.test(target.user.dms[0]), 'the DM must not reveal warns');
+    assert.strictEqual(logged.find(e => e.action === 'moderation.muted').reason, 'Эскалация: 2 варна', 'the log keeps the real reason');
 
     const third = await ModerationService.warn(guild, 'u1', 'Флуд', MOD, 'discord');
     assert.strictEqual(third.escalation.durationMs, 24 * HOUR_MS);

@@ -15,6 +15,7 @@ const CUSTOM_ID_PREFIX = 'mod';
 
 // Escalation and expired bans act on their own, with no moderator behind them
 const AUTO_ACTOR = { id: null, tag: null };
+const ESCALATION_DM_REASON = 'Повторные нарушения правил';
 
 function cleanReason(reason) {
     return String(reason || '').trim().slice(0, MAX_REASON_LENGTH);
@@ -182,7 +183,8 @@ class ModerationService {
                 // Never shorten a longer mute that is already running
                 const until = member.communicationDisabledUntilTimestamp || 0;
                 if (until > Date.now() + rule.durationMs) return { action: 'timeout', ok: false, code: 'already_muted' };
-                await this.applyTimeout(guild, member, rule.durationMs, reason, AUTO_ACTOR, 'auto');
+                // Warns are silent, so the DM must not reveal them
+                await this.applyTimeout(guild, member, rule.durationMs, reason, AUTO_ACTOR, 'auto', ESCALATION_DM_REASON);
                 return { action: 'timeout', ok: true, durationMs: rule.durationMs };
             }
             if (rule.action === 'propose_ban') {
@@ -230,11 +232,12 @@ class ModerationService {
 
     // --- Mutes (Discord timeouts) ------------------------------------------------
 
-    async applyTimeout(guild, member, durationMs, reason, actor, source) {
+    /** dmReason: what the user is told (escalation hides that warns exist); reason goes to the log. */
+    async applyTimeout(guild, member, durationMs, reason, actor, source, dmReason = reason) {
         await member.timeout(durationMs, discordReason(reason, actor));
         const until = new Date(Date.now() + durationMs).toISOString();
         const dmSent = await this.notify(member.user,
-            `Вам выдан мут на сервере «${guild.name}» на ${formatDuration(durationMs)}.\nПричина: ${reason}`);
+            `Вам выдан мут на сервере «${guild.name}» на ${formatDuration(durationMs)}.\nПричина: ${dmReason}`);
 
         await AuditLogService.log({
             guildId: guild.id,
