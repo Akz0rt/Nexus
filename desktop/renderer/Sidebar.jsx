@@ -11,7 +11,7 @@ export default function Sidebar({ view, onView, waitingCount, presence, version 
         <aside className="sidebar">
             <div className="brand">
                 <img src="./icon.png" alt="" width="28" height="28" />
-                <span>Пропускной пункт</span>
+                <span>Nexus</span>
             </div>
             <nav className="menu">
                 {ITEMS.map(item => (

@@ -1,9 +1,9 @@
 {
-  "name": "birthdaybot-panel",
-  "productName": "BirthdayBot Panel",
+  "name": "nexus-panel",
+  "productName": "Nexus",
   "version": "0.2.0",
   "private": true,
-  "description": "Desktop moderation panel for Birthday-Bot",
+  "description": "Nexus desktop moderation panel",
   "author": "Akz0rt",
   "main": "electron/main.js",
   "scripts": {
@@ -26,7 +26,7 @@
   },
   "build": {
     "appId": "com.akz0rt.birthdaybot.panel",
-    "productName": "BirthdayBot Panel",
+    "productName": "Nexus",
     "directories": {
       "output": "release"
     },
@@ -42,18 +42,18 @@
     "nsis": {
       "oneClick": true,
       "perMachine": false,
-      "artifactName": "BirthdayBot-Panel-Setup-${version}.${ext}"
+      "artifactName": "Nexus-Setup-${version}.${ext}"
     },
     "protocols": [
       {
-        "name": "BirthdayBot Panel",
+        "name": "Nexus",
         "schemes": ["birthdaybot-panel"]
       }
     ],
     "publish": [
       {
         "provider": "generic",
-        "url": "https://github.com/Akz0rt/Birthday-Bot/releases/latest/download"
+        "url": "https://github.com/Akz0rt/Nexus/releases/latest/download"
       }
     ]
   }

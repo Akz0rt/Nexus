@@ -7,6 +7,9 @@ const tokenStore = require('./tokenStore');
 const settings = require('./settings');
 const { ApiClient } = require('./api');
 
+// Data folder from before the rename to Nexus: keeps the saved login and settings
+app.setPath('userData', path.join(app.getPath('appData'), 'BirthdayBot Panel'));
+
 const ICON_PATH = path.join(__dirname, 'assets', 'icon.png');
 const UPDATE_CHECK_MS = 6 * 60 * 60 * 1000;
 
@@ -44,6 +47,7 @@ function setToken(value) {
 }
 
 // --- Deep link: birthdaybot-panel://auth?code=... --------------------------------
+// The scheme and appId keep the pre-Nexus names so installed 0.2.x builds update in place.
 
 if (process.defaultApp) {
     // Dev: register electron.exe + this app's path
@@ -197,7 +201,7 @@ function startAutoUpdate() {
 
 function createTray() {
     tray = new Tray(nativeImage.createFromPath(ICON_PATH).resize({ width: 16, height: 16 }));
-    tray.setToolTip('BirthdayBot Panel');
+    tray.setToolTip('Nexus');
     tray.setContextMenu(Menu.buildFromTemplate([
         { label: 'Открыть панель', click: showWindow },
         { type: 'separator' },
@@ -212,7 +216,7 @@ function createWindow() {
         height: 820,
         minWidth: 900,
         minHeight: 600,
-        title: 'BirthdayBot Panel',
+        title: 'Nexus',
         icon: ICON_PATH,
         backgroundColor: '#17181f',
         autoHideMenuBar: true,

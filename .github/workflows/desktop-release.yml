@@ -51,9 +51,9 @@ jobs:
         run: |
           VERSION="${{ steps.version.outputs.version }}"
           gh release create "$GITHUB_REF_NAME" \
-            "release/BirthdayBot-Panel-Setup-$VERSION.exe" \
-            "release/BirthdayBot-Panel-Setup-$VERSION.exe.blockmap" \
+            "release/Nexus-Setup-$VERSION.exe" \
+            "release/Nexus-Setup-$VERSION.exe.blockmap" \
             release/latest.yml \
-            --title "BirthdayBot Panel $VERSION" \
-            --notes "Установщик панели модераторов для Windows: скачайте BirthdayBot-Panel-Setup-$VERSION.exe и запустите. Уже установленное приложение обновится само." \
+            --title "Nexus $VERSION" \
+            --notes "Установщик панели модераторов для Windows: скачайте Nexus-Setup-$VERSION.exe и запустите. Уже установленное приложение обновится само." \
             --latest

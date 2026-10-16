@@ -105,8 +105,8 @@ export default function App() {
             <div className="login">
                 <div className="login-pass">
                     <img src="./icon.png" alt="" width="72" height="72" />
-                    <h1>Пропускной пункт</h1>
-                    <p>Панель модераторов BirthdayBot: очередь новичков, журнал действий и карточки участников.</p>
+                    <h1>Nexus</h1>
+                    <p>Панель модераторов сервера: очередь новичков, журнал действий и карточки участников.</p>
                     <button className="btn btn-primary btn-large" onClick={() => window.panel.login()}>Войти через Discord</button>
                     <p className="muted small">Вход откроется в браузере, затем вернёт вас сюда.</p>
                     {authError && <p className="error">{authError}</p>}

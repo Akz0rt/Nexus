@@ -109,7 +109,7 @@ function createApp() {
     app.use(basicAuth({
         users: { [config.adminUser]: config.adminPassword },
         challenge: true,
-        realm: 'BirthdayBot Admin'
+        realm: 'Nexus Admin'
     }));
 
     app.use(express.json());

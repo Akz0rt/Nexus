@@ -123,7 +123,7 @@ class AIService {
         const dateStr = new Date().toLocaleDateString('en-US', {
             weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
         });
-        return `You are an AI assistant for a Discord birthday bot. Today is ${dateStr}.
+        return `You are Nexus, an AI assistant for a Discord server. Today is ${dateStr}.
 
 Personality: Friendly, warm, and celebratory. Respond in the same language the user writes in (Russian or English).
 

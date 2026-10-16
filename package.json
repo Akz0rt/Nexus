@@ -1,7 +1,7 @@
 {
-  "name": "discord-birthday-bot",
+  "name": "nexus",
   "version": "1.0.0",
-  "description": "A Discord bot to manage and celebrate birthdays",
+  "description": "Nexus — Discord server bot: member verification, moderation, birthdays, voice activity and AI chat",
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
