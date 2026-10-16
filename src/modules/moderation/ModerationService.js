@@ -139,11 +139,18 @@ class ModerationService {
     }
 
     async unwarn(guild, warnId, actor, source) {
-        if (!(await this.authorize(guild, actor, PermissionFlagsBits.ModerateMembers))) {
-            return { ok: false, code: 'forbidden' };
-        }
+        const actorMember = await this.authorize(guild, actor, PermissionFlagsBits.ModerateMembers);
+        if (!actorMember) return { ok: false, code: 'forbidden' };
         const warning = await WarningService.get(guild.id, warnId);
         if (!warning) return { ok: false, code: 'warning_not_found' };
+
+        // Same rules as giving a warn: not your own, not someone ranked at or above you
+        if (warning.userId === actor.id) return { ok: false, code: 'self' };
+        const target = await this.fetchMember(guild, warning.userId);
+        if (target) {
+            const problem = targetProblem(guild, actorMember, target, null);
+            if (problem) return { ok: false, code: problem };
+        }
 
         await WarningService.remove(guild.id, warnId);
         await AuditLogService.log({

@@ -261,6 +261,13 @@ async function unwarn() {
     assert.strictEqual((await ModerationService.unwarn(guild, warning.id, MOD, 'panel')).ok, true);
     assert.strictEqual(warns.length, 0);
     assert.strictEqual((await ModerationService.unwarn(guild, warning.id, MOD, 'panel')).code, 'warning_not_found');
+
+    // A moderator can't clear their own warns or those of someone ranked at or above them
+    warns.push({ id: 'own', userId: 'mod', reason: 'Флуд' }, { id: 'peer', userId: 'peer', reason: 'Флуд' });
+    const { guild: guild2 } = makeGuild([makeMember('mod', 10), makeMember('peer', 10)]);
+    assert.strictEqual((await ModerationService.unwarn(guild2, 'own', MOD, 'panel')).code, 'self');
+    assert.strictEqual((await ModerationService.unwarn(guild2, 'peer', MOD, 'panel')).code, 'target_higher');
+    assert.strictEqual(warns.length, 2);
 }
 
 async function run() {
