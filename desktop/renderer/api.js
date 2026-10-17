@@ -16,6 +16,14 @@ export async function apiDelete(path) {
     return window.panel.request('DELETE', path);
 }
 
+export async function apiPut(path, body) {
+    return window.panel.request('PUT', path, body);
+}
+
+export async function apiPatch(path, body) {
+    return window.panel.request('PATCH', path, body);
+}
+
 const ERROR_TEXT = {
     not_configured: 'Пропуск не настроен на этом сервере: задайте UNVERIFIED_ROLE_ID и VERIFY_QUEUE_CHANNEL_ID.',
     forbidden: 'Нет прав на это действие.',
@@ -37,7 +45,22 @@ const ERROR_TEXT = {
     already_banned: 'Он уже забанен.',
     warning_not_found: 'Варн уже снят или сгорел.',
     invalid_user_id: 'Это не похоже на ID пользователя Discord.',
-    unauthorized: 'Сессия закончилась. Войдите снова.'
+    unauthorized: 'Сессия закончилась. Войдите снова.',
+    invalid_targets: 'Никто не выбран.',
+    invalid_name: 'Введите название.',
+    invalid_limit: 'Лимит — число от 0 до 99.',
+    need_two_channels: 'Для команд нужно хотя бы два канала.',
+    channel_not_found: 'Голосовой канал не найден. Возможно, его удалили.',
+    channel_forbidden: 'У вас нет доступа к этому каналу.',
+    bot_cannot_channel: 'У бота нет прав в этом канале.',
+    bot_missing_permission: 'Боту не хватает прав: «Перемещать участников», «Отключать участникам микрофон» или «Отключать участникам звук».',
+    nobody: 'Некого трогать: в канале никого нет или всё уже сделано.',
+    squad_not_found: 'Состав уже удалён.',
+    rename_rate_limited: 'Discord разрешает переименовать канал только дважды за 10 минут. Попробуйте позже.',
+    role_higher: 'Эта роль не ниже вашей высшей роли.',
+    role_managed: 'Эту роль выдаёт интеграция, вручную её не выдать.',
+    role_not_found: 'Роль не найдена.',
+    bot_cannot_role: 'Роль бота ниже этой роли.'
 };
 
 export function describeError(result) {

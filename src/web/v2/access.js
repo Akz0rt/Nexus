@@ -6,8 +6,9 @@ const ROLE_RANK = { none: 0, admin: 1, senior: 2 };
 
 /**
  * Panel role from a member's Discord permissions:
- * Administrator → senior; Manage Roles, Kick Members, Timeout Members or Ban Members → admin;
- * otherwise none. Each action still checks its own permission.
+ * Administrator → senior; Manage Roles, Kick Members, Timeout Members, Ban Members,
+ * Move Members, Mute Members or Deafen Members → admin; otherwise none.
+ * Each action still checks its own permission.
  * @param {{ has(flag: bigint): boolean }} permissions
  * @returns {'senior'|'admin'|'none'}
  */
@@ -18,7 +19,10 @@ function panelRoleFromPermissions(permissions) {
         PermissionFlagsBits.ManageRoles,
         PermissionFlagsBits.KickMembers,
         PermissionFlagsBits.ModerateMembers,
-        PermissionFlagsBits.BanMembers
+        PermissionFlagsBits.BanMembers,
+        PermissionFlagsBits.MoveMembers,
+        PermissionFlagsBits.MuteMembers,
+        PermissionFlagsBits.DeafenMembers
     ];
     if (moderatorFlags.some(flag => permissions.has(flag))) return 'admin';
     return 'none';

@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { apiGet, apiPost, describeError } from './api.js';
+import { describeBulk } from './format.js';
 
 // Options (reason templates, durations) per server, loaded once
 const optionsCache = new Map();
@@ -48,9 +49,10 @@ const SNOWFLAKE_RE = /^\d{17,20}$/;
 
 /**
  * Warn / mute / kick / ban dialog.
- * target: { id, displayName } or null for "ban by ID".
+ * target: { id, displayName } or null for "ban by ID";
+ * targets: several members at once (the voice board's «Тайм-аут…»).
  */
-export default function PunishDialog({ guildId, kind, target, onClose, onDone, toast }) {
+export default function PunishDialog({ guildId, kind, target, targets, onClose, onDone, toast }) {
     const options = useModerationOptions(guildId);
     const meta = KINDS[kind];
     const [userId, setUserId] = useState(target?.id || '');
@@ -68,8 +70,32 @@ export default function PunishDialog({ guildId, kind, target, onClose, onDone, t
         return () => window.removeEventListener('keydown', onKey);
     }, [onClose]);
 
+    const submitMany = async body => {
+        setBusy(true);
+        setError(null);
+        const done = [];
+        const failed = [];
+        for (const member of targets) {
+            const result = await apiPost(`/guilds/${guildId}/moderation/${member.id}/${kind}`, body);
+            if (result.ok) done.push(member.id);
+            else failed.push({ userId: member.id, name: member.displayName, code: result.error });
+        }
+        setBusy(false);
+        if (done.length === 0) { setError(describeError({ error: failed[0]?.code })); return; }
+        toast(describeBulk(meta.done, { done, failed }), failed.length ? { tone: 'error', ttl: 8000 } : {});
+        onDone?.({ done, failed });
+        onClose();
+    };
+
     const submit = async event => {
         event.preventDefault();
+        if (targets) {
+            if (!reason.trim()) { setError('Укажите причину.'); return; }
+            const body = { reason: reason.trim() };
+            if (kind === 'mute') body.duration = duration;
+            await submitMany(body);
+            return;
+        }
         const id = userId.trim();
         if (!SNOWFLAKE_RE.test(id)) { setError('Введите ID пользователя: 17–20 цифр.'); return; }
         if (!reason.trim()) { setError('Укажите причину.'); return; }
@@ -95,9 +121,11 @@ export default function PunishDialog({ guildId, kind, target, onClose, onDone, t
     return (
         <div className="dialog-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) onClose(); }}>
             <form className="dialog" role="dialog" aria-modal="true" aria-labelledby="punish-title" onSubmit={submit}>
-                <h2 id="punish-title">{meta.title}{target ? `: ${target.displayName || target.id}` : ' по ID'}</h2>
+                <h2 id="punish-title">
+                    {meta.title}{targets ? `: ${targets.length} чел.` : target ? `: ${target.displayName || target.id}` : ' по ID'}
+                </h2>
 
-                {!target && (
+                {!target && !targets && (
                     <label className="field">
                         ID пользователя
                         <input ref={firstField} value={userId} onChange={e => setUserId(e.target.value)} inputMode="numeric" placeholder="123456789012345678" />
@@ -147,7 +175,7 @@ export default function PunishDialog({ guildId, kind, target, onClose, onDone, t
                                 onClick={() => setReason(template)}>{template}</button>
                         ))}
                     </div>
-                    <input ref={target ? firstField : undefined} value={reason} maxLength={400}
+                    <input ref={target || targets ? firstField : undefined} value={reason} maxLength={400}
                         onChange={e => setReason(e.target.value)} placeholder="Шаблон выше или своя причина" aria-label="Причина" />
                 </div>
 

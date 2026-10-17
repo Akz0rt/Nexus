@@ -5,6 +5,7 @@ import Header from './Header.jsx';
 import QueueView from './QueueView.jsx';
 import JournalView from './JournalView.jsx';
 import ModerationView from './ModerationView.jsx';
+import VoiceView from './VoiceView.jsx';
 import MemberDrawer from './MemberDrawer.jsx';
 import Toasts from './Toasts.jsx';
 
@@ -25,6 +26,7 @@ export default function App() {
     const [streamState, setStreamState] = useState('closed');
     const [presence, setPresence] = useState([]);
     const [revision, setRevision] = useState(0); // bumps on every live event
+    const [voiceRevision, setVoiceRevision] = useState(0); // bumps on every voice-board change
     const [liveEvents, setLiveEvents] = useState([]);
     const [waiting, setWaiting] = useState(null); // waiting queue, shared by sidebar counter and queue view
     const [toasts, setToasts] = useState([]);
@@ -83,6 +85,7 @@ export default function App() {
                 setLiveEvents(list => [data, ...list].slice(0, 300));
                 setRevision(r => r + 1);
             }
+            if (event === 'voice') setVoiceRevision(r => r + 1);
         });
         const offState = window.panel.onStreamState(({ guildId: id, state }) => { if (id === guildId) setStreamState(state); });
         return () => { offEvent(); offState(); };
@@ -107,7 +110,7 @@ export default function App() {
                 <div className="login-pass">
                     <img src="./icon.png" alt="" width="72" height="72" />
                     <h1>Nexus</h1>
-                    <p>Панель модераторов сервера: очередь новичков, наказания, журнал действий и карточки участников.</p>
+                    <p>Панель модераторов сервера: очередь новичков, голосовые каналы, наказания, журнал действий и карточки участников.</p>
                     <button className="btn btn-primary btn-large" onClick={() => window.panel.login()}>Войти через Discord</button>
                     <p className="muted small">Вход откроется в браузере, затем вернёт вас сюда.</p>
                     {authError && <p className="error">{authError}</p>}
@@ -149,7 +152,7 @@ export default function App() {
                     {!guildId && (
                         <div className="empty">
                             <h2>Нет серверов с доступом</h2>
-                            <p>Панель открывается на серверах, где есть бот и у вас есть одно из прав: «Управлять ролями», «Выгонять», «Отправлять подумать о поведении», «Банить» или «Администратор».</p>
+                            <p>Панель открывается на серверах, где есть бот и у вас есть одно из прав: «Управлять ролями», «Выгонять», «Отправлять подумать о поведении», «Банить», «Перемещать участников», «Отключать участникам микрофон или звук» или «Администратор».</p>
                         </div>
                     )}
                     {guildId && view === 'queue' && (
@@ -161,6 +164,10 @@ export default function App() {
                             onOpenMember={setDrawerUserId}
                             toast={toast}
                         />
+                    )}
+                    {guildId && view === 'voice' && (
+                        <VoiceView guildId={guildId} myId={me?.id} revision={revision} voiceRevision={voiceRevision}
+                            onOpenMember={setDrawerUserId} toast={toast} />
                     )}
                     {guildId && view === 'moderation' && (
                         <ModerationView guildId={guildId} revision={revision} onOpenMember={setDrawerUserId} toast={toast} />

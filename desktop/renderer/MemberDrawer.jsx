@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { apiDelete, apiGet, apiPost, describeError } from './api.js';
-import { GENDER_LABELS, SOURCE_LABELS, accountAge, describeAction, formatDateTime, timeLeft } from './format.js';
+import { GENDER_LABELS, SOURCE_LABELS, accountAge, describeAction, describeBulk, formatDateTime, timeLeft } from './format.js';
 import Avatar, { MemberLink } from './Avatar.jsx';
 import PunishDialog from './PunishDialog.jsx';
+import ChannelPicker from './ChannelPicker.jsx';
 
 const CARD_STATUS = {
     pending: 'Ждёт пропуска',
@@ -15,7 +16,7 @@ const CARD_STATUS = {
 export default function MemberDrawer({ guildId, userId, revision, onClose, onOpenMember, toast }) {
     const [data, setData] = useState(null);
     const [error, setError] = useState(null);
-    const [dialog, setDialog] = useState(null); // 'warn' | 'mute' | 'kick' | 'ban'
+    const [dialog, setDialog] = useState(null); // 'warn' | 'mute' | 'kick' | 'ban' | 'move'
 
     useEffect(() => {
         let cancelled = false;
@@ -54,6 +55,12 @@ export default function MemberDrawer({ guildId, userId, revision, onClose, onOpe
         const result = await apiPost(`/guilds/${guildId}/moderation/${userId}/unmute`);
         toast(result.ok ? 'Мут снят' : describeError(result), result.ok ? {} : { tone: 'error' });
     };
+    const voiceAction = async (path, body, verb) => {
+        const result = await apiPost(`/guilds/${guildId}/voice/${path}`, body);
+        if (!result.ok) { toast(describeError(result), { tone: 'error' }); return; }
+        const failure = result.data.failed[0];
+        toast(failure ? describeBulk(verb, result.data) : `${verb}: ${member.displayName}`, failure ? { tone: 'error' } : {});
+    };
     const unwarn = async warn => {
         const result = await apiDelete(`/guilds/${guildId}/moderation/warnings/${warn.id}`);
         toast(result.ok ? 'Варн снят' : describeError(result), result.ok ? {} : { tone: 'error' });
@@ -80,7 +87,14 @@ export default function MemberDrawer({ guildId, userId, revision, onClose, onOpe
                     <dl className="facts">
                         <div><dt>Аккаунту</dt><dd>{accountAge(member.accountCreatedAt)}</dd></div>
                         <div><dt>На сервере с</dt><dd>{formatDateTime(member.joinedAt)}</dd></div>
-                        <div><dt>Голосовой канал</dt><dd>{data.voice ? data.voice.name : 'не в голосе'}</dd></div>
+                        <div>
+                            <dt>Голосовой канал</dt>
+                            <dd>
+                                {data.voice ? data.voice.name : 'не в голосе'}
+                                {data.voice?.serverMute && <span className="voice-note"> · микро выключен сервером</span>}
+                                {data.voice?.serverDeaf && <span className="voice-note"> · звук выключен сервером</span>}
+                            </dd>
+                        </div>
                         {data.card && (
                             <div>
                                 <dt>Пропуск</dt>
@@ -94,6 +108,15 @@ export default function MemberDrawer({ guildId, userId, revision, onClose, onOpe
                     </dl>
                     {member.flags.length > 0 && (
                         <ul className="flags">{member.flags.map(flag => <li key={flag}>{flag.replace(/^⚠️\s*/, '')}</li>)}</ul>
+                    )}
+                    {data.voice && moderation && (
+                        <div className="punish-row">
+                            <button className="btn" disabled={!moderation.can.move} onClick={() => setDialog('move')}>Переместить</button>
+                            {data.voice.serverMute
+                                ? <button className="btn" disabled={!moderation.can.voiceMute} onClick={() => voiceAction('unmute', { userIds: [userId] }, 'Микро включён')}>Включить микро</button>
+                                : <button className="btn" disabled={!moderation.can.voiceMute} onClick={() => voiceAction('mute', { userIds: [userId] }, 'Микро выключен')}>Выключить микро</button>}
+                            <button className="btn" disabled={!moderation.can.move} onClick={() => voiceAction('disconnect', { userIds: [userId] }, 'Отключён от голоса')}>Отключить от голоса</button>
+                        </div>
                     )}
 
                     {moderation && (
@@ -163,7 +186,12 @@ export default function MemberDrawer({ guildId, userId, revision, onClose, onOpe
                     </ol>
                 </div>
             )}
-            {dialog && member && (
+            {dialog === 'move' && member && (
+                <ChannelPicker guildId={guildId} excludeIds={data.voice ? [data.voice.id] : []}
+                    onClose={() => setDialog(null)}
+                    onPick={channel => { setDialog(null); voiceAction('move', { userIds: [userId], channelId: channel.id }, 'Перемещён'); }} />
+            )}
+            {dialog && dialog !== 'move' && member && (
                 <PunishDialog guildId={guildId} kind={dialog} target={{ id: member.id, displayName: member.displayName }}
                     onClose={() => setDialog(null)} toast={toast} />
             )}

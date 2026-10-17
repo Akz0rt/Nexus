@@ -81,9 +81,10 @@ class SseHub {
         this.heartbeat = null;
     }
 
-    /** Forward audit-log entries to the guild's open streams. */
+    /** Forward audit-log entries and voice-board changes to the guild's open streams. */
     attach(bus = EventBus) {
         bus.on('audit', entry => this.broadcast(entry.guildId, 'audit', entry));
+        bus.on('voice', change => this.broadcast(change.guildId, 'voice', change));
         return this;
     }
 }

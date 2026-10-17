@@ -9,7 +9,8 @@ const modules = [
     require('./ai'),
     require('./activity'),
     require('./verification'),
-    require('./moderation')
+    require('./moderation'),
+    require('./voice')
 ];
 
 function registerModules(client) {

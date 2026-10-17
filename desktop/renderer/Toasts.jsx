@@ -6,11 +6,12 @@ export default function Toasts({ toasts, onDismiss }) {
             {toasts.map(t => (
                 <div key={t.id} className={`toast ${t.tone ? `toast-${t.tone}` : ''}`}>
                     <span>{t.text}</span>
-                    {t.action && (
-                        <button className="btn btn-quiet" onClick={() => { t.action.onClick(); onDismiss(t.id); }}>
-                            {t.action.label}
+                    {(t.actions || (t.action ? [t.action] : [])).map((action, index) => (
+                        <button key={action.label} className={`btn btn-quiet ${index > 0 ? 'toast-more' : ''}`}
+                            onClick={() => { action.onClick(); onDismiss(t.id); }}>
+                            {action.label}
                         </button>
-                    )}
+                    ))}
                 </div>
             ))}
         </div>

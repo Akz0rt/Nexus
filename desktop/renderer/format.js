@@ -13,7 +13,24 @@ export const ACTION_LABELS = {
     'moderation.kicked': 'Кик',
     'moderation.banned': 'Бан',
     'moderation.unbanned': 'Разбан',
-    'moderation.ban_proposed': 'Предложен бан'
+    'moderation.ban_proposed': 'Предложен бан',
+    'voice.moved': 'Перемещение',
+    'voice.move_undone': 'Перемещение отменено',
+    'voice.split': 'Разбивка на команды',
+    'voice.gathered': 'Сбор в канал',
+    'voice.muted': 'Микро выключен',
+    'voice.unmuted': 'Микро включён',
+    'voice.deafened': 'Звук выключен',
+    'voice.undeafened': 'Звук включён',
+    'voice.disconnected': 'Отключён от голоса',
+    'voice.channel_locked': 'Канал закрыт',
+    'voice.channel_unlocked': 'Канал открыт',
+    'voice.channel_edited': 'Канал изменён',
+    'voice.squad_saved': 'Состав сохранён',
+    'voice.squad_deleted': 'Состав удалён',
+    'voice.squad_invited': 'Приглашение в голос',
+    'roles.added': 'Роль выдана',
+    'roles.removed': 'Роль снята'
 };
 
 export const SOURCE_LABELS = { discord: 'Discord', bot: 'Бот', panel: 'Панель', auto: 'Авто' };
@@ -94,5 +111,42 @@ export function describeAction(entry) {
     if (entry.action === 'moderation.warned' && entry.details?.activeWarns) {
         return `${label} · ${entry.details.activeWarns}-й активный`;
     }
+    const subject = entry.details?.roleName || entry.details?.squadName || entry.details?.channelName;
+    if (subject) return `${label} · ${subject}`;
     return label;
+}
+
+/** Why one member was skipped in a group action. */
+export const FAILURE_LABELS = {
+    not_in_voice: 'не в голосе',
+    target_higher: 'роль не ниже вашей',
+    target_protected: 'владелец сервера',
+    member_not_found: 'нет на сервере',
+    bot_cannot: 'боту не хватает прав',
+    dm_closed: 'закрыты ЛС',
+    failed: 'ошибка Discord'
+};
+
+/** "Перемещено 7 из 8 · Bob — не в голосе" */
+export function describeBulk(verb, data) {
+    const total = data.done.length + data.failed.length;
+    const parts = [`${verb} ${data.done.length} из ${total}`];
+    const byCode = new Map();
+    for (const failure of data.failed) {
+        if (!byCode.has(failure.code)) byCode.set(failure.code, []);
+        byCode.get(failure.code).push(failure.name || failure.userId);
+    }
+    for (const [code, names] of byCode) {
+        const shown = names.slice(0, 2).join(', ') + (names.length > 2 ? ` и ещё ${names.length - 2}` : '');
+        parts.push(`${shown} — ${FAILURE_LABELS[code] || code}`);
+    }
+    return parts.join(' · ');
+}
+
+/** "12 мин", "2 ч 05 мин" in a voice channel */
+export function formatSince(iso) {
+    if (!iso) return '';
+    const minutes = Math.max(0, Math.floor((Date.now() - Date.parse(iso)) / 60000));
+    if (minutes < 60) return `${minutes} мин`;
+    return `${Math.floor(minutes / 60)} ч ${String(minutes % 60).padStart(2, '0')} мин`;
 }

@@ -69,7 +69,12 @@ router.get('/:userId', async (req, res, next) => {
             }));
 
         const voice = member.voice?.channel
-            ? { id: member.voice.channel.id, name: member.voice.channel.name }
+            ? {
+                id: member.voice.channel.id,
+                name: member.voice.channel.name,
+                serverMute: Boolean(member.voice.serverMute),
+                serverDeaf: Boolean(member.voice.serverDeaf)
+            }
             : null;
 
         const [history, card, warnings] = await Promise.all([
@@ -82,14 +87,17 @@ router.get('/:userId', async (req, res, next) => {
             ? new Date(member.communicationDisabledUntilTimestamp).toISOString()
             : null;
 
-        // Which punishment buttons the viewer gets (the service re-checks on every action)
+        // Which punishment and voice buttons the viewer gets (the services re-check on every action)
         const viewer = guild.members.cache.get(req.session.userId);
         const has = flag => Boolean(viewer?.permissions.has(flag));
         const can = {
             warn: has(PermissionFlagsBits.ModerateMembers),
             mute: has(PermissionFlagsBits.ModerateMembers),
             kick: has(PermissionFlagsBits.KickMembers),
-            ban: has(PermissionFlagsBits.BanMembers)
+            ban: has(PermissionFlagsBits.BanMembers),
+            move: has(PermissionFlagsBits.MoveMembers),
+            voiceMute: has(PermissionFlagsBits.MuteMembers),
+            deafen: has(PermissionFlagsBits.DeafenMembers)
         };
 
         res.json({
