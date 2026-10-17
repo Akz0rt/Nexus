@@ -248,6 +248,11 @@ async function channelSettings() {
     const noManage = world({ modPerms: flag => flag !== PermissionFlagsBits.ManageChannels });
     noManage.channels.cache.get('lobby').permissionsFor = member => ({ has: flag => member.id === 'bot' || flag !== PermissionFlagsBits.ManageChannels });
     assert.strictEqual((await VoiceService.setLocked(noManage, 'lobby', true, MOD, 'panel')).code, 'forbidden');
+    // Locking edits overwrites: needs Manage Permissions as well
+    const noOverwrites = world();
+    noOverwrites.channels.cache.get('lobby').permissionsFor = member => ({ has: flag => member.id === 'bot' || flag !== PermissionFlagsBits.ManageRoles });
+    assert.strictEqual((await VoiceService.setLocked(noOverwrites, 'lobby', true, MOD, 'panel')).code, 'forbidden');
+    assert.ok((await VoiceService.editChannel(noOverwrites, 'lobby', { userLimit: 3 }, MOD, 'panel')).ok);
 }
 
 async function roles() {

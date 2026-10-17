@@ -468,8 +468,10 @@ class VoiceService {
 
     /** Close the channel to @everyone (deny Connect) or open it again. */
     async setLocked(guild, channelId, locked, actor, source) {
-        const { channel, code } = await this.authorizeChannel(guild, channelId, actor);
+        const { channel, actorMember, code } = await this.authorizeChannel(guild, channelId, actor);
         if (code) return { ok: false, code };
+        // Editing overwrites takes Manage Permissions too, as in Discord itself
+        if (!channel.permissionsFor(actorMember)?.has(PermissionFlagsBits.ManageRoles)) return { ok: false, code: 'forbidden' };
         if (!this.botHas(guild, PermissionFlagsBits.ManageChannels, channel)
             || !this.botHas(guild, PermissionFlagsBits.ManageRoles, channel)) {
             return { ok: false, code: 'bot_cannot_channel' };

@@ -122,7 +122,7 @@ function ChannelMenu({ channel, can, hasSplit, selectedHere, onAction, onClose }
         { id: 'unmuteAll', label: 'Размутить всех', enabled: can.mute && channel.members.some(m => m.serverMute) },
         { id: 'split', label: 'Разбить на команды…', enabled: can.move && people >= 2 },
         hasSplit && { id: 'gatherBack', label: 'Собрать обратно', enabled: can.move },
-        { id: 'lock', label: channel.locked ? 'Открыть для всех' : 'Закрыть для всех', enabled: can.channels },
+        { id: 'lock', label: channel.locked ? 'Открыть для всех' : 'Закрыть для всех', enabled: can.channels && can.roles },
         { id: 'edit', label: 'Лимит и название…', enabled: can.channels }
     ].filter(Boolean);
 

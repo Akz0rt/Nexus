@@ -69,10 +69,10 @@ function describeChannel(guild, channel) {
     };
 }
 
-/** Voice channels grouped by category, in the server's own order. */
-function describeBoard(guild) {
+/** Voice channels the viewer can see, grouped by category, in the server's own order. */
+function describeBoard(guild, viewer) {
     const voiceChannels = [...guild.channels.cache.values()]
-        .filter(isVoice)
+        .filter(channel => isVoice(channel) && channel.permissionsFor(viewer)?.has(PermissionFlagsBits.ViewChannel))
         .sort((a, b) => a.rawPosition - b.rawPosition);
     const categories = new Map();
     for (const channel of voiceChannels) {
@@ -116,7 +116,7 @@ router.get('/', (req, res) => {
     const viewer = guild.members.cache.get(req.session.userId);
     const has = flag => Boolean(viewer?.permissions.has(flag));
     res.json({
-        categories: describeBoard(guild),
+        categories: viewer ? describeBoard(guild, viewer) : [],
         myChannelId: viewer?.voice?.channelId || null,
         can: {
             move: has(PermissionFlagsBits.MoveMembers),

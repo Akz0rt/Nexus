@@ -47,6 +47,9 @@ makeMember(guild, PEER_ID, { position: 10, perms: modPerms, channelId: LOOSE_ID 
 guild.members.cache.get(A_ID).voice.selfMute = true;
 guild.channels.cache.get(RED_ID).permissionOverwrites.cache.set(guild.id, { deny: { has: flag => flag === PermissionFlagsBits.Connect } });
 guild.roles.cache.set('500000000000000001', { id: '500000000000000001', name: 'Ивент', position: 1, managed: false, editable: true, hexColor: '#123456' });
+// A staff-only room the mod can't see stays off their board
+makeChannel(guild, { id: '400000000000000009', name: 'Админская', position: 1, connect: () => true });
+guild.channels.cache.get('400000000000000009').permissionsFor = member => ({ has: flag => member.id === 'bot' || flag !== PermissionFlagsBits.ViewChannel });
 guild.memberCount = guild.members.cache.size;
 state.client = { isReady: () => true, guilds: { cache: new Map([[guild.id, guild]]) } };
 
@@ -69,6 +72,7 @@ async function run() {
         // Uncategorised first, then categories by position; channels by position
         assert.deepStrictEqual(board.body.categories.map(c => c.name), ['Без категории', 'Игры']);
         assert.deepStrictEqual(board.body.categories[1].channels.map(c => c.name), ['Лобби', 'Красные']);
+        assert.deepStrictEqual(board.body.categories[0].channels.map(c => c.name), ['Общий']);
         assert.strictEqual(board.body.categories[1].channels[1].locked, true);
         const lobby = board.body.categories[1].channels[0];
         assert.deepStrictEqual(lobby.members.map(m => m.id).sort(), [A_ID, MOD_ID].sort());
