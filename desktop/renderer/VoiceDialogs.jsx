@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { apiGet, apiPatch, apiPost, apiPut, describeError } from './api.js';
-import { describeBulk } from './format.js';
+import { apiPatch, apiPost, apiPut, describeError } from './api.js';
 import Dialog from './Dialog.jsx';
 import Avatar from './Avatar.jsx';
 
@@ -33,52 +32,6 @@ export function ChannelEditDialog({ guildId, channel, onClose, toast }) {
                 <input type="number" min="0" max="99" value={limit} onChange={e => setLimit(e.target.value)} />
             </label>
             <p className="muted small">Discord разрешает переименовать канал только дважды за 10 минут.</p>
-            {error && <p className="error">{error}</p>}
-        </Dialog>
-    );
-}
-
-/** Give or take one role from everyone selected. */
-export function RoleDialog({ guildId, userIds, onClose, toast }) {
-    const [roles, setRoles] = useState(null);
-    const [roleId, setRoleId] = useState('');
-    const [add, setAdd] = useState(true);
-    const [busy, setBusy] = useState(false);
-    const [error, setError] = useState(null);
-
-    useEffect(() => {
-        apiGet(`/guilds/${guildId}/roles/assignable`)
-            .then(data => { setRoles(data.items); setRoleId(data.items[0]?.id || ''); })
-            .catch(err => setError(describeError(err)));
-    }, [guildId]);
-
-    const submit = async () => {
-        if (!roleId) return;
-        setBusy(true);
-        const result = await apiPost(`/guilds/${guildId}/roles/bulk`, { userIds, roleId, add });
-        setBusy(false);
-        if (!result.ok) { setError(describeError(result)); return; }
-        const role = roles.find(r => r.id === roleId);
-        toast(`${describeBulk(add ? 'Роль выдана' : 'Роль снята', result.data)} · ${role?.name}`,
-            result.data.failed.length ? { tone: 'error', ttl: 8000 } : {});
-        onClose();
-    };
-
-    return (
-        <Dialog title={`Роль: ${userIds.length} чел.`} onClose={onClose} onSubmit={submit} submitLabel={add ? 'Выдать' : 'Снять'} busy={busy}>
-            <div className="segmented" role="group" aria-label="Действие">
-                <button type="button" className={`tab ${add ? 'is-active' : ''}`} aria-pressed={add} onClick={() => setAdd(true)}>Выдать</button>
-                <button type="button" className={`tab ${!add ? 'is-active' : ''}`} aria-pressed={!add} onClick={() => setAdd(false)}>Снять</button>
-            </div>
-            {roles && roles.length === 0 && <p className="muted">Нет ролей, которые вы можете выдавать: они должны быть ниже вашей высшей роли и роли бота.</p>}
-            {roles && roles.length > 0 && (
-                <label className="field">
-                    Роль
-                    <select value={roleId} onChange={e => setRoleId(e.target.value)}>
-                        {roles.map(role => <option key={role.id} value={role.id}>{role.name}</option>)}
-                    </select>
-                </label>
-            )}
             {error && <p className="error">{error}</p>}
         </Dialog>
     );

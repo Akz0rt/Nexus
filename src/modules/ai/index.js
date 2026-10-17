@@ -2,8 +2,14 @@ const { Events } = require('discord.js');
 const config = require('../../config');
 const AIService = require('../../services/AIService');
 
+function isAddressedToBot(message, botId) {
+    if (message.mentions.users.has(botId)) return true;
+    return Boolean(message.reference) && message.mentions.repliedUser?.id === botId;
+}
+
 module.exports = {
     name: 'ai',
+    isAddressedToBot,
 
     register(client) {
         client.on(Events.MessageCreate, async message => {
@@ -13,6 +19,9 @@ module.exports = {
             // Only respond in the dedicated AI channel — ignore everything else,
             // even direct @mentions. Slash commands are unaffected (handled separately).
             if (!config.aiChannelId || message.channelId !== config.aiChannelId) return;
+            // ...and there only to an @mention or a reply to the bot: with the Message Content
+            // intent the bot sees every message, and answering all of them would cost OpenAI calls
+            if (!isAddressedToBot(message, client.user.id)) return;
 
             let userContent = message.content
                 .replace(`<@${client.user.id}>`, '')

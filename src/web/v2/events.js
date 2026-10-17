@@ -1,4 +1,5 @@
 const EventBus = require('../../services/EventBus');
+const { canUserSee } = require('./visibility');
 
 const HEARTBEAT_MS = 25 * 1000; // well under Azure's ~230 s idle timeout
 
@@ -9,9 +10,11 @@ const HEARTBEAT_MS = 25 * 1000; // well under Azure's ~230 s idle timeout
  * whoever has the app open on a guild is "on shift" there.
  */
 class SseHub {
-    constructor() {
+    /** @param {{ canSee?: (guildId, userId, entry) => boolean }} [options] who may see an audit entry */
+    constructor({ canSee = canUserSee } = {}) {
         this.clients = new Map(); // guildId -> Map<res, user>
         this.heartbeat = null;
+        this.canSee = canSee;
     }
 
     /**
@@ -58,12 +61,18 @@ class SseHub {
         this.broadcast(guildId, 'presence', { users: this.presence(guildId) });
     }
 
-    broadcast(guildId, event, data) {
+    /** @param {(user) => boolean} [allow] limits the frame to some streams */
+    broadcast(guildId, event, data, allow = null) {
         const streams = this.clients.get(guildId);
         if (!streams) return 0;
         const frame = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
-        for (const res of streams.keys()) res.write(frame);
-        return streams.size;
+        let sent = 0;
+        for (const [res, user] of streams) {
+            if (allow && !allow(user)) continue;
+            res.write(frame);
+            sent++;
+        }
+        return sent;
     }
 
     ensureHeartbeat() {
@@ -81,10 +90,15 @@ class SseHub {
         this.heartbeat = null;
     }
 
-    /** Forward audit-log entries and voice-board changes to the guild's open streams. */
+    /**
+     * Forward audit-log entries, voice-board changes and mass role job progress to
+     * the guild's open streams. Message-log entries go only to who may read them.
+     */
     attach(bus = EventBus) {
-        bus.on('audit', entry => this.broadcast(entry.guildId, 'audit', entry));
+        bus.on('audit', entry => this.broadcast(entry.guildId, 'audit', entry,
+            user => this.canSee(entry.guildId, user?.id, entry)));
         bus.on('voice', change => this.broadcast(change.guildId, 'voice', change));
+        bus.on('job', job => this.broadcast(job.guildId, 'job', job));
         return this;
     }
 }

@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { apiGet, apiPost, describeError } from './api.js';
 import { GENDER_LABELS, accountAge, formatDateTime, formatTime, timeAgo } from './format.js';
 import Avatar, { MemberLink } from './Avatar.jsx';
+import { ExtraRolesDialog, useAssignable } from './RoleDialogs.jsx';
+import { ROLE_PROBLEMS } from './format.js';
 
 const TABS = [
     { id: 'waiting', label: 'Ждут' },
@@ -38,7 +40,7 @@ function readJoined() {
 const STAMP_MS = 900;
 const UNDO_TOAST_MS = 10000;
 
-function Pass({ item, selected, busy, stamp, onSelect, onApprove, onKick, onOpenMember }) {
+function Pass({ item, selected, busy, stamp, extraRoles, onExtras, onClearExtras, onSelect, onApprove, onKick, onOpenMember }) {
     const [kicking, setKicking] = useState(false);
     const [reason, setReason] = useState('');
     const { member } = item;
@@ -63,6 +65,24 @@ function Pass({ item, selected, busy, stamp, onSelect, onApprove, onKick, onOpen
                     </dl>
                     {member.flags.length > 0 && (
                         <ul className="flags">{member.flags.map(flag => <li key={flag}>{flag.replace(/^⚠️\s*/, '')}</li>)}</ul>
+                    )}
+                    {onExtras && (
+                        <div className="pass-extras" onClick={e => e.stopPropagation()}>
+                            {extraRoles.length > 0 ? (
+                                <>
+                                    <span className="muted small">Доп. роли:</span>
+                                    <ul className="roles">
+                                        {extraRoles.map(role => (
+                                            <li key={role.id} className="role" style={{ '--role': role.color === '#000000' ? 'var(--muted)' : role.color }}>{role.name}</li>
+                                        ))}
+                                    </ul>
+                                    <button className="btn btn-quiet" disabled={busy} onClick={onExtras}>Изменить</button>
+                                    <button className="btn btn-quiet" disabled={busy} onClick={onClearExtras} aria-label="Убрать доп. роли">✕</button>
+                                </>
+                            ) : (
+                                <button className="btn btn-quiet" disabled={busy} onClick={onExtras}>+ Доп. роли…</button>
+                            )}
+                        </div>
                     )}
                     {!item.card && <p className="muted small">Карточки в Discord нет — пропустить можно только отсюда.</p>}
                     {item.error && <p className="error small">{item.error}</p>}
@@ -120,9 +140,13 @@ export default function QueueView({ guildId, waiting, revision, onChanged, onOpe
     const [errors, setErrors] = useState({});  // userId -> message
     const [leaving, setLeaving] = useState({}); // userId -> { item, stamp } shown briefly after a decision
     const [handled, setHandled] = useState(null);
+    const [extras, setExtras] = useState({}); // userId -> extra role ids for the approval
+    const [extrasFor, setExtrasFor] = useState(null); // member whose «Доп. роли» dialog is open
+    const { roles: assignable } = useAssignable(guildId);
     const listRef = useRef(null);
+    const roleOf = id => assignable?.find(r => r.id === id) || null;
 
-    useEffect(() => { setSelectedId(null); setLeaving({}); setErrors({}); }, [guildId]);
+    useEffect(() => { setSelectedId(null); setLeaving({}); setErrors({}); setExtras({}); }, [guildId]);
 
     // "Пропущены / Отклонены сегодня"
     useEffect(() => {
@@ -157,7 +181,8 @@ export default function QueueView({ guildId, waiting, revision, onChanged, onOpe
         const id = item.member.id;
         setBusy(b => ({ ...b, [id]: true }));
         setErrors(e => ({ ...e, [id]: null }));
-        const result = await apiPost(`/guilds/${guildId}/queue/${id}/${action}`, body);
+        const extraIds = action === 'approve' ? (extras[id] || []) : [];
+        const result = await apiPost(`/guilds/${guildId}/queue/${id}/${action}`, extraIds.length ? { ...body, roleIds: extraIds } : body);
         setBusy(b => ({ ...b, [id]: false }));
 
         if (!result.ok) {
@@ -177,7 +202,13 @@ export default function QueueView({ guildId, waiting, revision, onChanged, onOpe
 
         const name = item.member.displayName;
         if (action === 'approve') {
-            toast(`Пропущен ${name} · ${GENDER_LABELS[body.gender]}`, {
+            setExtras(x => { const next = { ...x }; delete next[id]; return next; });
+            const skipped = result.data.skippedRoles || [];
+            const added = extraIds.length - skipped.length;
+            const note = (added > 0 ? ` · +${added} доп. ${added === 1 ? 'роль' : 'роли'}` : '')
+                + (skipped.length ? ` · не выданы: ${skipped.map(r => `${r.name || 'удалённая'} (${ROLE_PROBLEMS[r.code] || r.code})`).join(', ')}` : '');
+            toast(`Пропущен ${name} · ${GENDER_LABELS[body.gender]}${note}`, {
+                tone: skipped.length ? 'error' : null,
                 ttl: UNDO_TOAST_MS,
                 action: {
                     label: 'Отменить',
@@ -197,7 +228,7 @@ export default function QueueView({ guildId, waiting, revision, onChanged, onOpe
     useEffect(() => {
         if (tab !== 'waiting') return undefined;
         const onKey = event => {
-            if (event.target.closest('input, textarea, select') || event.ctrlKey || event.altKey || event.metaKey) return;
+            if (extrasFor || event.target.closest('input, textarea, select') || event.ctrlKey || event.altKey || event.metaKey) return;
             const index = items.findIndex(item => item.member.id === selectedId);
             if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
                 event.preventDefault();
@@ -271,6 +302,9 @@ export default function QueueView({ guildId, waiting, revision, onChanged, onOpe
                                 selected={item.member.id === selectedId}
                                 busy={Boolean(busy[item.member.id])}
                                 stamp={leaving[item.member.id]?.stamp}
+                                extraRoles={(extras[item.member.id] || []).map(roleOf).filter(Boolean)}
+                                onExtras={assignable?.length ? () => setExtrasFor(item.member) : null}
+                                onClearExtras={() => setExtras(x => { const next = { ...x }; delete next[item.member.id]; return next; })}
                                 onSelect={() => setSelectedId(item.member.id)}
                                 onApprove={gender => decide(item, 'approve', { gender })}
                                 onKick={reason => decide(item, 'kick', { reason })}
@@ -278,6 +312,11 @@ export default function QueueView({ guildId, waiting, revision, onChanged, onOpe
                             />
                         ))}
                     </ul>
+                    {extrasFor && (
+                        <ExtraRolesDialog guildId={guildId} name={extrasFor.displayName} value={extras[extrasFor.id] || []}
+                            onClose={() => setExtrasFor(null)}
+                            onPick={roleIds => { setExtras(x => ({ ...x, [extrasFor.id]: roleIds })); setExtrasFor(null); }} />
+                    )}
                 </>
             )}
 

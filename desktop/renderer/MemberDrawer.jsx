@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { apiDelete, apiGet, apiPost, describeError } from './api.js';
-import { GENDER_LABELS, SOURCE_LABELS, accountAge, describeAction, describeBulk, formatDateTime, timeLeft } from './format.js';
+import { GENDER_LABELS, SOURCE_LABELS, accountAge, describeAction, describeBulk, describeMessage, formatDateTime, timeLeft } from './format.js';
 import Avatar, { MemberLink } from './Avatar.jsx';
 import PunishDialog from './PunishDialog.jsx';
 import ChannelPicker from './ChannelPicker.jsx';
+import { PresetApplyDialog, RoleDialog } from './RoleDialogs.jsx';
 
 const CARD_STATUS = {
     pending: 'Ждёт пропуска',
@@ -16,7 +17,7 @@ const CARD_STATUS = {
 export default function MemberDrawer({ guildId, userId, revision, onClose, onOpenMember, toast }) {
     const [data, setData] = useState(null);
     const [error, setError] = useState(null);
-    const [dialog, setDialog] = useState(null); // 'warn' | 'mute' | 'kick' | 'ban' | 'move'
+    const [dialog, setDialog] = useState(null); // 'warn' | 'mute' | 'kick' | 'ban' | 'move' | 'role' | 'preset'
 
     useEffect(() => {
         let cancelled = false;
@@ -60,6 +61,12 @@ export default function MemberDrawer({ guildId, userId, revision, onClose, onOpe
         if (!result.ok) { toast(describeError(result), { tone: 'error' }); return; }
         const failure = result.data.failed[0];
         toast(failure ? describeBulk(verb, result.data) : `${verb}: ${member.displayName}`, failure ? { tone: 'error' } : {});
+    };
+    const removeRole = async role => {
+        const result = await apiPost(`/guilds/${guildId}/roles/bulk`, { userIds: [userId], roleId: role.id, add: false });
+        if (!result.ok) { toast(describeError(result), { tone: 'error' }); return; }
+        const failure = result.data.failed[0];
+        toast(failure ? describeBulk('Роль снята', result.data) : `Роль снята: ${role.name}`, failure ? { tone: 'error' } : {});
     };
     const unwarn = async warn => {
         const result = await apiDelete(`/guilds/${guildId}/moderation/warnings/${warn.id}`);
@@ -159,11 +166,23 @@ export default function MemberDrawer({ guildId, userId, revision, onClose, onOpe
                     {data.roles.length === 0 && <p className="muted small">Ролей нет.</p>}
                     <ul className="roles">
                         {data.roles.map(role => (
-                            <li key={role.id} className="role" style={{ '--role': role.color === '#000000' ? 'var(--muted)' : role.color }}>
+                            <li key={role.id} className={`role ${role.editable ? '' : 'is-locked'}`}
+                                style={{ '--role': role.color === '#000000' ? 'var(--muted)' : role.color }}
+                                title={role.expiresAt ? `Временная: до ${formatDateTime(role.expiresAt)}` : (!role.editable && moderation?.can.roles ? 'Эту роль вы не можете снять' : undefined)}>
                                 {role.name}
+                                {role.expiresAt && <span className="role-timer">{timeLeft(role.expiresAt)}</span>}
+                                {role.editable && (
+                                    <button type="button" className="role-x" onClick={() => removeRole(role)} aria-label={`Снять роль ${role.name}`}>×</button>
+                                )}
                             </li>
                         ))}
                     </ul>
+                    {moderation?.can.roles && (
+                        <div className="punish-row">
+                            <button className="btn" onClick={() => setDialog('role')}>+ роль</button>
+                            <button className="btn" onClick={() => setDialog('preset')}>Применить пресет</button>
+                        </div>
+                    )}
 
                     <h3>История</h3>
                     {data.history.length === 0 && <p className="muted small">За 30 дней действий с этим человеком не было.</p>}
@@ -175,10 +194,13 @@ export default function MemberDrawer({ guildId, userId, revision, onClose, onOpe
                                     {describeAction(entry)}
                                     {entry.reason && ` — ${entry.reason}`}
                                 </span>
+                                {entry.action.startsWith('message.') && describeMessage(entry) && (
+                                    <span className="message-text small">{describeMessage(entry)}</span>
+                                )}
                                 <span className="muted small">
                                     {entry.actorId
                                         ? <MemberLink id={entry.actorId} name={entry.actorTag} onOpen={onOpenMember} />
-                                        : 'бот'}
+                                        : (entry.action.startsWith('message.') ? '—' : 'бот')}
                                     {' · '}{SOURCE_LABELS[entry.source] || entry.source}
                                 </span>
                             </li>
@@ -191,7 +213,13 @@ export default function MemberDrawer({ guildId, userId, revision, onClose, onOpe
                     onClose={() => setDialog(null)}
                     onPick={channel => { setDialog(null); voiceAction('move', { userIds: [userId], channelId: channel.id }, 'Перемещён'); }} />
             )}
-            {dialog && dialog !== 'move' && member && (
+            {dialog === 'role' && member && (
+                <RoleDialog guildId={guildId} userIds={[member.id]} title={`Роль для ${member.displayName}`} onClose={() => setDialog(null)} toast={toast} />
+            )}
+            {dialog === 'preset' && member && (
+                <PresetApplyDialog guildId={guildId} member={member} onClose={() => setDialog(null)} toast={toast} />
+            )}
+            {dialog && !['move', 'role', 'preset'].includes(dialog) && member && (
                 <PunishDialog guildId={guildId} kind={dialog} target={{ id: member.id, displayName: member.displayName }}
                     onClose={() => setDialog(null)} toast={toast} />
             )}

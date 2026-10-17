@@ -1,6 +1,7 @@
 const { PermissionFlagsBits } = require('discord.js');
 const GuildSettingsService = require('../../services/GuildSettingsService');
 const AuditLogService = require('../../services/AuditLogService');
+const RoleService = require('../../services/RoleService');
 const QueueCardService = require('./QueueCardService');
 const { buildCardMessage } = require('./card');
 const { computeNewRoles, shouldAssignUnverified } = require('./roles');
@@ -241,14 +242,21 @@ class VerificationService {
 
     /**
      * Approve: swap @unverified for the gender role in one roles.set call.
+     * Extra roles (a preset or picked by hand) go into the same call; ones the
+     * moderator may not give are left out and reported in `skippedRoles`.
      * @param {{ id: string, tag?: string }} actor
+     * @param {{ extraRoleIds?: string[] }} [options]
      */
-    async approve(guild, userId, gender, actor, source) {
+    async approve(guild, userId, gender, actor, source, { extraRoleIds = [] } = {}) {
         const settings = await this.getQueueSettings(guild.id);
         if (!settings) return { ok: false, code: 'not_configured' };
-        if (!(await this.assertPermission(guild, actor.id, PermissionFlagsBits.ManageRoles))) {
+        const actorMember = await guild.members.fetch(actor.id).catch(() => null);
+        if (!actorMember?.permissions.has(PermissionFlagsBits.ManageRoles)) {
             return { ok: false, code: 'forbidden' };
         }
+        const extras = extraRoleIds.length > 0
+            ? RoleService.sortRoles(guild, actorMember, extraRoleIds)
+            : { valid: [], skipped: [] };
 
         return this.withQueuedMember(guild, userId, settings, async (card, member) => {
             const roles = computeNewRoles(member.roles.cache.keys(), {
@@ -256,12 +264,16 @@ class VerificationService {
                 maleId: settings.maleRoleId,
                 femaleId: settings.femaleRoleId
             }, gender);
-            await member.roles.set(roles, `Пропуск: ${gender === 'male' ? 'парень' : 'девушка'} · ${actor.tag || actor.id}`);
+            // Only the ones they don't have yet: undo takes these away again
+            const added = extras.valid.filter(role => !roles.includes(role.id));
+            await member.roles.set([...roles, ...added.map(role => role.id)],
+                `Пропуск: ${gender === 'male' ? 'парень' : 'девушка'} · ${actor.tag || actor.id}`);
 
             const updated = await QueueCardService.upsert({
                 ...card,
                 status: 'approved',
                 gender,
+                extraRoleIds: added.map(role => role.id),
                 handledBy: actor.id,
                 handledAt: new Date().toISOString()
             });
@@ -274,9 +286,9 @@ class VerificationService {
                 actorTag: actor.tag,
                 targetIds: [userId],
                 source,
-                details: { gender }
+                details: added.length ? { gender, extraRoles: added.map(role => role.name) } : { gender }
             });
-            return { ok: true, card: updated };
+            return { ok: true, card: updated, skippedRoles: extras.skipped };
         });
     }
 
@@ -303,6 +315,7 @@ class VerificationService {
             const genderRoleId = card.gender === 'male' ? settings.maleRoleId : settings.femaleRoleId;
             const roles = new Set(member.roles.cache.keys());
             if (genderRoleId) roles.delete(genderRoleId);
+            for (const roleId of card.extraRoleIds || []) roles.delete(roleId);
             roles.add(settings.unverifiedRoleId);
             await member.roles.set([...roles], `Отмена пропуска · ${actor.tag || actor.id}`);
 
@@ -310,6 +323,7 @@ class VerificationService {
                 ...card,
                 status: 'pending',
                 gender: null,
+                extraRoleIds: [],
                 handledBy: null,
                 handledAt: null
             });

@@ -6,7 +6,8 @@ import ChannelPicker from './ChannelPicker.jsx';
 import SplitDialog from './SplitDialog.jsx';
 import SquadsPanel from './SquadsPanel.jsx';
 import PunishDialog from './PunishDialog.jsx';
-import { ChannelEditDialog, GatherDialog, RoleDialog, SquadDialog } from './VoiceDialogs.jsx';
+import { ChannelEditDialog, GatherDialog, SquadDialog } from './VoiceDialogs.jsx';
+import { RoleDialog } from './RoleDialogs.jsx';
 
 const FILTERS_KEY = 'panel.voice.filters';
 const DRAG_TYPE = 'application/x-nexus-users';

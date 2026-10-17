@@ -1,11 +1,12 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { apiGet } from './api.js';
+import { apiGet, apiPost, describeError } from './api.js';
 import Sidebar from './Sidebar.jsx';
 import Header from './Header.jsx';
 import QueueView from './QueueView.jsx';
 import JournalView from './JournalView.jsx';
 import ModerationView from './ModerationView.jsx';
 import VoiceView from './VoiceView.jsx';
+import RolesView from './RolesView.jsx';
 import MemberDrawer from './MemberDrawer.jsx';
 import Toasts from './Toasts.jsx';
 
@@ -32,7 +33,9 @@ export default function App() {
     const [toasts, setToasts] = useState([]);
     const [update, setUpdate] = useState(null);
     const [theme, setTheme] = useState(readTheme);
+    const [roleJob, setRoleJob] = useState(null); // running or last mass role change
     const toastSeq = useRef(0);
+    const dismissedJob = useRef(null);
 
     const toast = useCallback((text, options = {}) => {
         const id = ++toastSeq.current;
@@ -41,6 +44,16 @@ export default function App() {
         return id;
     }, []);
     const dismissToast = useCallback(id => setToasts(list => list.filter(t => t.id !== id)), []);
+
+    // A closed "done" bar stays closed; a late snapshot never rolls a finished job back
+    const updateJob = useCallback(next => {
+        if (!next) {
+            setRoleJob(current => { dismissedJob.current = current?.id || null; return null; });
+            return;
+        }
+        if (next.id === dismissedJob.current && next.status === 'done') return;
+        setRoleJob(current => (current?.id === next.id && current.status === 'done' && next.status !== 'done' ? current : next));
+    }, []);
 
     useEffect(() => {
         document.documentElement.dataset.theme = theme;
@@ -77,6 +90,7 @@ export default function App() {
         setLiveEvents([]);
         setPresence([]);
         setDrawerUserId(null);
+        setRoleJob(null);
         window.panel.subscribe(guildId);
         const offEvent = window.panel.onEvent(({ guildId: id, event, data }) => {
             if (id !== guildId) return;
@@ -86,10 +100,36 @@ export default function App() {
                 setRevision(r => r + 1);
             }
             if (event === 'voice') setVoiceRevision(r => r + 1);
+            if (event === 'job') updateJob(data);
         });
         const offState = window.panel.onStreamState(({ guildId: id, state }) => { if (id === guildId) setStreamState(state); });
         return () => { offEvent(); offState(); };
-    }, [guildId]);
+    }, [guildId, updateJob]);
+
+    // My own mass role change finished: say how it went, even on another screen
+    const announcedJob = useRef(null);
+    useEffect(() => {
+        if (!roleJob || roleJob.status !== 'done' || roleJob.actorId !== me?.id || announcedJob.current === roleJob.id) return;
+        announcedJob.current = roleJob.id;
+        const done = roleJob.doneCount ?? roleJob.processed - roleJob.failedCount;
+        const text = `${roleJob.add ? 'Выдано' : 'Снято'} «${roleJob.roleName}»: ${done} из ${roleJob.total}`
+            + (roleJob.failedCount ? ` · не удалось ${roleJob.failedCount}` : '');
+        const retryIds = roleJob.failedIds || [];
+        toast(text, roleJob.failedCount ? {
+            tone: 'error',
+            ttl: 10000,
+            action: retryIds.length ? {
+                label: 'Повторить для неудачных',
+                onClick: async () => {
+                    const result = await apiPost(`/guilds/${roleJob.guildId}/roles/jobs`, {
+                        roleId: roleJob.roleId, add: roleJob.add, filter: { type: 'users', userIds: retryIds }
+                    });
+                    if (result.ok) updateJob(result.data.job);
+                    else toast(describeError(result), { tone: 'error' });
+                }
+            } : undefined
+        } : {});
+    }, [roleJob, me?.id, toast, updateJob]);
 
     // Waiting queue: drives the sidebar counter and the "Ждут" tab
     const [reloadWaiting, setReloadWaiting] = useState(0);
@@ -127,6 +167,7 @@ export default function App() {
                 view={view}
                 onView={setView}
                 waitingCount={waiting?.items?.length ?? null}
+                canRoles={Boolean(guild?.can?.roles)}
                 presence={presence}
                 version={auth.version}
             />
@@ -168,6 +209,9 @@ export default function App() {
                     {guildId && view === 'voice' && (
                         <VoiceView guildId={guildId} myId={me?.id} revision={revision} voiceRevision={voiceRevision}
                             onOpenMember={setDrawerUserId} toast={toast} />
+                    )}
+                    {guildId && view === 'roles' && guild?.can?.roles && (
+                        <RolesView guildId={guildId} revision={revision} job={roleJob} onJob={updateJob} onOpenMember={setDrawerUserId} toast={toast} />
                     )}
                     {guildId && view === 'moderation' && (
                         <ModerationView guildId={guildId} revision={revision} onOpenMember={setDrawerUserId} toast={toast} />

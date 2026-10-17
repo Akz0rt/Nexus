@@ -22,6 +22,12 @@ function buildAuditQuery(filters) {
     for (const [key, clause] of Object.entries(FILTER_CLAUSES)) {
         const value = filters[key];
         if (value === undefined || value === null || value === '') continue;
+        // "message.*" — every action of a group
+        if (key === 'action' && String(value).endsWith('.*')) {
+            where.push('STARTSWITH(c.action, @action)');
+            parameters.push({ name: '@action', value: String(value).slice(0, -1) });
+            continue;
+        }
         where.push(clause);
         parameters.push({ name: `@${key}`, value: String(value) });
     }

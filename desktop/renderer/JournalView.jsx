@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { apiGet, describeError } from './api.js';
-import { ACTION_LABELS, SOURCE_LABELS, describeAction, formatDateTime, toCsv } from './format.js';
+import { ACTION_GROUPS, ACTION_LABELS, SOURCE_LABELS, describeAction, describeMessage, formatDateTime, toCsv } from './format.js';
 import { MemberLink } from './Avatar.jsx';
 
 const EMPTY_FILTERS = { action: '', source: '', actorId: '', targetId: '', since: '', until: '' };
@@ -21,13 +21,27 @@ function buildQuery(filters, cursor, limit) {
 
 /** Does a live entry belong under the current filters? */
 function matches(entry, filters) {
-    if (filters.action && entry.action !== filters.action) return false;
+    if (filters.action) {
+        const group = filters.action.endsWith('.*') ? filters.action.slice(0, -1) : null;
+        if (group ? !entry.action.startsWith(group) : entry.action !== filters.action) return false;
+    }
     if (filters.source && entry.source !== filters.source) return false;
     if (filters.actorId && entry.actorId !== filters.actorId) return false;
     if (filters.targetId && !(entry.targetIds || []).includes(filters.targetId)) return false;
     if (filters.since && entry.createdAt < new Date(`${filters.since}T00:00:00`).toISOString()) return false;
     if (filters.until && entry.createdAt > new Date(`${filters.until}T23:59:59.999`).toISOString()) return false;
     return true;
+}
+
+/** Message entries have no actor when the author deleted it themselves. */
+function actorText(entry) {
+    if (entry.actorTag) return entry.actorTag;
+    return entry.action.startsWith('message.') ? '—' : 'бот';
+}
+
+/** Reason column: the reason, or the message text for the message log. */
+function reasonText(entry) {
+    return entry.action.startsWith('message.') ? describeMessage(entry) : (entry.reason || '');
 }
 
 export default function JournalView({ guildId, liveEvents, onOpenMember, toast }) {
@@ -83,10 +97,10 @@ export default function JournalView({ guildId, liveEvents, onOpenMember, toast }
                 ['Время', 'Кто', 'Действие', 'Над кем', 'Причина', 'Источник'],
                 ...all.map(entry => [
                     formatDateTime(entry.createdAt, true),
-                    entry.actorId ? label(entry.actorId) : (entry.actorTag || 'бот'),
+                    entry.actorId ? label(entry.actorId) : actorText(entry),
                     describeAction(entry),
                     (entry.targetIds || []).map(label).join(', '),
-                    entry.reason || '',
+                    reasonText(entry),
                     SOURCE_LABELS[entry.source] || entry.source
                 ])
             ]);
@@ -111,6 +125,7 @@ export default function JournalView({ guildId, liveEvents, onOpenMember, toast }
             <div className="toolbar filters">
                 <select value={filters.action} onChange={e => setFilter('action', e.target.value)} aria-label="Действие">
                     <option value="">Все действия</option>
+                    {Object.entries(ACTION_GROUPS).map(([id, label]) => <option key={id} value={id}>{label}</option>)}
                     {Object.entries(ACTION_LABELS).map(([id, label]) => <option key={id} value={id}>{label}</option>)}
                 </select>
                 <select value={filters.source} onChange={e => setFilter('source', e.target.value)} aria-label="Источник">
@@ -131,7 +146,7 @@ export default function JournalView({ guildId, liveEvents, onOpenMember, toast }
                 )}
                 {filtered && <button className="btn btn-quiet" onClick={() => setFilters(EMPTY_FILTERS)}>Сбросить</button>}
             </div>
-            <p className="muted small">Клик по имени открывает карточку, ⏷ рядом с именем оставляет только записи этого человека. Записи хранятся 30 дней.</p>
+            <p className="muted small">Клик по имени открывает карточку, ⏷ рядом с именем оставляет только записи этого человека. Удалённые и изменённые сообщения видны только из каналов, которые вы можете читать. Записи хранятся 30 дней.</p>
 
             {error && <p className="error">{error}</p>}
             <div className="table-wrap">
@@ -149,7 +164,7 @@ export default function JournalView({ guildId, liveEvents, onOpenMember, toast }
                                             <MemberLink id={entry.actorId} name={nameOf(entry.actorId)} onOpen={onOpenMember} />
                                             <button className="filter-by" title="Только его действия" onClick={() => setFilter('actorId', entry.actorId)}>⏷</button>
                                         </span>
-                                    ) : <span className="muted">{entry.actorTag || 'бот'}</span>}
+                                    ) : <span className="muted">{actorText(entry)}</span>}
                                 </td>
                                 <td>{describeAction(entry)}</td>
                                 <td>
@@ -160,7 +175,7 @@ export default function JournalView({ guildId, liveEvents, onOpenMember, toast }
                                         </span>
                                     ))}
                                 </td>
-                                <td className="reason">{entry.reason || ''}</td>
+                                <td className={`reason ${entry.action.startsWith('message.') ? 'message-text' : ''}`}>{reasonText(entry)}</td>
                                 <td><span className={`source source-${entry.source}`}>{SOURCE_LABELS[entry.source] || entry.source}</span></td>
                             </tr>
                         ))}

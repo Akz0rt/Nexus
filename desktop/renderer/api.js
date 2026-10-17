@@ -60,7 +60,13 @@ const ERROR_TEXT = {
     role_higher: 'Эта роль не ниже вашей высшей роли.',
     role_managed: 'Эту роль выдаёт интеграция, вручную её не выдать.',
     role_not_found: 'Роль не найдена.',
-    bot_cannot_role: 'Роль бота ниже этой роли.'
+    bot_cannot_role: 'Роль бота ниже этой роли.',
+    invalid_duration: 'Такого срока нет.',
+    invalid_roles: 'Выберите от 1 до 25 ролей.',
+    invalid_filter: 'Выберите, кому менять роль.',
+    preset_not_found: 'Пресет уже удалён.',
+    job_running: 'Уже идёт массовая выдача ролей. Дождитесь, пока она закончится.',
+    too_many_targets: 'Слишком много людей за раз: не больше 5000.'
 };
 
 export function describeError(result) {

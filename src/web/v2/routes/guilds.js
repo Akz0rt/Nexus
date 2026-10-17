@@ -1,4 +1,5 @@
 const express = require('express');
+const { PermissionFlagsBits } = require('discord.js');
 const state = require('../../../state');
 const { getPanelRole } = require('../access');
 
@@ -18,7 +19,9 @@ router.get('/', async (req, res, next) => {
                 id: guild.id,
                 name: guild.name,
                 iconURL: guild.iconURL({ size: 128, extension: 'png' }),
-                panelRole: role
+                panelRole: role,
+                // Which menu items to show; each action still checks its own permission
+                can: { roles: Boolean(guild.members.cache.get(req.session.userId)?.permissions.has(PermissionFlagsBits.ManageRoles)) }
             });
         }
         res.json({ guilds });

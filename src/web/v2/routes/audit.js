@@ -1,6 +1,7 @@
 const express = require('express');
 const AuditLogService = require('../../../services/AuditLogService');
 const { userRef } = require('../serialize');
+const { canSeeEntry } = require('../visibility');
 
 const router = express.Router({ mergeParams: true });
 
@@ -15,7 +16,7 @@ router.get('/', async (req, res, next) => {
             if (q[key] && Number.isNaN(Date.parse(q[key]))) return res.status(400).json({ error: `invalid_${key}` });
         }
 
-        const { items, cursor } = await AuditLogService.query({
+        const page = await AuditLogService.query({
             guildId: req.guild.id,
             action: q.action,
             actorId: q.actorId,
@@ -24,6 +25,10 @@ router.get('/', async (req, res, next) => {
             since: q.since ? new Date(q.since).toISOString() : undefined,
             until: q.until ? new Date(q.until).toISOString() : undefined
         }, { limit: parseInt(q.limit, 10) || 50, cursor: q.cursor });
+        // Message texts only from channels the viewer can read (a page may come out shorter)
+        const viewer = req.guild.members.cache.get(req.session.userId);
+        const items = page.items.filter(entry => canSeeEntry(req.guild, viewer, entry));
+        const { cursor } = page;
 
         // Names for everyone mentioned, so the app doesn't need a request per row
         const ids = new Set();

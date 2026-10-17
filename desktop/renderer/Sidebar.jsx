@@ -5,10 +5,11 @@ const ITEMS = [
     { id: 'queue', label: 'Пропуск' },
     { id: 'voice', label: 'Голосовые' },
     { id: 'moderation', label: 'Модерация' },
+    { id: 'roles', label: 'Роли', needs: 'roles' },
     { id: 'journal', label: 'Журнал' }
 ];
 
-export default function Sidebar({ view, onView, waitingCount, presence, version }) {
+export default function Sidebar({ view, onView, waitingCount, canRoles, presence, version }) {
     return (
         <aside className="sidebar">
             <div className="brand">
@@ -16,7 +17,7 @@ export default function Sidebar({ view, onView, waitingCount, presence, version 
                 <span>Nexus</span>
             </div>
             <nav className="menu">
-                {ITEMS.map(item => (
+                {ITEMS.filter(item => item.needs !== 'roles' || canRoles).map(item => (
                     <button
                         key={item.id}
                         className={`menu-item ${view === item.id ? 'is-active' : ''}`}

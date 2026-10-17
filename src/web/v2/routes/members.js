@@ -3,6 +3,9 @@ const { PermissionFlagsBits } = require('discord.js');
 const AuditLogService = require('../../../services/AuditLogService');
 const QueueCardService = require('../../../modules/verification/QueueCardService');
 const WarningService = require('../../../modules/moderation/WarningService');
+const TempRoleService = require('../../../modules/roles/TempRoleService');
+const { roleProblem } = require('../../../services/RoleService');
+const { canSeeEntry } = require('../visibility');
 const { describeMember, serializeCard, userRef } = require('../serialize');
 
 const router = express.Router({ mergeParams: true });
@@ -56,7 +59,10 @@ router.get('/:userId', async (req, res, next) => {
         const member = await guild.members.fetch(userId).catch(() => null);
         if (!member) return res.status(404).json({ error: 'member_not_found' });
 
-        const botTop = guild.members.me?.roles.highest.position ?? 0;
+        const viewer = guild.members.cache.get(req.session.userId);
+        const has = flag => Boolean(viewer?.permissions.has(flag));
+        const manageRoles = has(PermissionFlagsBits.ManageRoles);
+        const temporary = new Map((await TempRoleService.listForUser(guild.id, userId)).map(grant => [grant.roleId, grant.expiresAt]));
         const roles = member.roles.cache
             .filter(role => role.id !== guild.id) // @everyone
             .sort((a, b) => b.position - a.position)
@@ -65,7 +71,9 @@ router.get('/:userId', async (req, res, next) => {
                 name: role.name,
                 color: role.hexColor,
                 managed: role.managed,
-                editable: !role.managed && role.position < botTop
+                // May the viewer take it away (and give it): below their and the bot's highest role
+                editable: manageRoles && !roleProblem(guild, viewer, role),
+                expiresAt: temporary.get(role.id) || null
             }));
 
         const voice = member.voice?.channel
@@ -78,7 +86,8 @@ router.get('/:userId', async (req, res, next) => {
             : null;
 
         const [history, card, warnings] = await Promise.all([
-            AuditLogService.query({ guildId: guild.id, targetId: userId }, { limit: 50 }).then(r => r.items),
+            AuditLogService.query({ guildId: guild.id, targetId: userId }, { limit: 50 })
+                .then(r => r.items.filter(entry => canSeeEntry(guild, viewer, entry))),
             QueueCardService.get(guild.id, userId),
             WarningService.listActive(guild.id, userId)
         ]);
@@ -87,10 +96,9 @@ router.get('/:userId', async (req, res, next) => {
             ? new Date(member.communicationDisabledUntilTimestamp).toISOString()
             : null;
 
-        // Which punishment and voice buttons the viewer gets (the services re-check on every action)
-        const viewer = guild.members.cache.get(req.session.userId);
-        const has = flag => Boolean(viewer?.permissions.has(flag));
+        // Which punishment, voice and role buttons the viewer gets (the services re-check on every action)
         const can = {
+            roles: manageRoles,
             warn: has(PermissionFlagsBits.ModerateMembers),
             mute: has(PermissionFlagsBits.ModerateMembers),
             kick: has(PermissionFlagsBits.KickMembers),

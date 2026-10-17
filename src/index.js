@@ -3,7 +3,7 @@ if (typeof globalThis.crypto === 'undefined') {
     globalThis.crypto = require('node:crypto').webcrypto;
 }
 
-const { Client, Collection, Events, GatewayIntentBits, MessageFlags } = require('discord.js');
+const { Client, Collection, Events, GatewayIntentBits, MessageFlags, Options } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
 const config = require('./config');
@@ -18,9 +18,17 @@ const client = new Client({
         GatewayIntentBits.GuildMessages,
         GatewayIntentBits.GuildVoiceStates,
         // Privileged: enable "Server Members Intent" in the Developer Portal, otherwise login fails
-        GatewayIntentBits.GuildMembers
-        // MessageContent and GuildPresences removed for compatibility with bots lacking privileged intents
-    ]
+        GatewayIntentBits.GuildMembers,
+        // Privileged: enable "Message Content Intent" in the Developer Portal, otherwise login fails.
+        // Needed for the deleted/edited message log
+        GatewayIntentBits.MessageContent
+    ],
+    // The message log knows a message's text only while it's cached: up to 200 per channel, for 24 h
+    makeCache: Options.cacheWithLimits({ ...Options.DefaultMakeCacheSettings, MessageManager: 200 }),
+    sweepers: {
+        ...Options.DefaultSweeperSettings,
+        messages: { interval: 60 * 60, lifetime: 24 * 60 * 60 }
+    }
 });
 
 // Create a collection for commands

@@ -18,7 +18,7 @@ const RESULT_STATUS = {
 };
 
 function sendResult(res, guild, result) {
-    if (result.ok) return res.json({ ok: true, card: serializeCard(result.card) });
+    if (result.ok) return res.json({ ok: true, card: serializeCard(result.card), skippedRoles: result.skippedRoles || [] });
     res.status(RESULT_STATUS[result.code] || 400).json({
         error: result.code,
         card: serializeCard(result.card),
@@ -70,12 +70,13 @@ function actorOf(req) {
     return { id: req.session.userId, tag: req.session.username };
 }
 
-// POST /queue/:userId/approve { gender: 'male'|'female' }
+// POST /queue/:userId/approve { gender: 'male'|'female', roleIds?: extra roles (preset or picked) }
 router.post('/:userId/approve', async (req, res, next) => {
     try {
         const gender = req.body?.gender;
         if (gender !== 'male' && gender !== 'female') return res.status(400).json({ error: 'invalid_gender' });
-        const result = await VerificationService.approve(req.guild, req.params.userId, gender, actorOf(req), 'panel');
+        const extraRoleIds = Array.isArray(req.body?.roleIds) ? req.body.roleIds.map(String).slice(0, 25) : [];
+        const result = await VerificationService.approve(req.guild, req.params.userId, gender, actorOf(req), 'panel', { extraRoleIds });
         sendResult(res, req.guild, result);
     } catch (error) {
         next(error);

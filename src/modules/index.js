@@ -10,7 +10,9 @@ const modules = [
     require('./activity'),
     require('./verification'),
     require('./moderation'),
-    require('./voice')
+    require('./voice'),
+    require('./roles'),
+    require('./messagelog')
 ];
 
 function registerModules(client) {

@@ -30,7 +30,35 @@ export const ACTION_LABELS = {
     'voice.squad_deleted': 'Состав удалён',
     'voice.squad_invited': 'Приглашение в голос',
     'roles.added': 'Роль выдана',
-    'roles.removed': 'Роль снята'
+    'roles.removed': 'Роль снята',
+    'roles.temp_expired': 'Срок роли истёк',
+    'roles.preset_applied': 'Применён пресет',
+    'roles.preset_saved': 'Пресет сохранён',
+    'roles.preset_deleted': 'Пресет удалён',
+    'message.deleted': 'Сообщение удалено',
+    'message.edited': 'Сообщение изменено',
+    'message.bulk_deleted': 'Сообщения очищены'
+};
+
+/** Groups for the journal filter ("message.*" matches every message action). */
+export const ACTION_GROUPS = { 'message.*': 'Сообщения: все' };
+
+/** How long a temporary role lasts (ids match the server's ROLE_DURATIONS). */
+export const ROLE_DURATIONS = [
+    { id: '', label: 'Навсегда' },
+    { id: '1h', label: '1 час' },
+    { id: '6h', label: '6 часов' },
+    { id: '1d', label: '1 день' },
+    { id: '7d', label: '7 дней' },
+    { id: '30d', label: '30 дней' }
+];
+
+/** Why a role can't be given from the panel. */
+export const ROLE_PROBLEMS = {
+    role_managed: 'выдаёт интеграция',
+    role_higher: 'не ниже вашей роли',
+    bot_cannot_role: 'бот не может выдавать',
+    role_not_found: 'роль удалена'
 };
 
 export const SOURCE_LABELS = { discord: 'Discord', bot: 'Бот', panel: 'Панель', auto: 'Авто' };
@@ -111,13 +139,35 @@ export function describeAction(entry) {
     if (entry.action === 'moderation.warned' && entry.details?.activeWarns) {
         return `${label} · ${entry.details.activeWarns}-й активный`;
     }
-    const subject = entry.details?.roleName || entry.details?.squadName || entry.details?.channelName;
-    if (subject) return `${label} · ${subject}`;
+    if (entry.action.startsWith('message.')) {
+        const where = entry.details?.channelName ? ` · #${entry.details.channelName}` : '';
+        const count = entry.action === 'message.bulk_deleted' ? ` · ${entry.details?.count || 0} шт.` : '';
+        return `${label}${where}${count}`;
+    }
+    if (entry.action === 'roles.added' && entry.details?.durationMs) {
+        return `${label} · ${entry.details.roleName} · на ${formatDurationMs(entry.details.durationMs)}`;
+    }
+    const subject = entry.details?.roleName || entry.details?.presetName || entry.details?.squadName || entry.details?.channelName;
+    const many = entry.details?.count > 1 && (entry.action === 'roles.added' || entry.action === 'roles.removed')
+        ? ` · ${entry.details.count} чел.` : '';
+    if (subject) return `${label} · ${subject}${many}`;
     return label;
+}
+
+/** Message text for the journal: the deleted text, or "было → стало" for an edit. */
+export function describeMessage(entry) {
+    const details = entry.details || {};
+    if (entry.action === 'message.edited') return `${details.content || '—'} → ${details.newContent || '—'}`;
+    if (entry.action === 'message.deleted') {
+        const files = details.attachments?.length ? ` [файлы: ${details.attachments.join(', ')}]` : '';
+        return `${details.content || ''}${files}`.trim();
+    }
+    return '';
 }
 
 /** Why one member was skipped in a group action. */
 export const FAILURE_LABELS = {
+    has_permanent: 'роль уже есть навсегда',
     not_in_voice: 'не в голосе',
     target_higher: 'роль не ниже вашей',
     target_protected: 'владелец сервера',
