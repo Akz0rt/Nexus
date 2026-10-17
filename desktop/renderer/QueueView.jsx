@@ -314,6 +314,7 @@ export default function QueueView({ guildId, waiting, revision, onChanged, onOpe
                     </ul>
                     {extrasFor && (
                         <ExtraRolesDialog guildId={guildId} name={extrasFor.displayName} value={extras[extrasFor.id] || []}
+                            excludeIds={waiting?.reservedRoleIds || []}
                             onClose={() => setExtrasFor(null)}
                             onPick={roleIds => { setExtras(x => ({ ...x, [extrasFor.id]: roleIds })); setExtrasFor(null); }} />
                     )}

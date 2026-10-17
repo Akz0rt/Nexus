@@ -136,6 +136,15 @@ async function expiry() {
     assert.strictEqual(grants.size, 0);
     assert.deepStrictEqual(logged.map(e => [e.action, e.source, e.details.roleName]), [['roles.temp_expired', 'auto', 'Хелпер']]);
 
+    // The bot can't take it any more: the moderators see it in the journal, no endless retries
+    await RoleService.bulkRole(guild, [C], HELPER, true, actor, 'panel', { duration: '1h' });
+    grants.get(key(guild.id, C, HELPER)).expiresAt = new Date(Date.now() - 1000).toISOString();
+    guild.members.cache.get(C).roles.remove = async () => { throw Object.assign(new Error('Missing Permissions'), { code: 50013 }); };
+    logged = [];
+    assert.strictEqual(await rolesModule.processExpiredRoles(client), 0);
+    assert.strictEqual(grants.size, 0);
+    assert.strictEqual(logged[0].details.failed, true);
+
     // Someone left: record dropped without touching Discord
     await RoleService.bulkRole(guild, [B], HELPER, true, actor, 'panel', { duration: '1h' });
     grants.get(key(guild.id, B, HELPER)).expiresAt = new Date(Date.now() - 1000).toISOString();
@@ -191,10 +200,10 @@ async function approveWithExtras() {
         return member;
     };
 
-    const result = await VerificationService.approve(guild, A, 'female', actor, 'panel', { extraRoleIds: [EVENT, ADMIN] });
+    const result = await VerificationService.approve(guild, A, 'female', actor, 'panel', { extraRoleIds: [EVENT, ADMIN, 'unv', 'male'] });
     assert.strictEqual(result.ok, true);
     assert.strictEqual(sets.length, 1, 'gender and extra roles go in one request');
-    assert.deepStrictEqual([...sets[0]].sort(), ['female', EVENT].sort());
+    assert.deepStrictEqual([...sets[0]].sort(), ['female', EVENT].sort(), '@unverified and the other gender role are never extras');
     assert.deepStrictEqual(result.skippedRoles.map(r => [r.id, r.code]), [[ADMIN, 'role_higher']]);
     assert.deepStrictEqual(cards[A].extraRoleIds, [EVENT]);
     assert.deepStrictEqual(logged.at(-1).details.extraRoles, ['Ивент']);

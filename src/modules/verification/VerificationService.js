@@ -254,8 +254,12 @@ class VerificationService {
         if (!actorMember?.permissions.has(PermissionFlagsBits.ManageRoles)) {
             return { ok: false, code: 'forbidden' };
         }
-        const extras = extraRoleIds.length > 0
-            ? RoleService.sortRoles(guild, actorMember, extraRoleIds)
+        // The queue's own roles never count as extras: @unverified would keep them in the queue,
+        // the other gender role would give them both
+        const reserved = new Set([settings.unverifiedRoleId, settings.maleRoleId, settings.femaleRoleId].filter(Boolean));
+        const extraIds = extraRoleIds.filter(id => !reserved.has(String(id)));
+        const extras = extraIds.length > 0
+            ? RoleService.sortRoles(guild, actorMember, extraIds)
             : { valid: [], skipped: [] };
 
         return this.withQueuedMember(guild, userId, settings, async (card, member) => {

@@ -205,8 +205,10 @@ export function PresetDialog({ guildId, preset, onClose, toast }) {
 }
 
 /** «Доп. роли…» before approving a newcomer: presets and single roles, merged into one list. */
-export function ExtraRolesDialog({ guildId, name, value, onClose, onPick }) {
-    const { roles, error: loadError } = useAssignable(guildId);
+export function ExtraRolesDialog({ guildId, name, value, excludeIds = [], onClose, onPick }) {
+    const { roles: assignable, error: loadError } = useAssignable(guildId);
+    // @unverified and the gender roles are handled by the approval itself
+    const roles = assignable && assignable.filter(role => !excludeIds.includes(role.id));
     const { presets } = usePresets(guildId);
     const [chosen, setChosen] = useState(() => new Set(value));
 
@@ -215,7 +217,7 @@ export function ExtraRolesDialog({ guildId, name, value, onClose, onPick }) {
         if (next.has(id)) next.delete(id); else next.add(id);
         return next;
     });
-    const usable = preset => preset.roles.filter(r => !r.problem).map(r => r.id);
+    const usable = preset => preset.roles.filter(r => !r.problem && !excludeIds.includes(r.id)).map(r => r.id);
     const presetOn = preset => usable(preset).length > 0 && usable(preset).every(id => chosen.has(id));
     const togglePreset = preset => setChosen(prev => {
         const next = new Set(prev);

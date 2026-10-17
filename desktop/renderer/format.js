@@ -144,6 +144,9 @@ export function describeAction(entry) {
         const count = entry.action === 'message.bulk_deleted' ? ` · ${entry.details?.count || 0} шт.` : '';
         return `${label}${where}${count}`;
     }
+    if (entry.action === 'roles.temp_expired' && entry.details?.failed) {
+        return `Срок роли истёк, но бот не смог её снять · ${entry.details.roleName}`;
+    }
     if (entry.action === 'roles.added' && entry.details?.durationMs) {
         return `${label} · ${entry.details.roleName} · на ${formatDurationMs(entry.details.durationMs)}`;
     }

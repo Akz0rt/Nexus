@@ -97,7 +97,8 @@ export default function App() {
             if (event === 'presence') setPresence(data.users);
             if (event === 'audit') {
                 setLiveEvents(list => [data, ...list].slice(0, 300));
-                setRevision(r => r + 1);
+                // Message edits and deletes are frequent and change nothing on the other screens
+                if (!data.action?.startsWith('message.')) setRevision(r => r + 1);
             }
             if (event === 'voice') setVoiceRevision(r => r + 1);
             if (event === 'job') updateJob(data);
@@ -137,7 +138,7 @@ export default function App() {
         if (!guildId) { setWaiting(null); return; }
         let cancelled = false;
         apiGet(`/guilds/${guildId}/queue?tab=waiting`)
-            .then(data => { if (!cancelled) setWaiting({ items: data.items }); })
+            .then(data => { if (!cancelled) setWaiting({ items: data.items, reservedRoleIds: data.reservedRoleIds || [] }); })
             .catch(error => { if (!cancelled) setWaiting({ items: [], error }); });
         return () => { cancelled = true; };
     }, [guildId, revision, reloadWaiting]);

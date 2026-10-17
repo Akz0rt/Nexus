@@ -5,6 +5,7 @@ const TempRoleService = require('./TempRoleService');
 
 const UNKNOWN_MEMBER = 10007;
 const UNKNOWN_ROLE = 10011;
+const MISSING_PERMISSIONS = 50013;
 
 /** Take away temporary roles whose time is up. Returns how many were taken. */
 async function processExpiredRoles(client) {
@@ -18,20 +19,30 @@ async function processExpiredRoles(client) {
                 throw error;
             });
             const role = guild.roles.cache.get(grant.roleId);
-            // Drop the record first, so our own role removal isn't mistaken for a manual one
+            if (member && role && member.roles.cache.has(role.id)) {
+                let failed = false;
+                try {
+                    await member.roles.remove(role, 'Срок временной роли истёк');
+                    taken++;
+                } catch (error) {
+                    if (error.code !== MISSING_PERMISSIONS) throw error; // e.g. Discord down: retry next minute
+                    // The role moved above the bot: tell the moderators instead of retrying forever
+                    failed = true;
+                }
+                await AuditLogService.log({
+                    guildId: guild.id,
+                    action: 'roles.temp_expired',
+                    targetIds: [grant.userId],
+                    source: 'auto',
+                    details: { roleId: role.id, roleName: role.name, grantedBy: grant.actorId || null, ...(failed ? { failed } : {}) }
+                });
+            }
             await TempRoleService.remove(grant.guildId, grant.userId, grant.roleId);
-            if (!member || !role || !member.roles.cache.has(role.id)) continue;
-            await member.roles.remove(role, 'Срок временной роли истёк');
-            taken++;
-            await AuditLogService.log({
-                guildId: guild.id,
-                action: 'roles.temp_expired',
-                targetIds: [grant.userId],
-                source: 'auto',
-                details: { roleId: role.id, roleName: role.name, grantedBy: grant.actorId || null }
-            });
         } catch (error) {
-            if (error.code === UNKNOWN_ROLE) continue;
+            if (error.code === UNKNOWN_ROLE) {
+                await TempRoleService.remove(grant.guildId, grant.userId, grant.roleId).catch(() => {});
+                continue;
+            }
             console.error(`Roles: removing expired role ${grant.roleId} from ${grant.userId} failed:`, error.message || error);
         }
     }

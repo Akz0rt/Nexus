@@ -42,7 +42,9 @@ router.get('/', async (req, res, next) => {
                 .filter(member => member.roles.cache.has(settings.unverifiedRoleId))
                 .map(describeMember);
             const cards = await QueueCardService.listPending(guild.id);
-            return res.json({ tab, items: mergeQueue(holders, cards) });
+            // Roles «Доп. роли…» must not offer: the queue's own
+            const reservedRoleIds = [settings.unverifiedRoleId, settings.maleRoleId, settings.femaleRoleId].filter(Boolean);
+            return res.json({ tab, items: mergeQueue(holders, cards), reservedRoleIds });
         }
 
         if (tab === 'handled' || tab === 'rejected') {
