@@ -31,6 +31,11 @@ function buildAuditQuery(filters) {
         where.push(clause);
         parameters.push({ name: `@${key}`, value: String(value) });
     }
+    // Leave a whole group out, e.g. the frequent message log on the start screen
+    if (filters.excludePrefix) {
+        where.push('NOT STARTSWITH(c.action, @excludePrefix)');
+        parameters.push({ name: '@excludePrefix', value: String(filters.excludePrefix) });
+    }
     return {
         query: `SELECT * FROM c WHERE ${where.join(' AND ')} ORDER BY c.createdAt DESC`,
         parameters
@@ -140,13 +145,23 @@ class AuditLogService {
      */
     async countByActor(guildId, sinceIso) {
         await this.initialize();
+        // Counted here rather than with GROUP BY: a month of moderator actions is small.
+        // The message log is left out: its "actor" is the message author.
         const { resources } = await this.container.items.query({
-            query: 'SELECT c.actorId, c.action, COUNT(1) AS n FROM c ' +
+            query: 'SELECT c.actorId, c.action FROM c ' +
                 'WHERE c.guildId = @guildId AND c.createdAt >= @since AND IS_STRING(c.actorId) ' +
-                'GROUP BY c.actorId, c.action',
+                "AND NOT STARTSWITH(c.action, 'message.')",
             parameters: [{ name: '@guildId', value: guildId }, { name: '@since', value: sinceIso }]
         }, { partitionKey: guildId }).fetchAll();
-        return resources;
+        const counts = new Map();
+        for (const { actorId, action } of resources) {
+            const key = `${actorId}\n${action}`;
+            counts.set(key, (counts.get(key) || 0) + 1);
+        }
+        return [...counts].map(([key, n]) => {
+            const [actorId, action] = key.split('\n');
+            return { actorId, action, n };
+        });
     }
 }
 

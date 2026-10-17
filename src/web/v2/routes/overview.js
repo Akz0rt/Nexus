@@ -24,11 +24,22 @@ function upcomingBirthdays(guild, birthdays) {
         .map(item => ({ ...userRef(guild, item.userId), month: item.month, day: item.day, inDays: item.inDays }));
 }
 
-// GET /overview — everything the start screen shows, in one request
+/** Voice channels with people in them, from Discord's cache (no database). */
+function voiceBlock(guild, viewer) {
+    const board = viewer ? describeBoard(guild, viewer) : [];
+    const voice = board
+        .flatMap(category => category.channels.map(channel => ({ ...channel, category: category.name })))
+        .filter(channel => channel.members.length > 0);
+    return { voice, inVoice: voice.reduce((sum, channel) => sum + channel.members.length, 0) };
+}
+
+// GET /overview — everything the start screen shows, in one request.
+// ?parts=voice — only the voice block: it changes often and costs no database queries.
 router.get('/', async (req, res, next) => {
     try {
         const guild = req.guild;
         const viewer = guild.members.cache.get(req.session.userId);
+        if (req.query.parts === 'voice') return res.json(voiceBlock(guild, viewer));
         if (guild.members.cache.size < guild.memberCount) await guild.members.fetch();
 
         const settings = await VerificationService.getQueueSettings(guild.id);
@@ -36,17 +47,14 @@ router.get('/', async (req, res, next) => {
         const [pending, approvedToday, journal, birthdays] = await Promise.all([
             settings ? QueueCardService.listPending(guild.id) : [],
             settings ? QueueCardService.listHandled(guild.id, ['approved'], since) : [],
-            AuditLogService.query({ guildId: guild.id }, { limit: 30 }),
+            AuditLogService.query({ guildId: guild.id, excludePrefix: 'message.' }, { limit: 30 }),
             BirthdayService.getAllBirthdays().catch(() => ({}))
         ]);
 
         const queue = settings
             ? mergeQueue(guild.members.cache.filter(m => m.roles.cache.has(settings.unverifiedRoleId)).map(describeMember), pending)
             : null;
-        const board = viewer ? describeBoard(guild, viewer) : [];
-        const voiceChannels = board
-            .flatMap(category => category.channels.map(channel => ({ ...channel, category: category.name })))
-            .filter(channel => channel.members.length > 0);
+        const { voice, inVoice } = voiceBlock(guild, viewer);
         const now = Date.now();
 
         const entries = journal.items.filter(entry => canSeeEntry(guild, viewer, entry)).slice(0, JOURNAL_SHOWN);
@@ -59,11 +67,11 @@ router.get('/', async (req, res, next) => {
             tiles: {
                 waiting: queue ? queue.length : null,
                 approvedToday: settings ? approvedToday.length : null,
-                inVoice: voiceChannels.reduce((sum, channel) => sum + channel.members.length, 0),
+                inVoice,
                 activeMutes: guild.members.cache.filter(m => (m.communicationDisabledUntilTimestamp || 0) > now).size
             },
             queue: queue ? queue.slice(0, QUEUE_SHOWN) : null,
-            voice: voiceChannels,
+            voice,
             journal: entries,
             users,
             birthdays: upcomingBirthdays(guild, birthdays)

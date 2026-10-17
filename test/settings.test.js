@@ -147,6 +147,24 @@ function stats() {
     assert.deepStrictEqual([result.queue.decided, result.queue.averageWaitMs, result.queue.medianWaitMs], [3, 3 * hour, 3 * hour]);
 }
 
+async function counting() {
+    // Counted in JS (no GROUP BY), message log excluded in the query itself
+    let sent = null;
+    const realInit = AuditLogService.initialize;
+    AuditLogService.initialize = async () => {};
+    AuditLogService.container = { items: { query: spec => { sent = spec; return { fetchAll: async () => ({ resources: [
+        { actorId: 'kira', action: 'verification.approved' }, { actorId: 'kira', action: 'verification.approved' },
+        { actorId: 'bob', action: 'moderation.muted' }] }) }; } } };
+    const counts = await AuditLogService.countByActor('g', '2026-10-01T00:00:00Z');
+    assert.ok(sent.query.includes("NOT STARTSWITH(c.action, 'message.')"));
+    assert.ok(!sent.query.includes('GROUP BY'));
+    assert.deepStrictEqual(counts.sort((a, b) => a.actorId.localeCompare(b.actorId)),
+        [{ actorId: 'bob', action: 'moderation.muted', n: 1 }, { actorId: 'kira', action: 'verification.approved', n: 2 }]);
+    const { buildAuditQuery } = require('../src/services/AuditLogService');
+    assert.ok(buildAuditQuery({ guildId: 'g', excludePrefix: 'message.' }).query.includes('NOT STARTSWITH(c.action, @excludePrefix)'));
+    AuditLogService.initialize = realInit;
+}
+
 function birthdays() {
     const today = new Date();
     const inDays = n => { const d = new Date(today); d.setDate(d.getDate() + n); return { month: d.getMonth() + 1, day: d.getDate() }; };
@@ -159,6 +177,7 @@ function birthdays() {
     await diagnostics();
     await api();
     stats();
+    await counting();
     birthdays();
     console.log('settings tests passed');
 })().catch(error => {

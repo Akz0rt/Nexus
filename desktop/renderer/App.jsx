@@ -149,8 +149,8 @@ export default function App() {
         if (!guildId) { setWaiting(null); return; }
         let cancelled = false;
         apiGet(`/guilds/${guildId}/queue?tab=waiting`)
-            .then(data => { if (!cancelled) setWaiting({ items: data.items, reservedRoleIds: data.reservedRoleIds || [] }); })
-            .catch(error => { if (!cancelled) setWaiting({ items: [], error }); });
+            .then(data => { if (!cancelled) setWaiting({ guildId, items: data.items, reservedRoleIds: data.reservedRoleIds || [] }); })
+            .catch(error => { if (!cancelled) setWaiting({ guildId, items: [], error }); });
         return () => { cancelled = true; };
     }, [guildId, revision, reloadWaiting]);
 

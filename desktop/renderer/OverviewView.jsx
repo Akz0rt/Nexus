@@ -69,14 +69,25 @@ export default function OverviewView({ guildId, revision, voiceRevision, waiting
 
     useEffect(() => {
         let cancelled = false;
-        // Voice changes come in bursts (someone joins, mutes, moves): fetch once they settle
+        apiGet(`/guilds/${guildId}/overview`)
+            .then(result => { if (!cancelled) { setData(result); setError(null); } })
+            .catch(err => { if (!cancelled) setError(describeError(err)); });
+        return () => { cancelled = true; };
+    }, [guildId, revision]);
+
+    // Voice changes come often and in bursts: refresh only the voice block once they settle
+    useEffect(() => {
+        if (!voiceRevision) return undefined;
+        let cancelled = false;
         const timer = setTimeout(() => {
-            apiGet(`/guilds/${guildId}/overview`)
-                .then(result => { if (!cancelled) { setData(result); setError(null); } })
-                .catch(err => { if (!cancelled) setError(describeError(err)); });
+            apiGet(`/guilds/${guildId}/overview?parts=voice`)
+                .then(part => {
+                    if (!cancelled) setData(d => (d ? { ...d, voice: part.voice, tiles: { ...d.tiles, inVoice: part.inVoice } } : d));
+                })
+                .catch(() => {});
         }, 250);
         return () => { cancelled = true; clearTimeout(timer); };
-    }, [guildId, revision, voiceRevision]);
+    }, [guildId, voiceRevision]);
 
     const changeLayout = next => { setLayout(next); saveLayout(next); };
     const move = (index, delta) => {

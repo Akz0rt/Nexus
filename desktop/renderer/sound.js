@@ -2,8 +2,12 @@
 // so the app ships no sound files.
 
 let context = null;
+let lastPlayed = 0;
+const MIN_GAP_MS = 2000; // fifteen joins at once → one chime, not fifteen
 
 export function playChime() {
+    if (Date.now() - lastPlayed < MIN_GAP_MS) return;
+    lastPlayed = Date.now();
     try {
         context = context || new AudioContext();
         if (context.state === 'suspended') context.resume();
