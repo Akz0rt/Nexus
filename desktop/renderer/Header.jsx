@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { apiGet } from './api.js';
 import Avatar from './Avatar.jsx';
+import LockdownButton from './LockdownButton.jsx';
 
 const STREAM = {
     open: { label: 'Бот на связи', tone: 'ok' },
@@ -114,6 +115,11 @@ function AccountMenu({ me, theme, onTheme }) {
                         Уведомлять о новичках
                     </label>
                     <label className="check">
+                        <input type="checkbox" checked={Boolean(settings?.sound)} disabled={!settings}
+                            onChange={() => toggle('sound')} />
+                        Звук, когда заходит новичок
+                    </label>
+                    <label className="check">
                         <input type="checkbox" checked={Boolean(settings?.closeToTray)} disabled={!settings}
                             onChange={() => toggle('closeToTray')} />
                         Сворачивать в трей при закрытии
@@ -133,7 +139,7 @@ function AccountMenu({ me, theme, onTheme }) {
     );
 }
 
-export default function Header({ guilds, guild, onGuild, me, streamState, onOpenMember, theme, onTheme }) {
+export default function Header({ guilds, guild, onGuild, me, streamState, onOpenMember, theme, onTheme, lockdown, canLockdown, onLockdown, toast }) {
     const stream = STREAM[streamState] || STREAM.closed;
     return (
         <header className="topbar">
@@ -144,6 +150,7 @@ export default function Header({ guilds, guild, onGuild, me, streamState, onOpen
                 </select>
             </label>
             <Search guildId={guild?.id} onOpenMember={onOpenMember} />
+            {canLockdown && guild && <LockdownButton guildId={guild.id} lockdown={lockdown} onChange={onLockdown} toast={toast} />}
             <span className={`link-state tone-${stream.tone}`} title="Связь с ботом">{stream.label}</span>
             <AccountMenu me={me} theme={theme} onTheme={onTheme} />
         </header>

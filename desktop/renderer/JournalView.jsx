@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { apiGet, describeError } from './api.js';
 import { ACTION_GROUPS, ACTION_LABELS, SOURCE_LABELS, describeAction, describeMessage, formatDateTime, toCsv } from './format.js';
 import { MemberLink } from './Avatar.jsx';
@@ -44,8 +44,21 @@ function reasonText(entry) {
     return entry.action.startsWith('message.') ? describeMessage(entry) : (entry.reason || '');
 }
 
-export default function JournalView({ guildId, liveEvents, onOpenMember, toast }) {
-    const [filters, setFilters] = useState(EMPTY_FILTERS);
+function presetFilters(preset) {
+    if (!preset) return EMPTY_FILTERS;
+    const { nonce, ...rest } = preset;
+    return { ...EMPTY_FILTERS, ...rest };
+}
+
+export default function JournalView({ guildId, liveEvents, preset, onOpenMember, toast }) {
+    const [filters, setFilters] = useState(() => presetFilters(preset));
+    // Opened from another screen with filters (e.g. a moderator from the stats)
+    const appliedPreset = useRef(preset?.nonce);
+    useEffect(() => {
+        if (!preset || preset.nonce === appliedPreset.current) return;
+        appliedPreset.current = preset.nonce;
+        setFilters(presetFilters(preset));
+    }, [preset]);
     const [items, setItems] = useState([]);
     const [users, setUsers] = useState({});
     const [cursor, setCursor] = useState(null);

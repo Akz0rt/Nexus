@@ -37,7 +37,10 @@ export const ACTION_LABELS = {
     'roles.preset_deleted': 'Пресет удалён',
     'message.deleted': 'Сообщение удалено',
     'message.edited': 'Сообщение изменено',
-    'message.bulk_deleted': 'Сообщения очищены'
+    'message.bulk_deleted': 'Сообщения очищены',
+    'server.lockdown_on': 'Lockdown включён',
+    'server.lockdown_off': 'Lockdown снят',
+    'settings.updated': 'Настройки изменены'
 };
 
 /** Groups for the journal filter ("message.*" matches every message action). */

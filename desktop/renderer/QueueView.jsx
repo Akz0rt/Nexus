@@ -40,7 +40,7 @@ function readJoined() {
 const STAMP_MS = 900;
 const UNDO_TOAST_MS = 10000;
 
-function Pass({ item, selected, busy, stamp, extraRoles, onExtras, onClearExtras, onSelect, onApprove, onKick, onOpenMember }) {
+function Pass({ item, selected, busy, stamp, isNew, extraRoles, onExtras, onClearExtras, onSelect, onApprove, onKick, onOpenMember }) {
     const [kicking, setKicking] = useState(false);
     const [reason, setReason] = useState('');
     const { member } = item;
@@ -57,6 +57,7 @@ function Pass({ item, selected, busy, stamp, extraRoles, onExtras, onClearExtras
                     <div className="pass-name">
                         <MemberLink id={member.id} name={member.displayName} onOpen={onOpenMember} />
                         <span className="muted">@{member.username}</span>
+                        {isNew && <span className="new-mark">новый</span>}
                     </div>
                     <dl className="pass-facts">
                         <div><dt>Зашёл</dt><dd title={formatDateTime(member.joinedAt)}>{timeAgo(member.joinedAt)}</dd></div>
@@ -130,10 +131,11 @@ function HandledRow({ item, onOpenMember }) {
     );
 }
 
-export default function QueueView({ guildId, waiting, revision, onChanged, onOpenMember, toast }) {
+export default function QueueView({ guildId, waiting, seen, revision, onChanged, onOpenMember, toast }) {
     const [tab, setTab] = useState('waiting');
     const [sort, setSort] = useState('oldest');
     const [onlyFlagged, setOnlyFlagged] = useState(false);
+    const [onlyNew, setOnlyNew] = useState(false);
     const [joined, setJoined] = useState(readJoined);
     const [selectedId, setSelectedId] = useState(null);
     const [busy, setBusy] = useState({});      // userId -> true while a request runs
@@ -168,9 +170,10 @@ export default function QueueView({ guildId, waiting, revision, onChanged, onOpe
         const now = Date.now();
         const visible = current.filter(item =>
             (!onlyFlagged || item.member.flags.length > 0)
+            && (!onlyNew || seen.isNew(item.member.id) || leaving[item.member.id])
             && JOINED[joined].test(now - Date.parse(item.member.joinedAt || 0)));
         return [...visible].sort(SORTS[sort].fn);
-    }, [waiting, leaving, errors, sort, onlyFlagged, joined]);
+    }, [waiting, leaving, errors, sort, onlyFlagged, onlyNew, seen, joined]);
 
     const changeJoined = value => {
         setJoined(value);
@@ -249,7 +252,9 @@ export default function QueueView({ guildId, waiting, revision, onChanged, onOpe
 
     useEffect(() => {
         listRef.current?.querySelector('.pass.is-selected')?.scrollIntoView({ block: 'nearest' });
-    }, [selectedId]);
+        // Choosing a pass (click or arrows) counts as having seen that newcomer
+        if (selectedId) seen.markSeen([selectedId]);
+    }, [selectedId, seen.markSeen]);
 
     const waitingCount = waiting?.items?.length ?? 0;
     const shownCount = items.filter(item => !leaving[item.member.id]).length;
@@ -282,6 +287,15 @@ export default function QueueView({ guildId, waiting, revision, onChanged, onOpe
                             <input type="checkbox" checked={onlyFlagged} onChange={e => setOnlyFlagged(e.target.checked)} />
                             Только с флагами
                         </label>
+                        <label className="check">
+                            <input type="checkbox" checked={onlyNew} onChange={e => setOnlyNew(e.target.checked)} />
+                            Только новые
+                        </label>
+                        {seen.newCount > 0 && (
+                            <button className="btn" onClick={seen.markAllSeen} title="Счётчик в меню погаснет до прихода следующего новичка">
+                                Отметить всех просмотренными · {seen.newCount}
+                            </button>
+                        )}
                         <span className="muted small hint">↑ ↓ — выбрать, M / F — пропустить</span>
                     </div>
                     {waiting?.error && <p className="error">{describeError(waiting.error)}</p>}
@@ -305,6 +319,7 @@ export default function QueueView({ guildId, waiting, revision, onChanged, onOpe
                                 extraRoles={(extras[item.member.id] || []).map(roleOf).filter(Boolean)}
                                 onExtras={assignable?.length ? () => setExtrasFor(item.member) : null}
                                 onClearExtras={() => setExtras(x => { const next = { ...x }; delete next[item.member.id]; return next; })}
+                                isNew={seen.isNew(item.member.id)}
                                 onSelect={() => setSelectedId(item.member.id)}
                                 onApprove={gender => decide(item, 'approve', { gender })}
                                 onKick={reason => decide(item, 'kick', { reason })}

@@ -2,14 +2,17 @@ import React from 'react';
 import Avatar from './Avatar.jsx';
 
 const ITEMS = [
+    { id: 'overview', label: 'Обзор' },
     { id: 'queue', label: 'Пропуск' },
     { id: 'voice', label: 'Голосовые' },
     { id: 'moderation', label: 'Модерация' },
     { id: 'roles', label: 'Роли', needs: 'roles' },
-    { id: 'journal', label: 'Журнал' }
+    { id: 'journal', label: 'Журнал' },
+    { id: 'stats', label: 'Статистика' },
+    { id: 'settings', label: 'Настройки', needs: 'settings' }
 ];
 
-export default function Sidebar({ view, onView, waitingCount, canRoles, presence, version }) {
+export default function Sidebar({ view, onView, waitingCount, newCount, canRoles, canSettings, presence, version }) {
     return (
         <aside className="sidebar">
             <div className="brand">
@@ -17,7 +20,7 @@ export default function Sidebar({ view, onView, waitingCount, canRoles, presence
                 <span>Nexus</span>
             </div>
             <nav className="menu">
-                {ITEMS.filter(item => item.needs !== 'roles' || canRoles).map(item => (
+                {ITEMS.filter(item => (item.needs !== 'roles' || canRoles) && (item.needs !== 'settings' || canSettings)).map(item => (
                     <button
                         key={item.id}
                         className={`menu-item ${view === item.id ? 'is-active' : ''}`}
@@ -25,7 +28,12 @@ export default function Sidebar({ view, onView, waitingCount, canRoles, presence
                         onClick={() => onView(item.id)}
                     >
                         <span>{item.label}</span>
-                        {item.id === 'queue' && waitingCount > 0 && <span className="counter">{waitingCount}</span>}
+                        {item.id === 'queue' && newCount > 0 && (
+                            <span className="counter" title={`Новых: ${newCount} · всего ждут: ${waitingCount}`}>{newCount}</span>
+                        )}
+                        {item.id === 'queue' && !newCount && waitingCount > 0 && (
+                            <span className="counter-quiet" title="Всех уже просмотрели">{waitingCount}</span>
+                        )}
                     </button>
                 ))}
             </nav>

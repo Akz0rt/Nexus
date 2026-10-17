@@ -66,7 +66,10 @@ const ERROR_TEXT = {
     invalid_filter: 'Выберите, кому менять роль.',
     preset_not_found: 'Пресет уже удалён.',
     job_running: 'Уже идёт массовая выдача ролей. Дождитесь, пока она закончится.',
-    too_many_targets: 'Слишком много людей за раз: не больше 5000.'
+    too_many_targets: 'Слишком много людей за раз: не больше 5000.',
+    already_active: 'Lockdown уже включён.',
+    not_active: 'Lockdown уже снят.',
+    bot_missing_manage_guild: 'Боту не хватает права «Управлять сервером».'
 };
 
 export function describeError(result) {

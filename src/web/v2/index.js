@@ -38,6 +38,13 @@ function createV2Router({ hub = new SseHub().attach() } = {}) {
     guildRouter.use('/moderation', require('./routes/moderation'));
     guildRouter.use('/voice', require('./routes/voice'));
     guildRouter.use('/roles', require('./routes/roles'));
+    guildRouter.use('/overview', require('./routes/overview'));
+    guildRouter.use('/stats', require('./routes/stats'));
+    guildRouter.use('/lockdown', require('./routes/lockdown'));
+    // Settings: administrators ("senior") only
+    guildRouter.use('/settings', (req, res, next) => (req.panelRole === 'senior'
+        ? next()
+        : res.status(403).json({ error: 'forbidden' })), require('./routes/settings'));
     guildRouter.get('/events', (req, res) => {
         const ref = userRef(req.guild, req.session.userId);
         hub.subscribe(req.guild.id, res, {

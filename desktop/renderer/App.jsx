@@ -7,6 +7,12 @@ import JournalView from './JournalView.jsx';
 import ModerationView from './ModerationView.jsx';
 import VoiceView from './VoiceView.jsx';
 import RolesView from './RolesView.jsx';
+import OverviewView from './OverviewView.jsx';
+import StatsView from './StatsView.jsx';
+import SettingsView from './SettingsView.jsx';
+import { LockdownBanner } from './LockdownButton.jsx';
+import { playChime } from './sound.js';
+import { useSeen } from './seen.js';
 import MemberDrawer from './MemberDrawer.jsx';
 import Toasts from './Toasts.jsx';
 
@@ -22,7 +28,7 @@ export default function App() {
     const [me, setMe] = useState(null);
     const [guilds, setGuilds] = useState([]);
     const [guildId, setGuildId] = useState(null);
-    const [view, setView] = useState('queue');
+    const [view, setView] = useState('overview');
     const [drawerUserId, setDrawerUserId] = useState(null);
     const [streamState, setStreamState] = useState('closed');
     const [presence, setPresence] = useState([]);
@@ -34,6 +40,8 @@ export default function App() {
     const [update, setUpdate] = useState(null);
     const [theme, setTheme] = useState(readTheme);
     const [roleJob, setRoleJob] = useState(null); // running or last mass role change
+    const [lockdown, setLockdown] = useState(null);
+    const [journalPreset, setJournalPreset] = useState(null); // filters to open the journal with
     const toastSeq = useRef(0);
     const dismissedJob = useRef(null);
 
@@ -97,6 +105,9 @@ export default function App() {
             if (event === 'presence') setPresence(data.users);
             if (event === 'audit') {
                 setLiveEvents(list => [data, ...list].slice(0, 300));
+                if (data.action === 'verification.queued') {
+                    window.panel.getSettings().then(prefs => { if (prefs.sound) playChime(); }).catch(() => {});
+                }
                 // Message edits and deletes are frequent and change nothing on the other screens
                 if (!data.action?.startsWith('message.')) setRevision(r => r + 1);
             }
@@ -143,6 +154,23 @@ export default function App() {
         return () => { cancelled = true; };
     }, [guildId, revision, reloadWaiting]);
 
+    const seen = useSeen(guildId, waiting);
+
+    // Lockdown: everyone sees the banner, administrators get the button
+    useEffect(() => {
+        if (!guildId) { setLockdown(null); return; }
+        let cancelled = false;
+        apiGet(`/guilds/${guildId}/lockdown`)
+            .then(data => { if (!cancelled) setLockdown(data); })
+            .catch(() => { if (!cancelled) setLockdown(null); });
+        return () => { cancelled = true; };
+    }, [guildId, revision]);
+
+    const openJournal = useCallback(filters => {
+        setJournalPreset({ ...filters, nonce: Date.now() });
+        setView('journal');
+    }, []);
+
     if (!auth) return <div className="splash" />;
 
     if (!auth.loggedIn) {
@@ -161,6 +189,7 @@ export default function App() {
     }
 
     const guild = guilds.find(g => g.id === guildId) || null;
+    const senior = guild?.panelRole === 'senior';
 
     return (
         <div className="shell">
@@ -168,7 +197,9 @@ export default function App() {
                 view={view}
                 onView={setView}
                 waitingCount={waiting?.items?.length ?? null}
+                newCount={seen.newCount}
                 canRoles={Boolean(guild?.can?.roles)}
+                canSettings={senior}
                 presence={presence}
                 version={auth.version}
             />
@@ -182,7 +213,12 @@ export default function App() {
                     onOpenMember={setDrawerUserId}
                     theme={theme}
                     onTheme={setTheme}
+                    lockdown={lockdown}
+                    canLockdown={senior}
+                    onLockdown={setLockdown}
+                    toast={toast}
                 />
+                {lockdown?.active && <LockdownBanner lockdown={lockdown} />}
                 {update && (
                     <div className="banner">
                         Версия {update.version} загружена.
@@ -197,10 +233,15 @@ export default function App() {
                             <p>Панель открывается на серверах, где есть бот и у вас есть одно из прав: «Управлять ролями», «Выгонять», «Отправлять подумать о поведении», «Банить», «Перемещать участников», «Отключать участникам микрофон или звук» или «Администратор».</p>
                         </div>
                     )}
+                    {guildId && view === 'overview' && (
+                        <OverviewView guildId={guildId} revision={revision} voiceRevision={voiceRevision} waiting={waiting} seen={seen}
+                            onView={setView} onOpenMember={setDrawerUserId} onChanged={() => setReloadWaiting(n => n + 1)} toast={toast} />
+                    )}
                     {guildId && view === 'queue' && (
                         <QueueView
                             guildId={guildId}
                             waiting={waiting}
+                            seen={seen}
                             revision={revision}
                             onChanged={() => setReloadWaiting(n => n + 1)}
                             onOpenMember={setDrawerUserId}
@@ -218,7 +259,13 @@ export default function App() {
                         <ModerationView guildId={guildId} revision={revision} onOpenMember={setDrawerUserId} toast={toast} />
                     )}
                     {guildId && view === 'journal' && (
-                        <JournalView guildId={guildId} liveEvents={liveEvents} onOpenMember={setDrawerUserId} toast={toast} />
+                        <JournalView guildId={guildId} liveEvents={liveEvents} preset={journalPreset} onOpenMember={setDrawerUserId} toast={toast} />
+                    )}
+                    {guildId && view === 'stats' && (
+                        <StatsView guildId={guildId} revision={revision} onOpenMember={setDrawerUserId} onOpenJournal={openJournal} />
+                    )}
+                    {guildId && view === 'settings' && senior && (
+                        <SettingsView guildId={guildId} toast={toast} />
                     )}
                 </main>
             </div>

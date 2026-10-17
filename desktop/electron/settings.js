@@ -5,6 +5,7 @@ const { app } = require('electron');
 // Per-machine app preferences (not secrets) in userData/settings.json
 const DEFAULTS = {
     notifications: true, // Windows notification when a newcomer joins the queue
+    sound: true,         // chime when a newcomer joins the queue (played by the window)
     closeToTray: true    // closing the window keeps the app running in the tray
 };
 

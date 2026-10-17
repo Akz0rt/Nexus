@@ -107,7 +107,8 @@ if (!gotLock) {
 function notify(title, body, view) {
     if (!settings.get().notifications || !Notification.isSupported()) return;
     if (mainWindow?.isVisible() && mainWindow.isFocused()) return;
-    const notification = new Notification({ title, body, icon: ICON_PATH });
+    // With our own chime on, the Windows sound would play twice
+    const notification = new Notification({ title, body, icon: ICON_PATH, silent: settings.get().sound });
     notification.on('click', () => {
         showWindow();
         send('app:navigate', { view });

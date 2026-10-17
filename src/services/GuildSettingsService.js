@@ -4,6 +4,7 @@ const { DEFAULT_REASONS, DEFAULT_ESCALATION } = require('../modules/moderation/t
 
 const GUILD_SETTINGS_CONTAINER = 'guild_settings';
 const CACHE_TTL_MS = 60 * 1000;
+const DEFAULT_SLOWMODE_SECONDS = 30;
 
 // Per-guild settings keys and their env fallbacks (env applies to the default guild only)
 const ENV_DEFAULTS = {
@@ -90,6 +91,18 @@ class GuildSettingsService {
             escalation: Array.isArray(moderation.escalation) ? moderation.escalation : DEFAULT_ESCALATION
         };
 
+        // Lockdown: start channels that get slowmode, and the current state (to undo it exactly)
+        const lockdown = doc?.lockdown || {};
+        result.lockdown = {
+            channelIds: Array.isArray(lockdown.channelIds) ? lockdown.channelIds : [],
+            slowmodeSeconds: Number.isInteger(lockdown.slowmodeSeconds) ? lockdown.slowmodeSeconds : DEFAULT_SLOWMODE_SECONDS
+        };
+        result.lockdownState = doc?.lockdownState || null;
+
+        // Which env-backed keys come from env rather than the guild doc (shown in Settings)
+        result.fromEnv = Object.keys(ENV_DEFAULTS).filter(key =>
+            (doc?.[key] === undefined || doc[key] === '') && result[key] !== undefined);
+
         return result;
     }
 
@@ -117,3 +130,4 @@ class GuildSettingsService {
 }
 
 module.exports = new GuildSettingsService();
+module.exports.DEFAULT_SLOWMODE_SECONDS = DEFAULT_SLOWMODE_SECONDS;

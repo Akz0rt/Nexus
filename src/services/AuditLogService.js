@@ -132,6 +132,22 @@ class AuditLogService {
         const { resources, continuationToken } = await iterator.fetchNext();
         return { items: resources || [], cursor: continuationToken || null };
     }
+
+    /**
+     * How many entries of each action every moderator has since a moment — for the
+     * moderator stats. Entries without an actor (bot, auto) don't count.
+     * @returns {Promise<Array<{ actorId: string, action: string, n: number }>>}
+     */
+    async countByActor(guildId, sinceIso) {
+        await this.initialize();
+        const { resources } = await this.container.items.query({
+            query: 'SELECT c.actorId, c.action, COUNT(1) AS n FROM c ' +
+                'WHERE c.guildId = @guildId AND c.createdAt >= @since AND IS_STRING(c.actorId) ' +
+                'GROUP BY c.actorId, c.action',
+            parameters: [{ name: '@guildId', value: guildId }, { name: '@since', value: sinceIso }]
+        }, { partitionKey: guildId }).fetchAll();
+        return resources;
+    }
 }
 
 module.exports = new AuditLogService();
