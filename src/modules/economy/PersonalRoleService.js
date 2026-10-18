@@ -316,6 +316,7 @@ class PersonalRoleService {
         if (!doc || !role) return { ok: false, code: 'not_personal' };
         if (!doc.price) return { ok: false, code: 'not_for_sale' };
         if (doc.ownerId === member.id) return { ok: false, code: 'own_role' };
+        if ((doc.buyers || []).some(b => b.userId === member.id && b.permanent)) return { ok: false, code: 'already_yours' };
         const owner = guild.members.cache.get(doc.ownerId) || await guild.members.fetch(doc.ownerId).catch(() => null);
         if (!owner) return { ok: false, code: 'owner_gone' };
 
@@ -337,6 +338,7 @@ class PersonalRoleService {
             return { ok: false, code: 'discord_error' };
         }
         const current = (doc.buyers || []).find(b => b.userId === member.id);
+        if (current?.permanent) return { ok: false, code: 'already_yours' };
         const from = Math.max(Date.now(), current ? Date.parse(current.expiresAt) : 0);
         const expiresAt = new Date(from + this.periodMs(settings)).toISOString();
         doc.buyers = [...(doc.buyers || []).filter(b => b.userId !== member.id), { userId: member.id, expiresAt }];
@@ -388,7 +390,8 @@ class PersonalRoleService {
                 let dirty = false;
                 const keep = [];
                 for (const buyer of doc.buyers || []) {
-                    if (Date.parse(buyer.expiresAt) > now) { keep.push(buyer); continue; }
+                    // Holders carried over from the old bot keep it while the role exists
+                    if (buyer.permanent || Date.parse(buyer.expiresAt) > now) { keep.push(buyer); continue; }
                     const member = guild.members.cache.get(buyer.userId);
                     if (member?.roles.cache.has(role.id)) await member.roles.remove(role, 'Срок купленной роли закончился').catch(() => {});
                     await this.notify(guild, buyer.userId, `Срок роли «${role.name}» на сервере ${guild.name} закончился. Купить снова: /shop.`);

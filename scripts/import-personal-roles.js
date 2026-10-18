@@ -5,7 +5,7 @@
 //
 // The owner is whoever created the role in the old bot's history ("Создание личной роли <@&id>").
 // Every imported role gets a full rental period from today; whoever wears it besides the
-// owner becomes a buyer for the same period. New personal roles will be created right
+// owner keeps it for as long as the role exists. New personal roles will be created right
 // above the role just below the lowest imported one (the anchor), keeping them in one block.
 // Options: --file <dump.sql> (default data/economiusers.sql), --guild <id> (default GUILD_ID).
 
@@ -50,7 +50,7 @@ async function main() {
     const name = id => members.find(m => m.user.id === id)?.nick || members.find(m => m.user.id === id)?.user.global_name || id;
     console.log(`Personal roles to import: ${docs.length}`);
     for (const doc of docs) {
-        console.log(`  ${roles.get(doc.roleId).name} — owner ${name(doc.ownerId)}${doc.ownerWears ? '' : ' (not wearing)'}, buyers: ${doc.buyers.map(b => name(b.userId)).join(', ') || 'none'}, until ${doc.expiresAt.slice(0, 10)}`);
+        console.log(`  ${roles.get(doc.roleId).name} — owner ${name(doc.ownerId)}${doc.ownerWears ? '' : ' (not wearing)'}, holders (kept while the role exists): ${doc.buyers.map(b => name(b.userId)).join(', ') || 'none'}, until ${doc.expiresAt.slice(0, 10)}`);
     }
     const lowest = Math.min(...docs.map(doc => roles.get(doc.roleId).position));
     const anchor = [...roles.values()].find(role => role.position === lowest - 1);

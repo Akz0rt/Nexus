@@ -132,6 +132,13 @@ async function time(roleId) {
     assert.deepStrictEqual(store.get(roleId).buyers, []);
     assert.ok(dms.some(d => d.to === BUYER && /\/shop/.test(d.text)));
 
+    // A holder from the old bot keeps it until the role itself ends
+    store.get(roleId).buyers = [{ userId: POOR, expiresAt: null, permanent: true }];
+    poor.roles.cache.set(roleId, guild.roles.cache.get(roleId));
+    await PersonalRoleService.processDue(client, Date.parse(store.get(roleId).expiresAt) - 5 * DAY);
+    assert.ok(poor.roles.cache.has(roleId) && store.get(roleId).buyers.length === 1);
+    assert.strictEqual((await PersonalRoleService.buy(guild, poor, roleId)).code, 'already_yours');
+
     // 3 days before the end: one reminder
     const end = Date.parse(store.get(roleId).expiresAt);
     await PersonalRoleService.processDue(client, end - 2 * DAY);
@@ -197,7 +204,7 @@ function legacy() {
     const docs = legacyPersonalRoles(rows, guild.id, {
         roles, holdersOf: id => (id === '111' ? [BUYER] : []), memberIds: new Set([OWNER, BUYER]), periodDays: 30, now: 0
     });
-    assert.deepStrictEqual(docs.map(d => [d.roleId, d.ownerId, d.ownerWears, d.buyers.map(b => b.userId)]), [['111', OWNER, false, [BUYER]]], 'gone roles and owners who left are skipped');
+    assert.deepStrictEqual(docs.map(d => [d.roleId, d.ownerId, d.ownerWears, d.buyers.map(b => [b.userId, b.permanent])]), [['111', OWNER, false, [[BUYER, true]]]], 'gone roles and owners who left are skipped');
     assert.strictEqual(docs[0].expiresAt, new Date(30 * DAY).toISOString());
 }
 

@@ -96,7 +96,8 @@ function buildImport(rows, guildId, now = new Date().toISOString(), presentIds =
 /**
  * Personal roles from the old history that still exist in Discord and whose creator
  * is still on the server. `holdersOf(roleId)` — who wears it now. Every role gets a
- * full period from `now`; other wearers become buyers for the same period.
+ * full period from `now`; other wearers keep it for as long as the role exists
+ * (buyers with no term of their own).
  */
 function legacyPersonalRoles(rows, guildId, { roles, holdersOf, memberIds, periodDays, now = Date.now() }) {
     const creators = new Map(); // roleId -> owner (the latest creation entry wins)
@@ -117,7 +118,7 @@ function legacyPersonalRoles(rows, guildId, { roles, holdersOf, memberIds, perio
             id: roleId, guildId, roleId, ownerId,
             ownerWears: holders.includes(ownerId),
             price: null,
-            buyers: holders.filter(id => id !== ownerId).map(userId => ({ userId, expiresAt: until })),
+            buyers: holders.filter(id => id !== ownerId).map(userId => ({ userId, expiresAt: null, permanent: true })),
             expiresAt: until,
             remindedAt: null,
             createdAt: new Date(now).toISOString(),

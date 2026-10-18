@@ -95,7 +95,7 @@ export default function PersonalRolesTab({ guildId, revision, onOpenMember, toas
                                 <dd>
                                     {item.buyers.length === 0 && <span className="muted">никто</span>}
                                     {item.buyers.map(buyer => (
-                                        <span key={buyer.id} className="buyer"><Person person={buyer} onOpenMember={onOpenMember} /><span className="muted small">до {formatDateTime(buyer.expiresAt)}</span></span>
+                                        <span key={buyer.id} className="buyer"><Person person={buyer} onOpenMember={onOpenMember} /><span className="muted small">{buyer.expiresAt ? `до ${formatDateTime(buyer.expiresAt)}` : 'пока роль существует'}</span></span>
                                     ))}
                                 </dd>
                             </div>
