@@ -5,7 +5,7 @@ const CosmosDBService = require('../../../services/CosmosDBService');
 const VerificationService = require('../../../modules/verification/VerificationService');
 const QueueCardService = require('../../../modules/verification/QueueCardService');
 const { startOfToday } = require('../../../utils/dateUtils');
-const { describeMember, mergeQueue, userRef } = require('../serialize');
+const { describeMember, flagContext, mergeQueue, userRef } = require('../serialize');
 const { canSeeEntry } = require('../visibility');
 const { describeBoard } = require('./voice');
 const { describeBirthdays } = require('./birthdays');
@@ -50,8 +50,9 @@ router.get('/', async (req, res, next) => {
             CosmosDBService.getAllBirthdays().catch(() => ({}))
         ]);
 
+        const context = settings ? await flagContext(guild, new Map(pending.map(card => [card.userId, card.kickCount || 0]))) : null;
         const queue = settings
-            ? mergeQueue(guild.members.cache.filter(m => m.roles.cache.has(settings.unverifiedRoleId)).map(describeMember), pending)
+            ? mergeQueue(guild.members.cache.filter(m => m.roles.cache.has(settings.unverifiedRoleId)).map(m => describeMember(m, context)), pending)
             : null;
         const { voice, inVoice } = voiceBlock(guild, viewer);
         const now = Date.now();

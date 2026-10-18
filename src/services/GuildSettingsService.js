@@ -5,6 +5,7 @@ const { DEFAULT_REASONS, DEFAULT_ESCALATION } = require('../modules/moderation/t
 const GUILD_SETTINGS_CONTAINER = 'guild_settings';
 const CACHE_TTL_MS = 60 * 1000;
 const DEFAULT_SLOWMODE_SECONDS = 30;
+const DEFAULT_YOUNG_ACCOUNT_DAYS = 7;
 
 // Per-guild settings keys and their env fallbacks (env applies to the default guild only)
 const ENV_DEFAULTS = {
@@ -83,6 +84,10 @@ class GuildSettingsService {
         // Give @unverified on join ourselves (skipped if a third-party bot already did). On by default.
         const envAssign = useEnv ? parseBool(config.assignUnverifiedOnJoin) : undefined;
         result.assignUnverifiedOnJoin = doc?.assignUnverifiedOnJoin ?? envAssign ?? true;
+
+        // Queue flags: an account younger than this is «новый аккаунт»
+        const youngDays = doc?.verification?.youngAccountDays;
+        result.verification = { youngAccountDays: Number.isInteger(youngDays) ? youngDays : DEFAULT_YOUNG_ACCOUNT_DAYS };
 
         // Moderation: reason templates and warn escalation (edited from the panel's Settings later)
         const moderation = doc?.moderation || {};

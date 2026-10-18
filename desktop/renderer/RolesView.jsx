@@ -1,8 +1,9 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { apiDelete, apiGet, apiPost, describeError } from './api.js';
 import { ErrorState } from './States.jsx';
 import { ROLE_PROBLEMS, describeBulk, formatDateTime, timeLeft } from './format.js';
 import Avatar, { MemberLink } from './Avatar.jsx';
+import useSelection, { marqueeStyle } from './useSelection.js';
 import Dialog from './Dialog.jsx';
 import { MassRoleDialog, PresetDialog, RoleChip } from './RoleDialogs.jsx';
 import RoleMenusTab from './RoleMenusTab.jsx';
@@ -58,14 +59,8 @@ function Owners({ guildId, role, revision, dialogOpen, onOpenMember, onStartJob,
     const [error, setError] = useState(null);
     const [retry, setRetry] = useState(0);
     const [query, setQuery] = useState('');
-    const [selected, setSelected] = useState(() => new Set());
-    const [anchor, setAnchor] = useState(null);
-    const [marquee, setMarquee] = useState(null);
     const [confirm, setConfirm] = useState(null); // { userIds|null (= all), count }
     const [busy, setBusy] = useState(false);
-    const listRef = useRef(null);
-
-    useEffect(() => { setSelected(new Set()); setAnchor(null); setQuery(''); }, [role.id]);
     useEffect(() => {
         let cancelled = false;
         apiGet(`/guilds/${guildId}/roles/${role.id}/members`)
@@ -79,70 +74,9 @@ function Owners({ guildId, role, revision, dialogOpen, onOpenMember, onStartJob,
         return (data?.items || []).filter(m => !needle || m.displayName.toLowerCase().includes(needle) || m.username.toLowerCase().includes(needle));
     }, [data, query]);
     const ids = items.map(m => m.id);
-    // Drop ids that left the list (role taken away meanwhile)
-    const chosen = ids.filter(id => selected.has(id));
+    const { selected, chosen, setSelected, click, toggle, startMarquee, marquee, listRef } = useSelection(ids, { paused: dialogOpen || Boolean(confirm) });
 
-    const click = (event, id) => {
-        if (event.detail > 1) return;
-        if (event.shiftKey && anchor && ids.includes(anchor)) {
-            const [from, to] = [ids.indexOf(anchor), ids.indexOf(id)].sort((a, b) => a - b);
-            setSelected(prev => new Set([...(event.ctrlKey ? prev : []), ...ids.slice(from, to + 1)]));
-            return;
-        }
-        if (event.ctrlKey || event.metaKey) {
-            setSelected(prev => {
-                const next = new Set(prev);
-                if (next.has(id)) next.delete(id); else next.add(id);
-                return next;
-            });
-        } else {
-            setSelected(prev => (prev.size === 1 && prev.has(id) ? new Set() : new Set([id])));
-        }
-        setAnchor(id);
-    };
-
-    useEffect(() => {
-        const onKey = event => {
-            if (dialogOpen || confirm || event.target.closest?.('input, select, textarea')) return;
-            if (event.key === 'Escape') setSelected(new Set());
-            if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'a') {
-                event.preventDefault();
-                setSelected(new Set(ids));
-            }
-        };
-        window.addEventListener('keydown', onKey);
-        return () => window.removeEventListener('keydown', onKey);
-    }, [dialogOpen, confirm, ids]);
-
-    const startMarquee = event => {
-        if (event.button !== 0 || event.target.closest('[data-owner], button, input')) return;
-        event.preventDefault();
-        const base = event.shiftKey ? new Set(selected) : new Set();
-        const start = { x: event.clientX, y: event.clientY };
-        let moved = false;
-        const onMove = e => {
-            const rect = {
-                left: Math.min(start.x, e.clientX), top: Math.min(start.y, e.clientY),
-                right: Math.max(start.x, e.clientX), bottom: Math.max(start.y, e.clientY)
-            };
-            if (!moved && rect.right - rect.left < 4 && rect.bottom - rect.top < 4) return;
-            moved = true;
-            setMarquee(rect);
-            const hits = [...listRef.current.querySelectorAll('[data-owner]')].filter(el => {
-                const r = el.getBoundingClientRect();
-                return r.left < rect.right && r.right > rect.left && r.top < rect.bottom && r.bottom > rect.top;
-            }).map(el => el.dataset.owner);
-            setSelected(new Set([...base, ...hits]));
-        };
-        const onUp = () => {
-            window.removeEventListener('mousemove', onMove);
-            window.removeEventListener('mouseup', onUp);
-            setMarquee(null);
-            if (!moved && !event.shiftKey) setSelected(new Set());
-        };
-        window.addEventListener('mousemove', onMove);
-        window.addEventListener('mouseup', onUp);
-    };
+    useEffect(() => { setSelected(new Set()); setQuery(''); }, [role.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const remove = async userIds => {
         const people = userIds ? userIds.filter(id => !data.items.find(m => m.id === id)?.bot) : null;
@@ -181,11 +115,11 @@ function Owners({ guildId, role, revision, dialogOpen, onOpenMember, onStartJob,
                 <ul>
                     {items.map(member => (
                         <li key={member.id}>
-                            <div className={`owner ${selected.has(member.id) ? 'is-selected' : ''}`} data-owner={member.id}
+                            <div className={`owner ${selected.has(member.id) ? 'is-selected' : ''}`} data-select={member.id}
                                 role="option" aria-selected={selected.has(member.id)} tabIndex={0}
                                 onClick={event => click(event, member.id)}
                                 onDoubleClick={() => onOpenMember(member.id)}
-                                onKeyDown={event => { if (event.key === ' ') { event.preventDefault(); click({ ctrlKey: true }, member.id); } if (event.key === 'Enter') onOpenMember(member.id); }}>
+                                onKeyDown={event => { if (event.key === ' ') { event.preventDefault(); toggle(member.id); } if (event.key === 'Enter') onOpenMember(member.id); }}>
                                 <Avatar src={member.avatarURL} name={member.displayName} size={28} />
                                 <span className="owner-name">{member.displayName}</span>
                                 {member.bot && <span className="tile-flag tile-flag-bot">бот</span>}
@@ -208,7 +142,7 @@ function Owners({ guildId, role, revision, dialogOpen, onOpenMember, onStartJob,
                     onClose={() => setConfirm(null)} onConfirm={() => remove(confirm.userIds)} />
             )}
             {marquee && (
-                <div className="marquee" style={{ left: marquee.left, top: marquee.top, width: marquee.right - marquee.left, height: marquee.bottom - marquee.top }} />
+                <div className="marquee" style={marqueeStyle(marquee)} />
             )}
         </section>
     );

@@ -17,7 +17,8 @@ const SAVE_ERRORS = {
     duplicate_warns: 'Два правила на одно и то же число варнов.',
     invalid_slowmode: 'Такой задержки нет.',
     too_many_channels: 'Не больше 10 каналов.',
-    nothing_to_save: 'Нечего сохранять.'
+    nothing_to_save: 'Нечего сохранять.',
+    invalid_young_days: 'Порог «нового аккаунта» — от 1 до 365 дней.'
 };
 
 const LEVEL_MARK = { ok: '✓', warn: '!', bad: '✕' };
@@ -101,7 +102,7 @@ function useSave(guildId, onSaved, toast) {
 }
 
 function VerificationSection({ guildId, values, options, onSaved, toast }) {
-    const keys = ['unverifiedRoleId', 'maleRoleId', 'femaleRoleId', 'verifyQueueChannelId', 'verificationEnabled', 'assignUnverifiedOnJoin'];
+    const keys = ['unverifiedRoleId', 'maleRoleId', 'femaleRoleId', 'verifyQueueChannelId', 'verificationEnabled', 'assignUnverifiedOnJoin', 'youngAccountDays'];
     const { draft, set, dirty, reset } = useDraft(values, keys);
     const { busy, error, save } = useSave(guildId, onSaved, toast);
     const env = key => values.fromEnv.includes(key) && draft[key] === values[key];
@@ -120,6 +121,11 @@ function VerificationSection({ guildId, values, options, onSaved, toast }) {
             <label className="check">
                 <input type="checkbox" checked={draft.assignUnverifiedOnJoin} onChange={e => set('assignUnverifiedOnJoin', e.target.checked)} />
                 Выдавать @АНверефи при входе на сервер (если её не выдал другой бот)
+            </label>
+            <label className="field field-narrow">
+                Флаг «новый аккаунт» — если аккаунту меньше, дней
+                <input type="number" min="1" max="365" value={draft.youngAccountDays}
+                    onChange={e => set('youngAccountDays', e.target.value === '' ? '' : Number(e.target.value))} />
             </label>
             <SaveBar dirty={dirty} busy={busy} error={error} onReset={reset} onSave={() => save(Object.fromEntries(keys.map(k => [k, draft[k]])))} />
         </div>

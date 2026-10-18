@@ -1,14 +1,20 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { apiGet, apiPost, describeError } from './api.js';
-import { GENDER_LABELS, accountAge, formatDateTime, formatTime, timeAgo } from './format.js';
+import { GENDER_LABELS, ROLE_PROBLEMS, accountAge, formatDateTime, formatTime, waitLabel } from './format.js';
 import Avatar, { MemberLink } from './Avatar.jsx';
 import { ExtraRolesDialog, useAssignable } from './RoleDialogs.jsx';
-import { ROLE_PROBLEMS } from './format.js';
+import { Chip, FilterChip, StatusPill } from './Chips.jsx';
+import OverflowMenu from './OverflowMenu.jsx';
+import SelectionBar from './SelectionBar.jsx';
+import { EmptyState, ErrorState, Skeleton } from './States.jsx';
+import Dialog from './Dialog.jsx';
+import PunishDialog from './PunishDialog.jsx';
+import useSelection, { marqueeStyle } from './useSelection.js';
 
 const TABS = [
     { id: 'waiting', label: 'Ждут' },
     { id: 'handled', label: 'Пропущены сегодня' },
-    { id: 'rejected', label: 'Отклонены сегодня' }
+    { id: 'rejected', label: 'Отклонены' }
 ];
 
 const SORTS = {
@@ -18,6 +24,7 @@ const SORTS = {
 };
 
 const HOUR_MS = 60 * 60 * 1000;
+const LONG_WAIT_MS = 5 * HOUR_MS; // «Ждёт» turns amber after this
 // "Когда зашли": newcomers vs. old accounts that have held the role for months
 const JOINED = {
     all: { label: 'Зашли когда угодно', test: () => true },
@@ -27,91 +34,149 @@ const JOINED = {
     older: { label: 'Ждут больше месяца', test: age => age > 30 * 24 * HOUR_MS }
 };
 const JOINED_KEY = 'panel.queue.joined';
+const DENSITY_KEY = 'panel.queue.density';
 
-function readJoined() {
+function readStored(key, allowed, fallback) {
     try {
-        const value = localStorage.getItem(JOINED_KEY);
-        return JOINED[value] ? value : 'all';
+        const value = localStorage.getItem(key);
+        return allowed.includes(value) ? value : fallback;
     } catch {
-        return 'all';
+        return fallback;
     }
+}
+
+function store(key, value) {
+    try { localStorage.setItem(key, value); } catch { /* remembered per machine only */ }
 }
 
 const STAMP_MS = 900;
 const UNDO_TOAST_MS = 10000;
 
-function Pass({ item, selected, busy, stamp, isNew, extraRoles, onExtras, onClearExtras, onSelect, onApprove, onKick, onOpenMember }) {
-    const [kicking, setKicking] = useState(false);
-    const [reason, setReason] = useState('');
-    const { member } = item;
+/** «@Lev», «vanity» or «—» and the key the invite filter groups by */
+function inviteLabel(invite) {
+    if (!invite) return { key: 'unknown', text: '—', title: 'Неизвестно: бот не видел, по какой ссылке зашёл' };
+    if (invite.vanity) return { key: 'vanity', text: 'vanity', title: 'Личная ссылка сервера' };
+    if (invite.inviter) return { key: invite.inviter.id, text: `@${invite.inviter.displayName || invite.inviter.id}`, title: invite.code ? `discord.gg/${invite.code}` : undefined };
+    return { key: 'unknown', text: invite.code || '—', title: invite.code ? `discord.gg/${invite.code}` : undefined };
+}
 
+/** A filter chip that opens a short list (Инвайт ▾, Когда зашли ▾); Esc and a click outside close it. */
+function FilterMenu({ label, active, open, onToggle, onClose, children }) {
+    const rootRef = React.useRef(null);
+    useEffect(() => {
+        if (!open) return undefined;
+        rootRef.current?.querySelector('[role^="menuitem"]')?.focus();
+        const onDown = event => { if (!rootRef.current?.contains(event.target)) onClose(); };
+        document.addEventListener('mousedown', onDown);
+        return () => document.removeEventListener('mousedown', onDown);
+    }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+    const onKeyDown = event => {
+        const entries = [...rootRef.current.querySelectorAll('[role^="menuitem"]')];
+        const index = entries.indexOf(document.activeElement);
+        if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); onClose(); rootRef.current.querySelector('.filter-chip')?.focus(); }
+        if (event.key === 'ArrowDown') { event.preventDefault(); entries[(index + 1) % entries.length]?.focus(); }
+        if (event.key === 'ArrowUp') { event.preventDefault(); entries[(index - 1 + entries.length) % entries.length]?.focus(); }
+    };
     return (
-        <li
-            className={`pass ${selected ? 'is-selected' : ''} ${stamp ? 'is-stamped' : ''}`}
-            onClick={onSelect}
-            aria-selected={selected}
-        >
-            <div className="pass-body">
-                <Avatar src={member.avatarURL} name={member.displayName} size={48} />
-                <div className="pass-info">
-                    <div className="pass-name">
-                        <MemberLink id={member.id} name={member.displayName} onOpen={onOpenMember} />
-                        <span className="muted">@{member.username}</span>
-                        {isNew && <span className="new-mark">новый</span>}
-                    </div>
-                    <dl className="pass-facts">
-                        <div><dt>Зашёл</dt><dd title={formatDateTime(member.joinedAt)}>{timeAgo(member.joinedAt)}</dd></div>
-                        <div><dt>Аккаунту</dt><dd>{accountAge(member.accountCreatedAt)}</dd></div>
-                        <div><dt>ID</dt><dd className="numeric">{member.id}</dd></div>
-                    </dl>
-                    {member.flags.length > 0 && (
-                        <ul className="flags">{member.flags.map(flag => <li key={flag}>{flag.replace(/^⚠️\s*/, '')}</li>)}</ul>
+        <div className="overflow" ref={rootRef}>
+            <button type="button" className="filter-chip" aria-pressed={active} aria-haspopup="menu" aria-expanded={open} onClick={onToggle}>{label} ▾</button>
+            {open && <div role="menu" className="menu-pop align-left" onKeyDown={onKeyDown}>{children}</div>}
+        </div>
+    );
+}
+
+function KickDialog({ names, busy, onClose, onKick }) {
+    const [reason, setReason] = useState('');
+    const many = names.length > 1;
+    return (
+        <Dialog title={many ? `Кикнуть ${names.length}?` : `Кикнуть ${names[0]}?`} onClose={onClose}
+            onSubmit={() => reason.trim() && onKick(reason.trim())} submitLabel={many ? `Кикнуть ${names.length}` : 'Кикнуть'} submitTone="danger" busy={busy}>
+            {many && <p className="muted small">{names.slice(0, 8).join(', ')}{names.length > 8 ? ` и ещё ${names.length - 8}` : ''}</p>}
+            <label className="field">
+                Причина — её увидят в журнале
+                <input autoFocus value={reason} onChange={e => setReason(e.target.value)} maxLength={400} />
+            </label>
+            <p className="muted small">Человек сможет вернуться по приглашению.</p>
+        </Dialog>
+    );
+}
+
+function Row({ item, detailed, selected, focused, busy, stamp, isNew, viewers, extraRoles, onClickRow, onToggle, onApprove, onKick, onBan, onExtras, onClearExtras, onOpenMember }) {
+    const { member } = item;
+    const waitedMs = Date.now() - Date.parse(member.joinedAt || 0);
+    const invite = inviteLabel(item.invite);
+    const menu = [
+        onExtras && { label: extraRoles.length ? 'Изменить доп. роли…' : 'Доп. роли…', onSelect: onExtras },
+        { label: 'Открыть карточку', onSelect: () => onOpenMember(member.id) },
+        { label: 'Кикнуть…', onSelect: onKick, end: true },
+        { label: 'Забанить…', onSelect: onBan, end: true, danger: true }
+    ];
+    return (
+        <>
+            <tr data-select={member.id} aria-selected={selected}
+                className={`queue-row ${selected ? 'is-selected' : ''} ${focused ? 'is-focused' : ''} ${stamp ? 'is-stamped' : ''} ${detailed ? 'has-detail' : ''}`}
+                onClick={event => { if (!event.target.closest('button, input, a, [role="menu"]')) onClickRow(event); }}
+                onDoubleClick={event => { if (!event.target.closest('button, input')) onOpenMember(member.id); }}>
+                <td className="queue-check">
+                    <input type="checkbox" checked={selected} onChange={onToggle} aria-label={`Выбрать ${member.displayName}`} />
+                </td>
+                <td>
+                    <span className="queue-who">
+                        <Avatar id={member.id} src={member.avatarURL} name={member.displayName} size={32} />
+                        <span className="queue-names">
+                            <MemberLink id={member.id} name={member.displayName} onOpen={onOpenMember} />
+                            <span className="muted small">@{member.username}</span>
+                        </span>
+                    </span>
+                </td>
+                <td>
+                    {member.flags.length === 0
+                        ? <span className="dash" aria-label="Флагов нет">—</span>
+                        : <span className="queue-flags">{member.flags.map(flag => <Chip key={flag.code} tone={flag.tone}>{flag.label}</Chip>)}</span>}
+                </td>
+                <td className={`numeric nowrap ${waitedMs > LONG_WAIT_MS ? 'is-long-wait' : ''}`} title={`Зашёл ${formatDateTime(member.joinedAt)}`}>
+                    {waitLabel(member.joinedAt)}
+                </td>
+                <td className="numeric nowrap" title={`Создан ${formatDateTime(member.accountCreatedAt)}`}>{accountAge(member.accountCreatedAt)}</td>
+                <td className="nowrap queue-invite" title={invite.title}>{invite.text}</td>
+                <td className="nowrap">
+                    {viewers.length > 0 && <StatusPill tone="presence">Смотрит {viewers.join(', ')}</StatusPill>}
+                    {viewers.length === 0 && isNew && <span className="queue-new">новый</span>}
+                    {viewers.length === 0 && !isNew && !item.card && <span className="muted small" title="Карточки в Discord нет — пропустить можно только отсюда">без карточки</span>}
+                </td>
+                <td className="queue-decide">
+                    {stamp ? <span className="row-stamp">{stamp}</span> : (
+                        <>
+                            <button type="button" className="btn btn-decide" disabled={busy} onClick={() => onApprove('male')}>Парень <kbd>M</kbd></button>
+                            <button type="button" className="btn btn-decide" disabled={busy} onClick={() => onApprove('female')}>Девушка <kbd>F</kbd></button>
+                            <OverflowMenu items={menu} label={`Ещё для ${member.displayName}: доп. роли, карточка, кик, бан`} />
+                        </>
                     )}
-                    {onExtras && (
-                        <div className="pass-extras" onClick={e => e.stopPropagation()}>
-                            {extraRoles.length > 0 ? (
-                                <>
-                                    <span className="muted small">Доп. роли:</span>
-                                    <ul className="roles">
+                </td>
+            </tr>
+            {(detailed || item.error) && (
+                <tr className={`queue-detail ${selected ? 'is-selected' : ''}`}>
+                    <td />
+                    <td colSpan={7}>
+                        {detailed && (
+                            <span className="queue-detail-line">
+                                {extraRoles.length > 0 ? (
+                                    <>
+                                        <span className="muted small">Доп. роли:</span>
                                         {extraRoles.map(role => (
-                                            <li key={role.id} className="role" style={{ '--role': role.color === '#000000' ? 'var(--muted)' : role.color }}>{role.name}</li>
+                                            <span key={role.id} className="role" style={{ '--role': role.color === '#000000' ? 'var(--muted)' : role.color }}>{role.name}</span>
                                         ))}
-                                    </ul>
-                                    <button className="btn btn-quiet" disabled={busy} onClick={onExtras}>Изменить</button>
-                                    <button className="btn btn-quiet" disabled={busy} onClick={onClearExtras} aria-label="Убрать доп. роли">✕</button>
-                                </>
-                            ) : (
-                                <button className="btn btn-quiet" disabled={busy} onClick={onExtras}>+ Доп. роли…</button>
-                            )}
-                        </div>
-                    )}
-                    {!item.card && <p className="muted small">Карточки в Discord нет — пропустить можно только отсюда.</p>}
-                    {item.error && <p className="error small">{item.error}</p>}
-                    {kicking && (
-                        <form className="kick-form" onClick={e => e.stopPropagation()}
-                            onSubmit={e => { e.preventDefault(); onKick(reason.trim()); }}>
-                            <input autoFocus placeholder="Причина кика — её увидят в журнале" value={reason}
-                                onChange={e => setReason(e.target.value)}
-                                onKeyDown={e => { if (e.key === 'Escape') setKicking(false); }} />
-                            <button type="submit" className="btn btn-danger" disabled={busy || !reason.trim()}>Кикнуть</button>
-                            <button type="button" className="btn btn-quiet" onClick={() => setKicking(false)}>Отмена</button>
-                        </form>
-                    )}
-                </div>
-            </div>
-            <div className="pass-stub" onClick={e => e.stopPropagation()}>
-                <button className="btn btn-stub" disabled={busy || kicking} onClick={() => onApprove('male')}>
-                    Парень <kbd>M</kbd>
-                </button>
-                <button className="btn btn-stub" disabled={busy || kicking} onClick={() => onApprove('female')}>
-                    Девушка <kbd>F</kbd>
-                </button>
-                <button className="btn btn-stub btn-stub-danger" disabled={busy || kicking} onClick={() => setKicking(true)}>
-                    Кик
-                </button>
-            </div>
-            {stamp && <div className="stamp" aria-hidden="true"><span>{stamp}</span></div>}
-        </li>
+                                        <button type="button" className="btn btn-quiet btn-small" onClick={onClearExtras} aria-label="Убрать доп. роли">✕</button>
+                                    </>
+                                ) : onExtras && <button type="button" className="btn btn-quiet btn-small" onClick={onExtras}>+ Доп. роли…</button>}
+                                <span className="muted small">зашёл {formatDateTime(member.joinedAt)} · ID {member.id}</span>
+                            </span>
+                        )}
+                        {item.error && <p className="error small">{item.error}</p>}
+                    </td>
+                </tr>
+            )}
+        </>
     );
 }
 
@@ -120,67 +185,109 @@ function HandledRow({ item, onOpenMember }) {
     const result = card.status === 'approved' ? GENDER_LABELS[card.gender] : `Кик: ${card.reason || 'без причины'}`;
     return (
         <li className="handled">
-            <Avatar src={member.avatarURL} name={member.displayName} size={32} />
+            <Avatar id={member.id} src={member.avatarURL} name={member.displayName} size={32} />
             <MemberLink id={member.id} name={member.displayName} onOpen={onOpenMember} />
             <span className={`result result-${card.status}`}>{result}</span>
             <span className="muted">
                 <MemberLink id={handledBy?.id} name={handledBy?.displayName} onOpen={onOpenMember} />
             </span>
-            <span className="muted numeric">{formatTime(card.handledAt)}</span>
+            <span className="muted numeric" title={formatDateTime(card.handledAt)}>{formatTime(card.handledAt)}</span>
         </li>
     );
 }
 
-export default function QueueView({ guildId, waiting, seen, revision, onChanged, onOpenMember, toast }) {
+export default function QueueView({ guildId, waiting, seen, revision, presence = [], myId, onChanged, onOpenMember, toast }) {
     const [tab, setTab] = useState('waiting');
     const [sort, setSort] = useState('oldest');
-    const [onlyFlagged, setOnlyFlagged] = useState(false);
-    const [onlyNew, setOnlyNew] = useState(false);
-    const [joined, setJoined] = useState(readJoined);
-    const [selectedId, setSelectedId] = useState(null);
-    const [busy, setBusy] = useState({});      // userId -> true while a request runs
-    const [errors, setErrors] = useState({});  // userId -> message
+    const [filters, setFilters] = useState({ flagged: false, young: false, unseen: false, invite: null });
+    const [joined, setJoined] = useState(() => readStored(JOINED_KEY, Object.keys(JOINED), 'all'));
+    const [density, setDensity] = useState(() => readStored(DENSITY_KEY, ['compact', 'detailed'], 'compact'));
+    const [focusedId, setFocusedId] = useState(null);
+    const [busy, setBusy] = useState({});       // userId -> true while a request runs
+    const [errors, setErrors] = useState({});   // userId -> message
     const [leaving, setLeaving] = useState({}); // userId -> { item, stamp } shown briefly after a decision
     const [handled, setHandled] = useState(null);
-    const [extras, setExtras] = useState({}); // userId -> extra role ids for the approval
+    const [handledRetry, setHandledRetry] = useState(0);
+    const [extras, setExtras] = useState({});   // userId -> extra role ids for the approval
     const [extrasFor, setExtrasFor] = useState(null); // member whose «Доп. роли» dialog is open
+    const [kicking, setKicking] = useState(null);     // [items] waiting for a kick reason
+    const [approving, setApproving] = useState(null); // { items, gender } — 3+ people: asked first
+    const [banning, setBanning] = useState(null);     // member to ban
+    const [groupBusy, setGroupBusy] = useState(false);
+    const [openMenu, setOpenMenu] = useState(null); // 'invite' | 'joined' — the filter menu that is open
     const { roles: assignable } = useAssignable(guildId);
-    const listRef = useRef(null);
     const roleOf = id => assignable?.find(r => r.id === id) || null;
+    const youngDays = waiting?.youngAccountDays ?? 7;
 
-    useEffect(() => { setSelectedId(null); setLeaving({}); setErrors({}); setExtras({}); }, [guildId]);
+    useEffect(() => { setFocusedId(null); setLeaving({}); setErrors({}); setExtras({}); }, [guildId]);
 
-    // "Пропущены / Отклонены сегодня"
+    // «Пропущены / Отклонены сегодня»
     useEffect(() => {
-        if (tab === 'waiting') return;
+        if (tab === 'waiting') return undefined;
         let cancelled = false;
         setHandled(null);
         apiGet(`/guilds/${guildId}/queue?tab=${tab}`)
             .then(data => { if (!cancelled) setHandled(data); })
-            .catch(error => { if (!cancelled) setHandled({ items: [], error: describeError(error) }); });
+            .catch(error => { if (!cancelled) setHandled({ items: [], error }); });
         return () => { cancelled = true; };
-    }, [guildId, tab, revision]);
+    }, [guildId, tab, revision, handledRetry]);
+
+    const all = useMemo(() => (waiting?.items || []).map(item => ({ ...item, error: errors[item.member.id] })), [waiting, errors]);
+    const isYoung = item => item.member.flags.some(flag => flag.code === 'young');
 
     const items = useMemo(() => {
-        const current = (waiting?.items || []).map(item => ({ ...item, error: errors[item.member.id] }));
-        // Keep just-decided passes on screen for the stamp, even after the server dropped them
+        const current = [...all];
+        // Keep just-decided rows on screen for the stamp, even after the server dropped them
         for (const [id, entry] of Object.entries(leaving)) {
             if (!current.some(item => item.member.id === id)) current.push(entry.item);
         }
         const now = Date.now();
-        const visible = current.filter(item =>
-            (!onlyFlagged || item.member.flags.length > 0)
-            && (!onlyNew || seen.isNew(item.member.id) || leaving[item.member.id])
-            && JOINED[joined].test(now - Date.parse(item.member.joinedAt || 0)));
+        const visible = current.filter(item => leaving[item.member.id] || (
+            (!filters.flagged || item.member.flags.length > 0)
+            && (!filters.young || isYoung(item))
+            && (!filters.unseen || seen.isNew(item.member.id))
+            && (!filters.invite || inviteLabel(item.invite).key === filters.invite)
+            && JOINED[joined].test(now - Date.parse(item.member.joinedAt || 0))));
         return [...visible].sort(SORTS[sort].fn);
-    }, [waiting, leaving, errors, sort, onlyFlagged, onlyNew, seen, joined]);
+    }, [all, leaving, sort, filters, seen, joined]);
 
-    const changeJoined = value => {
-        setJoined(value);
-        try { localStorage.setItem(JOINED_KEY, value); } catch { /* remembered per machine only */ }
+    const ids = items.filter(item => !leaving[item.member.id]).map(item => item.member.id);
+    const dialogOpen = Boolean(extrasFor || kicking || approving || banning);
+    const selection = useSelection(ids, { paused: dialogOpen || tab !== 'waiting' });
+    const chosenItems = selection.chosen.map(id => items.find(item => item.member.id === id)).filter(Boolean);
+
+    // Who else has this newcomer's card open: «Смотрит Kira»
+    const viewersOf = useMemo(() => {
+        const map = new Map();
+        for (const user of presence) {
+            if (!user.viewingId || user.id === myId) continue;
+            if (!map.has(user.viewingId)) map.set(user.viewingId, []);
+            map.get(user.viewingId).push(user.displayName || user.id);
+        }
+        return map;
+    }, [presence, myId]);
+
+    const counts = {
+        flagged: all.filter(item => item.member.flags.length > 0).length,
+        young: all.filter(isYoung).length,
+        unseen: all.filter(item => seen.isNew(item.member.id)).length
     };
+    const inviteGroups = useMemo(() => {
+        const groups = new Map();
+        for (const item of all) {
+            const label = inviteLabel(item.invite);
+            const group = groups.get(label.key) || { key: label.key, text: label.key === 'unknown' ? 'Неизвестно' : label.text, count: 0 };
+            group.count++;
+            groups.set(label.key, group);
+        }
+        return [...groups.values()].sort((a, b) => b.count - a.count);
+    }, [all]);
+    const setFilter = (key, value) => setFilters(f => ({ ...f, [key]: value }));
 
-    const decide = async (item, action, body) => {
+    const dropExtras = id => setExtras(x => { const next = { ...x }; delete next[id]; return next; });
+
+    /** One decision; returns true when it went through. `quiet` — part of a group action (one toast for all). */
+    const decide = async (item, action, body, { quiet = false } = {}) => {
         const id = item.member.id;
         setBusy(b => ({ ...b, [id]: true }));
         setErrors(e => ({ ...e, [id]: null }));
@@ -191,21 +298,22 @@ export default function QueueView({ guildId, waiting, seen, revision, onChanged,
         if (!result.ok) {
             setErrors(e => ({ ...e, [id]: describeError(result) }));
             if (result.error === 'already_handled' || result.error === 'member_left') onChanged();
-            return;
+            return false;
         }
 
         const stamp = action === 'kick' ? 'Кик' : 'Пропущен';
         setLeaving(l => ({ ...l, [id]: { item, stamp } }));
         setTimeout(() => setLeaving(l => { const next = { ...l }; delete next[id]; return next; }), STAMP_MS);
-        if (selectedId === id) {
-            const index = items.findIndex(i => i.member.id === id);
-            setSelectedId(items[index + 1]?.member.id || items[index - 1]?.member.id || null);
+        if (focusedId === id) {
+            const index = ids.indexOf(id);
+            setFocusedId(ids[index + 1] || ids[index - 1] || null);
         }
         onChanged();
+        if (quiet) return true;
 
         const name = item.member.displayName;
         if (action === 'approve') {
-            setExtras(x => { const next = { ...x }; delete next[id]; return next; });
+            dropExtras(id);
             const skipped = result.data.skippedRoles || [];
             const added = extraIds.length - skipped.length;
             const note = (added > 0 ? ` · +${added} доп. ${added === 1 ? 'роль' : 'роли'}` : '')
@@ -225,50 +333,82 @@ export default function QueueView({ guildId, waiting, seen, revision, onChanged,
         } else {
             toast(`Кикнут ${name}`);
         }
+        return true;
     };
 
-    // Keyboard: ↑/↓ choose a pass, M / F approve it, Esc clears the choice
+    /** The same decision for several people, one after another, one toast at the end. */
+    const decideMany = async (group, action, body) => {
+        if (group.length === 1) { await decide(group[0], action, body); return; }
+        setGroupBusy(true);
+        let done = 0;
+        const failed = [];
+        for (const item of group) {
+            if (await decide(item, action, body, { quiet: true })) done++;
+            else failed.push(item.member.displayName);
+        }
+        setGroupBusy(false);
+        selection.clear();
+        const verb = action === 'kick' ? 'Кикнуто' : `Пропущено · ${GENDER_LABELS[body.gender]}:`;
+        toast(`${verb} ${done} из ${group.length}${failed.length ? ` · не вышло: ${failed.slice(0, 3).join(', ')}${failed.length > 3 ? '…' : ''}` : ''}`,
+            failed.length ? { tone: 'error', ttl: 8000 } : {});
+    };
+
+    const approve = (group, gender) => {
+        if (group.length >= 3) setApproving({ items: group, gender });
+        else decideMany(group, 'approve', { gender });
+    };
+
+    // Keyboard: ↑/↓ move the row focus, Space marks it, M / F let in, K kicks, Enter opens the card
     useEffect(() => {
-        if (tab !== 'waiting') return undefined;
+        if (tab !== 'waiting' || dialogOpen) return undefined;
         const onKey = event => {
-            if (extrasFor || event.target.closest('input, textarea, select') || event.ctrlKey || event.altKey || event.metaKey) return;
-            const index = items.findIndex(item => item.member.id === selectedId);
+            if (event.target.closest('input, textarea, select, [role="menu"], [role="dialog"]') || event.ctrlKey || event.altKey || event.metaKey) return;
+            const index = ids.indexOf(focusedId);
             if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
                 event.preventDefault();
-                const next = event.key === 'ArrowDown' ? Math.min(index + 1, items.length - 1) : Math.max(index - 1, 0);
-                setSelectedId(items[next]?.member.id || null);
-            } else if (event.key === 'Escape') {
-                setSelectedId(null);
-            } else if (index >= 0 && !busy[selectedId] && !leaving[selectedId]) {
-                const key = event.key.toLowerCase();
-                // Russian layout: M → ь, F → а
-                if (key === 'm' || key === 'ь') decide(items[index], 'approve', { gender: 'male' });
-                if (key === 'f' || key === 'а') decide(items[index], 'approve', { gender: 'female' });
+                const next = event.key === 'ArrowDown' ? Math.min(index + 1, ids.length - 1) : Math.max(index - 1, 0);
+                setFocusedId(ids[next] || null);
+                return;
             }
+            if (index < 0 || busy[focusedId]) return;
+            const item = items.find(i => i.member.id === focusedId);
+            const key = event.key.toLowerCase();
+            if (event.key === ' ') { event.preventDefault(); selection.toggle(focusedId); }
+            else if (event.key === 'Enter') onOpenMember(focusedId);
+            // Russian layout: M → ь, F → а, K → л
+            else if (key === 'm' || key === 'ь') decide(item, 'approve', { gender: 'male' });
+            else if (key === 'f' || key === 'а') decide(item, 'approve', { gender: 'female' });
+            else if (key === 'k' || key === 'л') setKicking([item]);
         };
         window.addEventListener('keydown', onKey);
         return () => window.removeEventListener('keydown', onKey);
     });
 
     useEffect(() => {
-        listRef.current?.querySelector('.pass.is-selected')?.scrollIntoView({ block: 'nearest' });
-        // Choosing a pass (click or arrows) counts as having seen that newcomer
-        if (selectedId) seen.markSeen([selectedId]);
-    }, [selectedId, seen.markSeen]);
+        if (!focusedId) return;
+        selection.listRef.current?.querySelector('.queue-row.is-focused')?.scrollIntoView({ block: 'nearest' });
+        seen.markSeen([focusedId]); // the row focus counts as having seen that newcomer
+    }, [focusedId, seen.markSeen]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const waitingCount = waiting?.items?.length ?? 0;
-    const shownCount = items.filter(item => !leaving[item.member.id]).length;
-    const shownLabel = shownCount === waitingCount ? String(waitingCount) : `${shownCount} из ${waitingCount}`;
+    const shownCount = ids.length;
+    const filtered = filters.flagged || filters.young || filters.unseen || filters.invite || joined !== 'all';
+    const tabLabel = id => {
+        if (id === 'waiting') return `Ждут · ${shownCount === waitingCount ? waitingCount : `${shownCount} из ${waitingCount}`}`;
+        const count = waiting?.counts?.[id];
+        return count === undefined ? TABS.find(t => t.id === id).label : `${TABS.find(t => t.id === id).label} · ${count}`;
+    };
+    const inviteText = filters.invite ? inviteGroups.find(g => g.key === filters.invite)?.text || 'Инвайт' : 'Инвайт';
 
     return (
-        <section className="view">
+        <section className="view view-wide queue-view">
             <div className="view-head">
                 <h1>Пропуск новичков</h1>
                 <div className="tabs" role="tablist">
                     {TABS.map(t => (
                         <button key={t.id} role="tab" aria-selected={tab === t.id}
                             className={`tab ${tab === t.id ? 'is-active' : ''}`} onClick={() => setTab(t.id)}>
-                            {t.label}{t.id === 'waiting' ? ` · ${shownLabel}` : ''}
+                            {tabLabel(t.id)}
                         </button>
                     ))}
                 </div>
@@ -276,72 +416,146 @@ export default function QueueView({ guildId, waiting, seen, revision, onChanged,
 
             {tab === 'waiting' && (
                 <>
-                    <div className="toolbar">
+                    <div className="toolbar queue-toolbar">
                         <select value={sort} onChange={e => setSort(e.target.value)} aria-label="Сортировка">
                             {Object.entries(SORTS).map(([id, s]) => <option key={id} value={id}>{s.label}</option>)}
                         </select>
-                        <select value={joined} onChange={e => changeJoined(e.target.value)} aria-label="Когда зашли">
-                            {Object.entries(JOINED).map(([id, j]) => <option key={id} value={id}>{j.label}</option>)}
-                        </select>
-                        <label className="check">
-                            <input type="checkbox" checked={onlyFlagged} onChange={e => setOnlyFlagged(e.target.checked)} />
-                            Только с флагами
-                        </label>
-                        <label className="check">
-                            <input type="checkbox" checked={onlyNew} onChange={e => setOnlyNew(e.target.checked)} />
-                            Только новые
-                        </label>
-                        {seen.newCount > 0 && (
-                            <button className="btn" onClick={seen.markAllSeen} title="Счётчик в меню погаснет до прихода следующего новичка">
-                                Отметить всех просмотренными · {seen.newCount}
-                            </button>
+                        <FilterChip active={filters.flagged} count={counts.flagged} onClick={() => setFilter('flagged', !filters.flagged)}>С флагами</FilterChip>
+                        <FilterChip active={filters.young} count={counts.young} onClick={() => setFilter('young', !filters.young)}>Аккаунт младше {youngDays} дн.</FilterChip>
+                        {counts.unseen > 0 && (
+                            <>
+                                <FilterChip active={filters.unseen} count={counts.unseen} onClick={() => setFilter('unseen', !filters.unseen)}>Новые</FilterChip>
+                                <button type="button" className="icon-button icon-button-quiet" onClick={seen.markAllSeen}
+                                    aria-label="Отметить всех просмотренными" title="Отметить всех просмотренными">✓</button>
+                            </>
                         )}
-                        <span className="muted small hint">↑ ↓ — выбрать, M / F — пропустить</span>
+                        <FilterMenu label={inviteText} active={Boolean(filters.invite)} open={openMenu === 'invite'}
+                            onToggle={() => setOpenMenu(m => (m === 'invite' ? null : 'invite'))} onClose={() => setOpenMenu(null)}>
+                            <button type="button" role="menuitem" className="menu-entry" onClick={() => { setFilter('invite', null); setOpenMenu(null); }}>Все инвайты</button>
+                            <div className="menu-sep" role="separator" />
+                            {inviteGroups.map(group => (
+                                <button key={group.key} type="button" role="menuitem" className="menu-entry menu-entry-count"
+                                    onClick={() => { setFilter('invite', group.key); setOpenMenu(null); }}>
+                                    <span>{group.text}</span><span className="muted numeric">{group.count}</span>
+                                </button>
+                            ))}
+                            {waiting && waiting.invitesTracked === false && <p className="muted small menu-note">Бот не видит инвайты: дайте ему «Управлять сервером».</p>}
+                        </FilterMenu>
+                        <FilterMenu label={joined === 'all' ? 'Когда зашли' : JOINED[joined].label} active={joined !== 'all'} open={openMenu === 'joined'}
+                            onToggle={() => setOpenMenu(m => (m === 'joined' ? null : 'joined'))} onClose={() => setOpenMenu(null)}>
+                            {Object.entries(JOINED).map(([id, j]) => (
+                                <button key={id} type="button" role="menuitemradio" aria-checked={joined === id} className="menu-entry"
+                                    onClick={() => { setJoined(id); store(JOINED_KEY, id); setOpenMenu(null); }}>{j.label}</button>
+                            ))}
+                        </FilterMenu>
+                        <span className="toolbar-spacer" />
+                        <span className="muted small queue-keys-hint">M / F — пропуск · K — кик</span>
+                        <div className="segmented segmented-small" role="group" aria-label="Плотность списка">
+                            {[['compact', 'Компактно'], ['detailed', 'Подробно']].map(([id, label]) => (
+                                <button key={id} type="button" className={`tab ${density === id ? 'is-active' : ''}`} aria-pressed={density === id}
+                                    onClick={() => { setDensity(id); store(DENSITY_KEY, id); }}>{label}</button>
+                            ))}
+                        </div>
                     </div>
-                    {waiting?.error && <p className="error">{describeError(waiting.error)}</p>}
-                    {!waiting && <p className="muted">Загружаем очередь…</p>}
+
+                    <SelectionBar names={chosenItems.map(item => item.member.displayName)} onClear={selection.clear}>
+                        <button type="button" className="btn" disabled={groupBusy} onClick={() => approve(chosenItems, 'male')}>Парень</button>
+                        <button type="button" className="btn" disabled={groupBusy} onClick={() => approve(chosenItems, 'female')}>Девушка</button>
+                        <button type="button" className="btn btn-danger" disabled={groupBusy} onClick={() => setKicking(chosenItems)}>Кикнуть {chosenItems.length}</button>
+                    </SelectionBar>
+
+                    {waiting?.error && <ErrorState what="очередь" error={waiting.error} onRetry={onChanged} />}
+                    {!waiting && <Skeleton rows={6} height={58} />}
                     {waiting && !waiting.error && items.length === 0 && (
-                        <div className="empty">
-                            <h2>{waitingCount === 0 ? 'Очередь пуста' : 'Под эти фильтры никто не подходит'}</h2>
-                            <p>{waitingCount === 0
-                                ? 'Новые люди появятся здесь сами, как только зайдут на сервер.'
-                                : `Всего в очереди ${waitingCount}. Измените фильтры, чтобы увидеть остальных.`}</p>
+                        waitingCount === 0
+                            ? <EmptyState icon="queue" title="Очередь пуста" text="Новые люди появятся здесь сами, как только зайдут на сервер." />
+                            : <EmptyState icon="queue" title="Под эти фильтры никто не подходит" text={`Всего в очереди ${waitingCount}.`}
+                                action={filtered && <button type="button" className="btn" onClick={() => { setFilters({ flagged: false, young: false, unseen: false, invite: null }); setJoined('all'); store(JOINED_KEY, 'all'); }}>Сбросить фильтры</button>} />
+                    )}
+                    {items.length > 0 && (
+                        <div className="queue-table-wrap" ref={selection.listRef} onMouseDown={selection.startMarquee}>
+                            <table className={`queue-table ${density === 'detailed' ? 'is-detailed' : ''}`}>
+                                <thead>
+                                    <tr>
+                                        <th className="queue-check">
+                                            <input type="checkbox" aria-label="Выбрать всех"
+                                                checked={ids.length > 0 && selection.chosen.length === ids.length}
+                                                ref={el => { if (el) el.indeterminate = selection.chosen.length > 0 && selection.chosen.length < ids.length; }}
+                                                onChange={() => selection.setSelected(selection.chosen.length === ids.length ? new Set() : new Set(ids))} />
+                                        </th>
+                                        <th>Участник</th>
+                                        <th>Флаги</th>
+                                        <th>Ждёт</th>
+                                        <th>Аккаунт</th>
+                                        <th>Инвайт</th>
+                                        <th>Статус</th>
+                                        <th className="queue-decide">Решение</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {items.map(item => {
+                                        const id = item.member.id;
+                                        return (
+                                            <Row
+                                                key={id}
+                                                item={item}
+                                                detailed={density === 'detailed'}
+                                                selected={selection.selected.has(id)}
+                                                focused={focusedId === id}
+                                                busy={Boolean(busy[id]) || groupBusy}
+                                                stamp={leaving[id]?.stamp}
+                                                isNew={seen.isNew(id)}
+                                                viewers={viewersOf.get(id) || []}
+                                                extraRoles={(extras[id] || []).map(roleOf).filter(Boolean)}
+                                                onClickRow={event => { selection.click(event, id); setFocusedId(id); }}
+                                                onToggle={() => { selection.toggle(id); setFocusedId(id); }}
+                                                onApprove={gender => decide(item, 'approve', { gender })}
+                                                onKick={() => setKicking([item])}
+                                                onBan={() => setBanning(item.member)}
+                                                onExtras={assignable?.length ? () => setExtrasFor(item.member) : null}
+                                                onClearExtras={() => dropExtras(id)}
+                                                onOpenMember={onOpenMember}
+                                            />
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
                         </div>
                     )}
-                    <ul className="passes" ref={listRef}>
-                        {items.map(item => (
-                            <Pass
-                                key={item.member.id}
-                                item={item}
-                                selected={item.member.id === selectedId}
-                                busy={Boolean(busy[item.member.id])}
-                                stamp={leaving[item.member.id]?.stamp}
-                                extraRoles={(extras[item.member.id] || []).map(roleOf).filter(Boolean)}
-                                onExtras={assignable?.length ? () => setExtrasFor(item.member) : null}
-                                onClearExtras={() => setExtras(x => { const next = { ...x }; delete next[item.member.id]; return next; })}
-                                isNew={seen.isNew(item.member.id)}
-                                onSelect={() => setSelectedId(item.member.id)}
-                                onApprove={gender => decide(item, 'approve', { gender })}
-                                onKick={reason => decide(item, 'kick', { reason })}
-                                onOpenMember={onOpenMember}
-                            />
-                        ))}
-                    </ul>
+                    {selection.marquee && <div className="marquee" style={marqueeStyle(selection.marquee)} />}
+
                     {extrasFor && (
                         <ExtraRolesDialog guildId={guildId} name={extrasFor.displayName} value={extras[extrasFor.id] || []}
                             excludeIds={waiting?.reservedRoleIds || []}
                             onClose={() => setExtrasFor(null)}
                             onPick={roleIds => { setExtras(x => ({ ...x, [extrasFor.id]: roleIds })); setExtrasFor(null); }} />
                     )}
+                    {kicking && (
+                        <KickDialog names={kicking.map(item => item.member.displayName)} busy={groupBusy}
+                            onClose={() => setKicking(null)}
+                            onKick={async reason => { const group = kicking; setKicking(null); await decideMany(group, 'kick', { reason }); }} />
+                    )}
+                    {approving && (
+                        <Dialog title={`Пропустить ${approving.items.length} как «${GENDER_LABELS[approving.gender]}»?`} onClose={() => setApproving(null)}
+                            onSubmit={async () => { const { items: group, gender } = approving; setApproving(null); await decideMany(group, 'approve', { gender }); }}
+                            submitLabel={`Пропустить ${approving.items.length}`} busy={groupBusy}>
+                            <p className="muted small">{approving.items.map(item => item.member.displayName).slice(0, 10).join(', ')}{approving.items.length > 10 ? ` и ещё ${approving.items.length - 10}` : ''}</p>
+                            <p className="muted small">Доп. роли, выбранные для каждого, тоже выдадутся.</p>
+                        </Dialog>
+                    )}
+                    {banning && (
+                        <PunishDialog guildId={guildId} kind="ban" target={banning}
+                            onClose={() => setBanning(null)} onDone={onChanged} toast={toast} />
+                    )}
                 </>
             )}
 
             {tab !== 'waiting' && (
                 <>
-                    {!handled && <p className="muted">Загружаем…</p>}
-                    {handled?.error && <p className="error">{handled.error}</p>}
+                    {!handled && <Skeleton rows={4} height={52} />}
+                    {handled?.error && <ErrorState what="список" error={handled.error} onRetry={() => setHandledRetry(n => n + 1)} />}
                     {handled && !handled.error && handled.items.length === 0 && (
-                        <div className="empty"><h2>{tab === 'handled' ? 'Сегодня ещё никого не пропустили' : 'Сегодня никого не кикнули'}</h2></div>
+                        <EmptyState icon="queue" title={tab === 'handled' ? 'Сегодня ещё никого не пропустили' : 'Сегодня никого не кикнули'} />
                     )}
                     <ul className="handled-list">
                         {handled?.items?.map(item => <HandledRow key={item.member.id} item={item} onOpenMember={onOpenMember} />)}

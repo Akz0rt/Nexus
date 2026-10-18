@@ -17,6 +17,8 @@ const client = new Client({
         GatewayIntentBits.Guilds,
         GatewayIntentBits.GuildMessages,
         GatewayIntentBits.GuildVoiceStates,
+        // Not privileged: invite create/delete events, to tell which invite brought a newcomer in
+        GatewayIntentBits.GuildInvites,
         // Privileged: enable "Server Members Intent" in the Developer Portal, otherwise login fails
         GatewayIntentBits.GuildMembers,
         // Privileged: enable "Message Content Intent" in the Developer Portal, otherwise login fails.

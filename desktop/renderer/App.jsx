@@ -21,6 +21,7 @@ import MemberDrawer from './MemberDrawer.jsx';
 import Toasts from './Toasts.jsx';
 
 const THEME_KEY = 'panel.theme';
+const VIEWING_REPEAT_MS = 4 * 60 * 1000;
 
 function readTheme() {
     try { return localStorage.getItem(THEME_KEY) || 'system'; } catch { return 'system'; }
@@ -167,7 +168,7 @@ export default function App() {
         if (!guildId) { setWaiting(null); return; }
         let cancelled = false;
         apiGet(`/guilds/${guildId}/queue?tab=waiting`)
-            .then(data => { if (!cancelled) setWaiting({ guildId, items: data.items, reservedRoleIds: data.reservedRoleIds || [] }); })
+            .then(data => { if (!cancelled) setWaiting({ guildId, ...data, reservedRoleIds: data.reservedRoleIds || [] }); })
             .catch(error => { if (!cancelled) setWaiting({ guildId, items: [], error }); });
         return () => { cancelled = true; };
     }, [guildId, revision, reloadWaiting]);
@@ -198,6 +199,16 @@ export default function App() {
         setJournalPreset({ ...filters, nonce: Date.now() });
         setView('journal');
     }, []);
+
+    // «Смотрит Kira»: tell the others whose card is open here (repeated so a crashed app's mark expires)
+    useEffect(() => {
+        if (!guildId || !auth?.loggedIn) return undefined;
+        const send = userId => apiPost(`/guilds/${guildId}/presence/viewing`, { userId }).catch(() => {});
+        send(drawerUserId || null);
+        if (!drawerUserId) return undefined;
+        const timer = setInterval(() => send(drawerUserId), VIEWING_REPEAT_MS);
+        return () => { clearInterval(timer); send(null); };
+    }, [guildId, drawerUserId, auth?.loggedIn]);
 
     const openSettings = useCallback(section => {
         setSettingsSection({ section, at: Date.now() });
@@ -286,6 +297,8 @@ export default function App() {
                             waiting={waiting}
                             seen={seen}
                             revision={revision}
+                            presence={presence}
+                            myId={me?.id}
                             onChanged={() => setReloadWaiting(n => n + 1)}
                             onOpenMember={setDrawerUserId}
                             toast={toast}

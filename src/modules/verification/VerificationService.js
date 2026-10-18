@@ -3,6 +3,7 @@ const GuildSettingsService = require('../../services/GuildSettingsService');
 const AuditLogService = require('../../services/AuditLogService');
 const RoleService = require('../../services/RoleService');
 const QueueCardService = require('./QueueCardService');
+const InviteTracker = require('../invites/InviteTracker');
 const { buildCardMessage } = require('./card');
 const { computeNewRoles, shouldAssignUnverified } = require('./roles');
 
@@ -66,7 +67,7 @@ class VerificationService {
         const settings = await GuildSettingsService.get(guild.id);
         const channelId = card.channelId || settings.verifyQueueChannelId;
         const channel = await guild.client.channels.fetch(channelId);
-        const payload = buildCardMessage(member, card);
+        const payload = buildCardMessage(member, card, settings.verification);
 
         if (card.messageId) {
             try {
@@ -120,9 +121,12 @@ class VerificationService {
             handledBy: null,
             handledAt: null,
             gender: null,
-            reason: null
+            reason: null,
+            // Kicks from the queue add up across re-joins; the invite is this join's
+            kickCount: existing?.kickCount || 0,
+            invite: InviteTracker.joinOf(guild.id, member.id)
         };
-        const message = await channel.send(buildCardMessage(member, card));
+        const message = await channel.send(buildCardMessage(member, card, settings.verification));
         card.messageId = message.id;
         await QueueCardService.upsert(card);
 
@@ -232,7 +236,9 @@ class VerificationService {
                 handledBy: null,
                 handledAt: null,
                 gender: null,
-                reason: null
+                reason: null,
+                kickCount: card?.kickCount || 0,
+                invite: InviteTracker.joinOf(guild.id, userId)
             };
             return await fn(queuedCard, member);
         } finally {
@@ -362,6 +368,7 @@ class VerificationService {
                 ...card,
                 status: 'kicked',
                 reason,
+                kickCount: (card.kickCount || 0) + 1,
                 handledBy: actor.id,
                 handledAt: new Date().toISOString()
             });

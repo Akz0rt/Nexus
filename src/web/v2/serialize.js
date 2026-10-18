@@ -1,7 +1,31 @@
-const { computeFlags } = require('../../modules/verification/card');
+const GuildSettingsService = require('../../services/GuildSettingsService');
+const { riskFlags, joinsAround, bannedNames } = require('../../modules/verification/riskFlags');
 
-/** JSON view of a guild member for the desktop app. */
-function describeMember(member) {
+const RAID_LOOKBACK_MS = 7 * 24 * 60 * 60 * 1000; // a burst of joins long ago is history, not a raid
+
+/**
+ * What the risk flags need about the whole server: the young-account threshold,
+ * banned names, how many joined around each moment. Built once per request.
+ * @param {Map<string, number>} [kickCounts] userId -> kicks from the queue so far
+ */
+async function flagContext(guild, kickCounts = new Map()) {
+    const settings = await GuildSettingsService.get(guild.id);
+    const around = joinsAround([...guild.members.cache.values()].map(m => m.joinedTimestamp));
+    const now = Date.now();
+    return {
+        youngAccountDays: settings.verification?.youngAccountDays ?? 7,
+        bannedNames: await bannedNames.get(guild),
+        kickCounts,
+        joinsNear: member => (now - (member.joinedTimestamp || 0) < RAID_LOOKBACK_MS ? around(member.joinedTimestamp) : 0)
+    };
+}
+
+/**
+ * JSON view of a guild member for the desktop app.
+ * @param {object} [context] from flagContext(); without it only the per-member flags show
+ */
+function describeMember(member, context) {
+    const ctx = context && typeof context === 'object' ? context : {}; // .map() passes an index here
     return {
         id: member.id,
         username: member.user.username,
@@ -10,7 +34,12 @@ function describeMember(member) {
         bot: member.user.bot,
         accountCreatedAt: new Date(member.user.createdTimestamp).toISOString(),
         joinedAt: member.joinedAt ? member.joinedAt.toISOString() : null,
-        flags: computeFlags(member)
+        flags: riskFlags(member, {
+            youngAccountDays: ctx.youngAccountDays ?? 7,
+            bannedNames: ctx.bannedNames,
+            kickCount: ctx.kickCounts?.get(member.id) || 0,
+            joinsNear: ctx.joinsNear ? ctx.joinsNear(member) : 0
+        })
     };
 }
 
@@ -34,7 +63,8 @@ function serializeCard(card) {
         createdAt: card.createdAt || null,
         handledBy: card.handledBy || null,
         handledAt: card.handledAt || null,
-        hasDiscordMessage: Boolean(card.messageId)
+        hasDiscordMessage: Boolean(card.messageId),
+        kickCount: card.kickCount || 0
     };
 }
 
@@ -55,4 +85,4 @@ function mergeQueue(holders, cards) {
         .sort((a, b) => String(a.member.joinedAt || '').localeCompare(String(b.member.joinedAt || '')));
 }
 
-module.exports = { describeMember, userRef, serializeCard, mergeQueue };
+module.exports = { describeMember, flagContext, userRef, serializeCard, mergeQueue };

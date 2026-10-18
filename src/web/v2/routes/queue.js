@@ -2,8 +2,16 @@ const express = require('express');
 const config = require('../../../config');
 const VerificationService = require('../../../modules/verification/VerificationService');
 const QueueCardService = require('../../../modules/verification/QueueCardService');
+const InviteTracker = require('../../../modules/invites/InviteTracker');
 const { startOfToday } = require('../../../utils/dateUtils');
-const { describeMember, userRef, serializeCard, mergeQueue } = require('../serialize');
+const { describeMember, flagContext, userRef, serializeCard, mergeQueue } = require('../serialize');
+
+/** «@Lev» / vanity link / unknown, from the card or (just joined) the tracker's memory */
+function inviteOf(guild, card, userId) {
+    const invite = card?.invite || InviteTracker.joinOf(guild.id, userId);
+    if (!invite) return null;
+    return { code: invite.code || null, vanity: Boolean(invite.vanity), inviter: invite.inviterId ? userRef(guild, invite.inviterId) : null };
+}
 
 const router = express.Router({ mergeParams: true });
 
@@ -38,13 +46,30 @@ router.get('/', async (req, res, next) => {
         if (tab === 'waiting') {
             // Member cache is complete (startup fetch + GuildMembers intent); fetch once if not
             if (guild.members.cache.size < guild.memberCount) await guild.members.fetch();
+            const since = startOfToday(config.timezone).toISOString();
+            const [cards, handledToday] = await Promise.all([
+                QueueCardService.listPending(guild.id),
+                QueueCardService.listHandled(guild.id, ['approved', 'kicked'], since)
+            ]);
+            const context = await flagContext(guild, new Map(cards.map(card => [card.userId, card.kickCount || 0])));
             const holders = guild.members.cache
                 .filter(member => member.roles.cache.has(settings.unverifiedRoleId))
-                .map(describeMember);
-            const cards = await QueueCardService.listPending(guild.id);
+                .map(member => describeMember(member, context));
+            const byUser = new Map(cards.map(card => [card.userId, card]));
+            const items = mergeQueue(holders, cards).map(item => ({ ...item, invite: inviteOf(guild, byUser.get(item.member.id), item.member.id) }));
             // Roles «Доп. роли…» must not offer: the queue's own
             const reservedRoleIds = [settings.unverifiedRoleId, settings.maleRoleId, settings.femaleRoleId].filter(Boolean);
-            return res.json({ tab, items: mergeQueue(holders, cards), reservedRoleIds });
+            return res.json({
+                tab,
+                items,
+                reservedRoleIds,
+                counts: {
+                    handled: handledToday.filter(card => card.status === 'approved').length,
+                    rejected: handledToday.filter(card => card.status === 'kicked').length
+                },
+                youngAccountDays: context.youngAccountDays,
+                invitesTracked: InviteTracker.canTrack(guild.id)
+            });
         }
 
         if (tab === 'handled' || tab === 'rejected') {

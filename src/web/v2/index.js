@@ -59,6 +59,13 @@ function createV2Router({ hub = new SseHub().attach() } = {}) {
             avatarURL: ref.avatarURL
         });
     });
+    // Which member card this moderator has open ({ userId } or { userId: null }): «Смотрит Kira» for the others
+    guildRouter.post('/presence/viewing', (req, res) => {
+        const target = req.body?.userId ? String(req.body.userId) : null;
+        if (target && !/^\d{17,20}$/.test(target)) return res.status(400).json({ error: 'invalid_user_id' });
+        hub.setViewing(req.guild.id, req.session.userId, target);
+        res.json({ ok: true });
+    });
     router.use('/guilds/:guildId', requireGuildAccess('admin'), guildRouter);
 
     router.use((req, res) => res.status(404).json({ error: 'not_found' }));

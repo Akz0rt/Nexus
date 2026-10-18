@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { apiDelete, apiGet, apiPost, describeError } from './api.js';
 import { GENDER_LABELS, SOURCE_LABELS, accountAge, describeAction, describeBulk, describeMessage, formatDateTime, timeLeft } from './format.js';
 import Avatar, { MemberLink } from './Avatar.jsx';
+import { Chip } from './Chips.jsx';
 import PunishDialog from './PunishDialog.jsx';
 import ChannelPicker from './ChannelPicker.jsx';
 import { PresetApplyDialog, RoleDialog } from './RoleDialogs.jsx';
@@ -115,7 +116,7 @@ export default function MemberDrawer({ guildId, userId, revision, onClose, onOpe
                         )}
                     </dl>
                     {member.flags.length > 0 && (
-                        <ul className="flags">{member.flags.map(flag => <li key={flag}>{flag.replace(/^⚠️\s*/, '')}</li>)}</ul>
+                        <span className="queue-flags">{member.flags.map(flag => <Chip key={flag.code} tone={flag.tone}>{flag.label}</Chip>)}</span>
                     )}
                     {data.voice && moderation && (
                         <div className="punish-row">

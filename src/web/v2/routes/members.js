@@ -6,7 +6,7 @@ const WarningService = require('../../../modules/moderation/WarningService');
 const TempRoleService = require('../../../modules/roles/TempRoleService');
 const { roleProblem } = require('../../../services/RoleService');
 const { canSeeEntry } = require('../visibility');
-const { describeMember, serializeCard, userRef } = require('../serialize');
+const { describeMember, flagContext, serializeCard, userRef } = require('../serialize');
 
 const router = express.Router({ mergeParams: true });
 
@@ -109,7 +109,7 @@ router.get('/:userId', async (req, res, next) => {
         };
 
         res.json({
-            member: describeMember(member),
+            member: describeMember(member, await flagContext(guild, new Map([[member.id, card?.kickCount || 0]]))),
             roles,
             voice,
             card: serializeCard(card),

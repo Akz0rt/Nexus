@@ -9,7 +9,7 @@ const {
 } = require('discord.js');
 
 const CUSTOM_ID_PREFIX = 'verify';
-const YOUNG_ACCOUNT_DAYS = 7;
+const YOUNG_ACCOUNT_DAYS = 7; // default; each server sets its own in Settings → Пропуск
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 const STATUS_COLORS = {
@@ -35,10 +35,10 @@ function discordTime(date, style = 'f') {
     return `<t:${Math.floor(new Date(date).getTime() / 1000)}:${style}>`;
 }
 
-function computeFlags(member) {
+function computeFlags(member, youngAccountDays = YOUNG_ACCOUNT_DAYS) {
     const flags = [];
     const ageMs = Date.now() - member.user.createdTimestamp;
-    if (ageMs < YOUNG_ACCOUNT_DAYS * DAY_MS) flags.push(`⚠️ Аккаунт младше ${YOUNG_ACCOUNT_DAYS} дней`);
+    if (ageMs < youngAccountDays * DAY_MS) flags.push(`⚠️ Аккаунт младше ${youngAccountDays} дн.`);
     if (!member.user.avatar) flags.push('⚠️ Нет аватара');
     return flags;
 }
@@ -74,7 +74,7 @@ function statusLine(card) {
  * @param {import('discord.js').GuildMember | null} member live member (null if left)
  * @param {object} card queue_cards document
  */
-function buildCardMessage(member, card) {
+function buildCardMessage(member, card, { youngAccountDays } = {}) {
     const embed = new EmbedBuilder()
         .setColor(STATUS_COLORS[card.status] || STATUS_COLORS.pending)
         .setTitle(card.status === 'pending' ? 'Новичок ждёт пропуска' : 'Карточка новичка');
@@ -90,7 +90,7 @@ function buildCardMessage(member, card) {
                 { name: 'Зашёл', value: member.joinedAt ? discordTime(member.joinedAt, 'R') : '—', inline: true }
             );
 
-        const flags = computeFlags(member);
+        const flags = computeFlags(member, youngAccountDays);
         if (flags.length) embed.addFields({ name: 'Флаги', value: flags.join('\n') });
     } else {
         embed.setDescription(`<@${card.userId}> · \`${card.userId}\``);

@@ -228,6 +228,17 @@ export function describeBulk(verb, data) {
     return parts.join(' · ');
 }
 
+/** How long someone has been waiting: "3 мин", "6 ч 40", "7 ч", "12 дн." */
+export function waitLabel(iso, now = Date.now()) {
+    if (!iso) return '—';
+    const minutes = Math.max(0, Math.floor((now - Date.parse(iso)) / 60000));
+    if (minutes < 60) return `${minutes} мин`;
+    const hours = Math.floor(minutes / 60);
+    if (hours >= 48) return `${Math.floor(hours / 24)} дн.`;
+    const rest = minutes % 60;
+    return rest >= 5 && hours < 10 ? `${hours} ч ${String(rest).padStart(2, '0')}` : `${hours} ч`;
+}
+
 /** "12 мин", "2 ч 05 мин" in a voice channel */
 export function formatSince(iso) {
     if (!iso) return '';

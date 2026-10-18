@@ -2,6 +2,8 @@ const EventBus = require('../../services/EventBus');
 const { canUserSee } = require('./visibility');
 
 const HEARTBEAT_MS = 25 * 1000; // well under Azure's ~230 s idle timeout
+// «Смотрит Kira»: the app repeats what it has open every few minutes; older marks are dropped
+const VIEWING_TTL_MS = 6 * 60 * 1000;
 
 /**
  * Server-Sent Events fan-out per guild. Every action goes through
@@ -13,6 +15,7 @@ class SseHub {
     /** @param {{ canSee?: (guildId, userId, entry) => boolean }} [options] who may see an audit entry */
     constructor({ canSee = canUserSee } = {}) {
         this.clients = new Map(); // guildId -> Map<res, user>
+        this.viewing = new Map(); // guildId -> Map<userId, { targetId, at }> whose member card each moderator has open
         this.heartbeat = null;
         this.canSee = canSee;
     }
@@ -42,23 +45,39 @@ class SseHub {
 
     unsubscribe(guildId, res) {
         const streams = this.clients.get(guildId);
+        const user = streams?.get(res);
         if (!streams || !streams.delete(res)) return;
         if (streams.size === 0) this.clients.delete(guildId);
-        else this.broadcastPresence(guildId);
+        // Gone from the app altogether: nobody is looking at a card on their behalf any more
+        if (user && ![...streams.values()].some(other => other?.id === user.id)) this.viewing.get(guildId)?.delete(user.id);
+        if (streams.size > 0) this.broadcastPresence(guildId);
         if (this.clients.size === 0) this.stopHeartbeat();
     }
 
-    /** Distinct users with at least one open stream on the guild. */
-    presence(guildId) {
+    /** Distinct users with at least one open stream on the guild, with whose card they have open. */
+    presence(guildId, now = Date.now()) {
         const users = new Map();
+        const viewing = this.viewing.get(guildId);
         for (const user of this.clients.get(guildId)?.values() || []) {
-            if (user && !users.has(user.id)) users.set(user.id, user);
+            if (!user || users.has(user.id)) continue;
+            const mark = viewing?.get(user.id);
+            users.set(user.id, { ...user, viewingId: mark && now - mark.at < VIEWING_TTL_MS ? mark.targetId : null });
         }
         return [...users.values()];
     }
 
-    broadcastPresence(guildId) {
-        this.broadcast(guildId, 'presence', { users: this.presence(guildId) });
+    /** A moderator opened (targetId) or closed (null) a member card. */
+    setViewing(guildId, userId, targetId, now = Date.now()) {
+        if (!this.viewing.has(guildId)) this.viewing.set(guildId, new Map());
+        const marks = this.viewing.get(guildId);
+        const before = marks.get(userId)?.targetId || null;
+        if (targetId) marks.set(userId, { targetId, at: now });
+        else marks.delete(userId);
+        if (before !== (targetId || null)) this.broadcastPresence(guildId, now);
+    }
+
+    broadcastPresence(guildId, now = Date.now()) {
+        this.broadcast(guildId, 'presence', { users: this.presence(guildId, now) });
     }
 
     /** @param {(user) => boolean} [allow] limits the frame to some streams */

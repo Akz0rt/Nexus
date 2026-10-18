@@ -50,6 +50,12 @@ function sanitize(guild, body, current) {
         patch.assignUnverifiedOnJoin = Boolean(body.assignUnverifiedOnJoin);
         fields.push('assignUnverifiedOnJoin');
     }
+    if ('youngAccountDays' in body) {
+        const days = Number(body.youngAccountDays);
+        if (!Number.isInteger(days) || days < 1 || days > 365) return fail('youngAccountDays', 'invalid_young_days');
+        patch.verification = { ...current.verification, youngAccountDays: days };
+        fields.push('youngAccountDays');
+    }
 
     if ('reasons' in body || 'escalation' in body) {
         const moderation = { reasons: current.moderation.reasons, escalation: current.moderation.escalation };
@@ -114,6 +120,7 @@ function describeSettings(settings) {
         verifyQueueChannelId: settings.verifyQueueChannelId || '',
         verificationEnabled: Boolean(settings.modules.verification),
         assignUnverifiedOnJoin: Boolean(settings.assignUnverifiedOnJoin),
+        youngAccountDays: settings.verification.youngAccountDays,
         reasons: settings.moderation.reasons,
         escalation: settings.moderation.escalation,
         lockdownChannelIds: settings.lockdown.channelIds,

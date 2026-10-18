@@ -1,6 +1,7 @@
 const { GatewayIntentBits, PermissionFlagsBits } = require('discord.js');
 const GuildSettingsService = require('./GuildSettingsService');
 const AuditLogService = require('./AuditLogService');
+const InviteTracker = require('../modules/invites/InviteTracker');
 
 const DB_TIMEOUT_MS = 5000;
 
@@ -14,7 +15,7 @@ const BOT_PERMISSIONS = [
     { flag: PermissionFlagsBits.MuteMembers, label: 'Отключать участникам микрофон', hint: 'нужно для выключения микрофона' },
     { flag: PermissionFlagsBits.DeafenMembers, label: 'Отключать участникам звук', hint: 'нужно для выключения звука' },
     { flag: PermissionFlagsBits.ManageChannels, label: 'Управлять каналами', hint: 'нужно для лимита и названия голосовых и для slowmode в Lockdown' },
-    { flag: PermissionFlagsBits.ManageGuild, label: 'Управлять сервером', hint: 'без него Lockdown не может поставить инвайты на паузу' },
+    { flag: PermissionFlagsBits.ManageGuild, label: 'Управлять сервером', hint: 'без него Lockdown не может поставить инвайты на паузу, а в Пропуске не видно, по чьему инвайту зашёл новичок' },
     { flag: PermissionFlagsBits.ViewAuditLog, label: 'Просматривать журнал аудита', hint: 'без него в логе сообщений не видно, какой модератор удалил сообщение' }
 ];
 
@@ -85,6 +86,9 @@ async function run(guild, { database = pingDatabase } = {}) {
     }
     checks.push(check('verification', 'Модуль пропуска', settings.modules.verification ? 'ok' : 'warn',
         settings.modules.verification ? null : 'выключен — карточки новичков не создаются'));
+    const invites = InviteTracker.canTrack(guild.id);
+    checks.push(check('verification', 'Видно, по чьему инвайту зашёл новичок', invites ? 'ok' : 'warn',
+        invites ? null : 'дайте боту «Управлять сервером» — без него Discord не показывает инвайты'));
 
     if (settings.lockdown.channelIds.length === 0) {
         checks.push(check('lockdown', 'Стартовые каналы для Lockdown', 'warn', 'не выбраны — Lockdown только поставит инвайты на паузу'));

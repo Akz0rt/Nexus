@@ -151,7 +151,7 @@ export default function OverviewView({ guildId, revision, voiceRevision, waiting
                                 </span>
                                 <span className="muted small">
                                     зашёл {timeAgo(item.member.joinedAt)} · аккаунту {accountAge(item.member.accountCreatedAt)}
-                                    {item.member.flags.length > 0 && <span className="flag-inline"> · {item.member.flags.length} флаг.</span>}
+                                    {item.member.flags.length > 0 && <span className="flag-inline"> · {item.member.flags.map(flag => flag.label).join(', ')}</span>}
                                 </span>
                             </div>
                             <button className="btn" disabled={busy[item.member.id]} onClick={() => approve(item, 'male')}>Парень</button>
