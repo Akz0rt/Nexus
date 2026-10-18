@@ -82,7 +82,7 @@ class CosmosDBService {
 
         try {
             const { resource: item } = await this.container.item(userId, userId).read();
-            return item ? { month: item.month, day: item.day } : null;
+            return item ? { month: item.month, day: item.day, lastCongratulatedOn: item.lastCongratulatedOn || null } : null;
         } catch (error) {
             if (error.code === 404) {
                 return null; // Item not found

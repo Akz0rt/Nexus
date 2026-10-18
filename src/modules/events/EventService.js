@@ -11,6 +11,7 @@ const MINUTE_MS = 60 * 1000;
 const WEEK_MS = 7 * 24 * 60 * MINUTE_MS;
 const REMIND_BEFORE_MS = 15 * MINUTE_MS;
 const LATE_REMINDER_MS = 5 * MINUTE_MS; // the bot was down: don't remind once it has long started
+const MAX_MENTIONS = 60; // keeps the reminder under Discord's 2000-character limit
 const MAX_AHEAD_MS = 365 * 24 * 60 * MINUTE_MS;
 const TEXT_TYPES = new Set([ChannelType.GuildText, ChannelType.GuildAnnouncement]);
 const VOICE_TYPES = new Set([ChannelType.GuildVoice, ChannelType.GuildStageVoice]);
@@ -235,7 +236,7 @@ class EventService {
         });
     }
 
-    /** Ping those going, once, 15 minutes before. */
+    /** Ping those going, once, 15 minutes before. A failed send is not retried. */
     async remind(guild, event, now) {
         event.remindedAt = new Date(now).toISOString();
         const going = event.going || [];
@@ -243,17 +244,26 @@ class EventService {
         const channel = guild.channels.cache.get(event.channelId);
         if (!channel) return;
         const where = event.voiceChannelId ? ` Сбор в <#${event.voiceChannelId}>.` : '';
-        const mentions = going.slice(0, 90).map(id => `<@${id}>`).join(' ');
-        await channel.send({
-            content: `⏰ «${event.title}» начинается ${stamp(event.startsAt, 'R')}.${where}\n${mentions}`,
-            allowedMentions: { users: going.slice(0, 90) }
-        });
+        const pinged = going.slice(0, MAX_MENTIONS);
+        const more = going.length > pinged.length ? ` и ещё ${going.length - pinged.length}` : '';
+        try {
+            await channel.send({
+                content: `⏰ «${event.title}» начинается ${stamp(event.startsAt, 'R')}.${where}\n${pinged.map(id => `<@${id}>`).join(' ')}${more}`,
+                allowedMentions: { users: pinged }
+            });
+        } catch (error) {
+            console.error(`Events: reminder for ${event.id} failed:`, error.message || error);
+        }
     }
 
-    /** At the start: close sign-up; a weekly event publishes next week's card. */
+    /**
+     * At the start: close sign-up; a weekly event publishes next week's card.
+     * The event is saved as done first, so a failure below never starts it twice.
+     */
     async start(guild, event) {
         event.status = 'done';
         await this.render(guild, event).catch(error => console.error('EventService: card edit failed:', error.message || error));
+        await this.save(event);
         await this.log(event, 'event.started', null, 'auto', { going: (event.going || []).length });
         if (!event.repeatWeekly) return null;
 
@@ -270,7 +280,12 @@ class EventService {
             createdAt: new Date().toISOString()
         };
         delete next._rid; delete next._self; delete next._etag; delete next._attachments; delete next._ts;
-        if (guild.channels.cache.get(next.channelId)) await this.publish(guild, next);
+        try {
+            if (guild.channels.cache.get(next.channelId)) await this.publish(guild, next);
+        } catch (error) {
+            // Saved without a card: editing it in the app posts the card again
+            console.error(`Events: publishing next week's ${event.id} failed:`, error.message || error);
+        }
         await this.save(next);
         await this.log(next, 'event.created', null, 'auto', { repeated: true });
         this.emit(next);
@@ -295,7 +310,6 @@ class EventService {
                     }
                     if (now >= startsAt) {
                         await this.start(guild, event);
-                        await this.save(event);
                         this.emit(event);
                         changed++;
                     }

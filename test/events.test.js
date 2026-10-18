@@ -131,12 +131,31 @@ async function cancelling() {
     assert.ok(logged.some(e => e.action === 'event.cancelled'));
 }
 
+async function failingChannel() {
+    const { event } = await EventService.create(guild, { title: 'Сломанный канал', startsAt: inMinutes(30), channelId: TEXT, repeatWeekly: true }, mod, 'panel');
+    await EventService.setGoing(guild.id, event.id, A, true);
+    const realSend = channel.send;
+    channel.send = async () => { throw Object.assign(new Error('Missing Permissions'), { code: 50013 }); };
+    const startsAt = Date.parse(event.startsAt);
+    const before = logged.filter(e => e.action === 'event.started').length;
+    await EventService.processDue(client, startsAt - 10 * 60000); // reminder fails
+    assert.ok(docs.get(event.id).remindedAt, 'a failed reminder is not retried every minute');
+    await EventService.processDue(client, startsAt + 1000);       // next week's card fails
+    await EventService.processDue(client, startsAt + 61000);
+    assert.strictEqual(docs.get(event.id).status, 'done');
+    assert.strictEqual(logged.filter(e => e.action === 'event.started').length - before, 1, 'started exactly once');
+    const next = [...docs.values()].find(e => e.seriesId === event.id && e.id !== event.id);
+    assert.ok(next && next.status === 'scheduled' && !next.messageId, 'next week saved without a card');
+    channel.send = realSend;
+}
+
 (async () => {
     await validation();
     const id = await signUps();
     await reminderAndStart(id);
     await weekly();
     await cancelling();
+    await failingChannel();
     console.log('events tests passed');
 })().catch(error => {
     console.error(error);

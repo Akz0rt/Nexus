@@ -73,6 +73,13 @@ function validUser(req, res, next) {
 
 const fail = (res, code) => res.status(STATUS[code] || 400).json({ error: code });
 
+// The birthday store is shared by every server the bot is on: a moderator may only
+// touch the birthdays of their own server's members
+function memberOfGuild(req, res, next) {
+    if (!req.guild.members.cache.has(req.params.userId)) return fail(res, 'member_not_found');
+    next();
+}
+
 // GET /birthdays — everyone's birthdays here, plus the (read-only) announcement settings
 router.get('/', async (req, res, next) => {
     try {
@@ -96,13 +103,15 @@ router.get('/', async (req, res, next) => {
 });
 
 // PUT /birthdays/:userId — { month, day }: set or change someone's birthday
-router.put('/:userId', validUser, async (req, res, next) => {
+router.put('/:userId', validUser, memberOfGuild, async (req, res, next) => {
     try {
         const month = Number(req.body?.month);
         const day = Number(req.body?.day);
         if (!Number.isInteger(month) || !Number.isInteger(day) || !isValidDate(month, day)) return fail(res, 'invalid_date');
-        if (!req.guild.members.cache.has(req.params.userId)) return fail(res, 'member_not_found');
+        const previous = await CosmosDBService.getBirthday(req.params.userId);
         await CosmosDBService.setBirthday(req.params.userId, month, day);
+        // setBirthday rewrites the document: keep the "congratulated" mark, or today would be congratulated twice
+        if (previous?.lastCongratulatedOn) await CosmosDBService.markCongratulated(req.params.userId, previous.lastCongratulatedOn);
         await log(req, 'birthday.set', req.params.userId, { month, day });
         res.json({ ok: true });
     } catch (error) {
@@ -110,7 +119,7 @@ router.put('/:userId', validUser, async (req, res, next) => {
     }
 });
 
-router.delete('/:userId', validUser, async (req, res, next) => {
+router.delete('/:userId', validUser, memberOfGuild, async (req, res, next) => {
     try {
         const existing = await CosmosDBService.getBirthday(req.params.userId);
         if (!existing) return fail(res, 'birthday_not_found');
@@ -123,11 +132,14 @@ router.delete('/:userId', validUser, async (req, res, next) => {
 });
 
 // POST /birthdays/:userId/congratulate — «Поздравить сейчас», for today's birthdays only
-router.post('/:userId/congratulate', validUser, async (req, res, next) => {
+router.post('/:userId/congratulate', validUser, memberOfGuild, async (req, res, next) => {
     try {
         const birthday = await CosmosDBService.getBirthday(req.params.userId);
         if (!birthday) return fail(res, 'birthday_not_found');
         if (nextBirthday(birthday.month, birthday.day, CosmosDBService.getTodayDateString()).inDays !== 0) return fail(res, 'not_today');
+        // Congratulations go to the default server's channel: only from that server
+        const channel = NotificationService.congratsChannel || NotificationService.announceChannel;
+        if (!channel || channel.guild?.id !== req.guild.id) return fail(res, 'no_channel');
         const result = await NotificationService.congratulate(req.params.userId);
         if (!result.ok) return fail(res, result.code);
         await log(req, 'birthday.congratulated', req.params.userId);
@@ -138,7 +150,7 @@ router.post('/:userId/congratulate', validUser, async (req, res, next) => {
 });
 
 // POST /birthdays/:userId/skip — «Пропустить в этом году»: the daily run won't congratulate them
-router.post('/:userId/skip', validUser, async (req, res, next) => {
+router.post('/:userId/skip', validUser, memberOfGuild, async (req, res, next) => {
     try {
         const birthday = await CosmosDBService.getBirthday(req.params.userId);
         if (!birthday) return fail(res, 'birthday_not_found');

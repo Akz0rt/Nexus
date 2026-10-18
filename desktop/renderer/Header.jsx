@@ -112,7 +112,7 @@ function AccountMenu({ me, theme, onTheme }) {
                     <label className="check">
                         <input type="checkbox" checked={Boolean(settings?.notifications)} disabled={!settings}
                             onChange={() => toggle('notifications')} />
-                        Уведомлять о новичках
+                        Уведомлять о новичках и жалобах
                     </label>
                     <label className="check">
                         <input type="checkbox" checked={Boolean(settings?.sound)} disabled={!settings}
