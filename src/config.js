@@ -47,5 +47,8 @@ module.exports = {
     // Azure Management API (for syncing App Settings — requires Managed Identity)
     azureSubscriptionId: process.env.AZURE_SUBSCRIPTION_ID || '',
     azureResourceGroup: process.env.AZURE_RESOURCE_GROUP || '',
-    azureWebAppName: process.env.AZURE_WEBAPP_NAME || ''
+    azureWebAppName: process.env.AZURE_WEBAPP_NAME || '',
+
+    // Key for the anonymous ids of economy accounts of people who left (defaults to the Cosmos key)
+    economyAnonSecret: process.env.ECONOMY_ANON_SECRET || ''
 };

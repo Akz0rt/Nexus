@@ -53,7 +53,8 @@ async function main() {
     const rest = new REST({ version: '10' }).setToken(config.token);
     const names = await fetchNames(rest, rows.map(row => String(row.id)));
     const present = new Set([...names].filter(([, name]) => name.member).map(([id]) => id));
-    const { accounts, transactions, skipped, mismatches } = buildImport(rows, guildId, new Date().toISOString(), present);
+    const { accounts, transactions, skipped, mismatches } = buildImport(rows, guildId, new Date().toISOString(), present,
+        userId => EconomyService.anonymousId(guildId, userId));
     // Names only for those still here: someone who left is kept without one
     for (const account of accounts) {
         const name = names.get(account.userId);
@@ -61,14 +62,14 @@ async function main() {
     }
 
     const label = a => (a.prestige ? `${a.level} ★${a.prestige}` : String(a.level));
-    const nameOf = a => a.displayName || names.get(a.userId)?.displayName || a.userId;
+    const nameOf = a => a.displayName || (a.userId ? names.get(a.userId)?.displayName || a.userId : '(left, anonymous)');
     console.log(`Dump: ${file}`);
     console.log(`Server: ${guildId}`);
     console.log(`Rows: ${rows.length}, accounts: ${accounts.length}${skipped.length ? `, skipped (bad id): ${skipped.join(', ')}` : ''}`);
     console.log(`Coins in total: ${number(accounts.reduce((sum, a) => sum + a.money, 0))}`);
     console.log(`History entries: ${transactions.length}`);
     const left = accounts.filter(a => a.leftAt);
-    console.log(`Not on the server any more: ${left.length} (kept without a name, ${left.reduce((sum, a) => sum + a.money, 0).toLocaleString('ru-RU')} coins; deleted in ${EconomyService.LEFT_RETENTION_DAYS} days unless they come back)`);
+    console.log(`Not on the server any more: ${left.length} (stored anonymously, ${left.reduce((sum, a) => sum + a.money, 0).toLocaleString('ru-RU')} coins; deleted in ${EconomyService.LEFT_RETENTION_DAYS} days unless they come back)`);
     console.log('\nTop 10 by level:');
     [...accounts].sort((a, b) => b.totalExp - a.totalExp).slice(0, 10).forEach((a, i) =>
         console.log(`  ${i + 1}. ${nameOf(a)} — level ${label(a)} (was ${a.legacy.level}), ${number(a.money)} coins`));

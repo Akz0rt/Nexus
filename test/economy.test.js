@@ -42,6 +42,13 @@ EconomyService.writeRaw = async (doc, etag) => {
     docs.set(key, { doc: { ...doc }, etag: `e${++version}` });
 };
 EconomyService.addTransactions = async entries => { txs.push(...entries); };
+EconomyService.upsertRaw = async doc => { docs.set(`${doc.guildId}:${doc.id}`, { doc: { ...doc }, etag: `e${++version}` }); };
+EconomyService.removeRaw = async (guildId, id) => { docs.delete(`${guildId}:${id}`); };
+EconomyService.rekeyTransactions = async (guildId, fromId, toId) => {
+    const moved = txs.filter(t => t.guildId === guildId && t.userId === fromId);
+    for (const t of moved) t.userId = toId;
+    return moved.length;
+};
 const audit = [];
 AuditLogService.log = async entry => { audit.push(entry); return entry; };
 
@@ -157,24 +164,34 @@ async function messagesAndLevelUps() {
 async function leaving() {
     const guild = makeGuild();
     const member = makeMember(guild, '200000000000000077', {});
-    await EconomyService.credit(guild.id, member, { exp: 100, money: 40 });
+    await EconomyService.credit(guild.id, member, { exp: 5100, money: 40 }); // level 2: one journal entry
     const key = `${guild.id}:${member.id}`;
+    const anonId = EconomyService.anonymousId(guild.id, member.id);
+    assert.match(anonId, /^anon-[0-9a-f]{40}$/);
+    assert.ok(!anonId.includes(member.id));
+
     await EconomyService.markLeft(guild.id, member.id);
-    let doc = docs.get(key).doc;
-    assert.ok(doc.leftAt && doc.displayName === null && doc.username === null, 'left: no name');
-    assert.strictEqual(doc.money, 40, 'coins kept in case they come back');
+    assert.ok(!docs.has(key), 'nothing left under the user id');
+    let doc = docs.get(`${guild.id}:${anonId}`).doc;
+    assert.ok(doc.leftAt && doc.userId === null && doc.displayName === null && doc.username === null, 'obfuscated at once');
+    assert.strictEqual(doc.money, 140, 'coins kept in case they come back');
+    assert.ok(txs.filter(t => t.userId === anonId).length === 1 && !txs.some(t => t.userId === member.id), 'journal moved too');
     assert.strictEqual(await EconomyService.markLeft(guild.id, '200000000000000078'), null, 'no account, nothing created');
     assert.ok(!docs.has(`${guild.id}:200000000000000078`));
+
     await EconomyService.markReturned(guild.id, member);
+    assert.ok(!docs.has(`${guild.id}:${anonId}`));
     doc = docs.get(key).doc;
-    assert.deepStrictEqual([doc.leftAt, doc.displayName, doc.money], [null, member.displayName, 40]);
+    assert.deepStrictEqual([doc.leftAt, doc.userId, doc.displayName, doc.money, doc.level], [null, member.id, member.displayName, 140, 2]);
+    assert.ok(txs.some(t => t.userId === member.id) && !txs.some(t => t.userId === anonId), 'journal back');
 
     // Left while the bot was offline: the daily check notices
     EconomyService.presentIds = async () => [member.id, '200000000000000079'];
     docs.set(`${guild.id}:200000000000000079`, { doc: { ...EconomyService.blankAccount(guild.id, '200000000000000079'), displayName: 'Ушедший' }, etag: 'x' });
     guild.members.fetch = async () => guild.members.cache;
     assert.strictEqual(await economy.reconcileLeft(guild), 1);
-    assert.ok(docs.get(`${guild.id}:200000000000000079`).doc.leftAt);
+    assert.ok(!docs.has(`${guild.id}:200000000000000079`));
+    assert.ok(docs.get(`${guild.id}:${EconomyService.anonymousId(guild.id, '200000000000000079')}`).doc.leftAt);
     assert.strictEqual(docs.get(key).doc.leftAt, null, 'still here, untouched');
 }
 

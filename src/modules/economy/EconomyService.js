@@ -26,7 +26,16 @@ function blankAccount(guildId, userId) {
     };
 }
 
-/** A member's identity to keep on the account (shown in the app for people who left). */
+/**
+ * The key an account is kept under while its owner is away: an HMAC of the server
+ * and user id, so the record names no one, yet the same person coming back maps to it.
+ */
+function anonymousId(guildId, userId) {
+    const secret = config.economyAnonSecret || config.cosmosKey || 'economy';
+    return `anon-${crypto.createHmac('sha256', secret).update(`${guildId}:${userId}`).digest('hex').slice(0, 40)}`;
+}
+
+/** A member's identity to keep on the account. */
 function identityOf(member) {
     if (!member) return {};
     const user = member.user || member;
@@ -39,9 +48,10 @@ function identityOf(member) {
  * `economy_tx` journal. Writes are read-modify-replace guarded by the etag, so
  * two credits at once never lose each other's coins.
  *
- * Someone who leaves the server keeps the account (in case they come back) but
- * without their name, and out of the tops; after 90 days away it is deleted with its
- * journal. Warnings, the moderation log and activity stats are not touched.
+ * Someone who leaves the server is obfuscated at once: the account and its journal
+ * move to an anonymous key (no user id, no name) and drop out of the tops. Coming back
+ * within 90 days restores them; after that they are deleted. Warnings, the moderation
+ * log and activity stats are not touched.
  */
 class EconomyService {
     constructor() {
@@ -76,20 +86,53 @@ class EconomyService {
         }
     }
 
-    /** Create (etag null) or replace if unchanged since read; throws { code: 409 | 412 } on a race. */
-    async deleteAccount(guildId, userId) {
+    async upsertRaw(doc) {
         await this.initialize();
-        await this.accounts.item(userId, guildId).delete().catch(error => { if (error.code !== 404) throw error; });
-        const { resources } = await this.transactions.items.query({
-            query: 'SELECT c.id FROM c WHERE c.guildId = @guildId AND c.userId = @userId',
-            parameters: [{ name: '@guildId', value: guildId }, { name: '@userId', value: userId }]
-        }, { partitionKey: guildId }).fetchAll();
-        for (const { id } of resources) {
-            await this.transactions.item(id, guildId).delete().catch(error => { if (error.code !== 404) throw error; });
-        }
-        return resources.length;
+        const clean = { ...doc };
+        for (const field of COSMOS_FIELDS) delete clean[field];
+        await this.accounts.items.upsert(clean);
     }
 
+    async removeRaw(guildId, id) {
+        await this.initialize();
+        await this.accounts.item(id, guildId).delete().catch(error => { if (error.code !== 404) throw error; });
+    }
+
+    async transactionsOf(guildId, ownerId) {
+        await this.initialize();
+        const { resources } = await this.transactions.items.query({
+            query: 'SELECT * FROM c WHERE c.guildId = @guildId AND c.userId = @userId',
+            parameters: [{ name: '@guildId', value: guildId }, { name: '@userId', value: ownerId }]
+        }, { partitionKey: guildId }).fetchAll();
+        return resources;
+    }
+
+    /** Move a journal from one owner key to another (on leaving and on coming back). */
+    async rekeyTransactions(guildId, fromId, toId) {
+        const entries = await this.transactionsOf(guildId, fromId);
+        for (const entry of entries) {
+            const clean = { ...entry, userId: toId };
+            for (const field of COSMOS_FIELDS) delete clean[field];
+            await this.transactions.items.upsert(clean);
+        }
+        return entries.length;
+    }
+
+    async deleteTransactions(guildId, ownerId) {
+        const entries = await this.transactionsOf(guildId, ownerId);
+        for (const { id } of entries) {
+            await this.transactions.item(id, guildId).delete().catch(error => { if (error.code !== 404) throw error; });
+        }
+        return entries.length;
+    }
+
+    /** An account and its journal, by the key it is stored under. */
+    async deleteAccount(guildId, id) {
+        await this.removeRaw(guildId, id);
+        return this.deleteTransactions(guildId, id);
+    }
+
+    /** Create (etag null) or replace if unchanged since read; throws { code: 409 | 412 } on a race. */
     async writeRaw(doc, etag) {
         await this.initialize();
         const clean = { ...doc };
@@ -221,14 +264,22 @@ class EconomyService {
         return result;
     }
 
-    /** Left the server: forget the name, drop out of the tops. Nothing to do without an account. */
+    /**
+     * Left the server: the account and its journal move to the anonymous key at once,
+     * without the user id and name. Nothing to do without an account.
+     */
     async markLeft(guildId, userId) {
         const raw = await this.readRaw(guildId, userId);
-        if (!raw || raw.doc.leftAt) return null;
-        return this.mutate(guildId, userId, doc => {
-            Object.assign(doc, { leftAt: new Date().toISOString(), username: null, displayName: null });
-            return null;
-        });
+        if (!raw) return null;
+        const anonId = anonymousId(guildId, userId);
+        const doc = {
+            ...raw.doc, id: anonId, userId: null, username: null, displayName: null,
+            leftAt: raw.doc.leftAt || new Date().toISOString(), updatedAt: new Date().toISOString()
+        };
+        await this.upsertRaw(doc);
+        await this.rekeyTransactions(guildId, userId, anonId);
+        await this.removeRaw(guildId, userId);
+        return doc;
     }
 
     /** Ids of the accounts of people counted as on the server. */
@@ -243,12 +294,25 @@ class EconomyService {
 
     /** Came back before the account was deleted: everything is where they left it. */
     async markReturned(guildId, member) {
-        const raw = await this.readRaw(guildId, member.id);
-        if (!raw || !raw.doc.leftAt) return null;
-        return this.mutate(guildId, member.id, doc => {
-            Object.assign(doc, identityOf(member), { leftAt: null });
-            return null;
-        });
+        const anonId = anonymousId(guildId, member.id);
+        const raw = await this.readRaw(guildId, anonId);
+        if (!raw) return null;
+        // Earned something already since coming back (a fresh account): add it on top
+        const fresh = (await this.readRaw(guildId, member.id))?.doc;
+        const doc = {
+            ...raw.doc, ...identityOf(member), id: member.id, userId: member.id, leftAt: null,
+            money: raw.doc.money + (fresh?.money || 0),
+            voiceSeconds: (raw.doc.voiceSeconds || 0) + (fresh?.voiceSeconds || 0),
+            messages: (raw.doc.messages || 0) + (fresh?.messages || 0),
+            updatedAt: new Date().toISOString()
+        };
+        Object.assign(doc, curve.addExp({ level: doc.level, exp: doc.exp, prestige: doc.prestige || 0 }, fresh?.totalExp || 0));
+        delete doc.reached; delete doc.prestiges; delete doc.rewards;
+        doc.totalExp = curve.totalOf(doc.level, doc.exp, doc.prestige);
+        await this.upsertRaw(doc);
+        await this.rekeyTransactions(guildId, anonId, member.id);
+        await this.removeRaw(guildId, anonId);
+        return doc;
     }
 
     /** Delete the accounts (and journals) of people away for longer than the retention. */
@@ -256,10 +320,10 @@ class EconomyService {
         await this.initialize();
         const cutoff = new Date(now - LEFT_RETENTION_DAYS * 24 * 60 * 60 * 1000).toISOString();
         const { resources } = await this.accounts.items.query({
-            query: 'SELECT c.guildId, c.userId FROM c WHERE IS_STRING(c.leftAt) AND c.leftAt < @cutoff',
+            query: 'SELECT c.guildId, c.id FROM c WHERE IS_STRING(c.leftAt) AND c.leftAt < @cutoff',
             parameters: [{ name: '@cutoff', value: cutoff }]
         }).fetchAll();
-        for (const { guildId, userId } of resources) await this.deleteAccount(guildId, userId);
+        for (const { guildId, id } of resources) await this.deleteAccount(guildId, id);
         return resources.length;
     }
 
@@ -297,3 +361,4 @@ module.exports = new EconomyService();
 module.exports.identityOf = identityOf;
 module.exports.blankAccount = blankAccount;
 module.exports.LEFT_RETENTION_DAYS = LEFT_RETENTION_DAYS;
+module.exports.anonymousId = anonymousId;

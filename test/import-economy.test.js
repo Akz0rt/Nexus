@@ -51,6 +51,15 @@ function realDump() {
     assert.deepStrictEqual([veteran.level, veteran.prestige, veteran.legacy.level], [50, 23, 84]);
     assert.strictEqual(byId.get('320897026407661569').prestige, 8);
     assert.ok(accounts.every(a => a.importedAt && a.guildId === G));
+    // Someone not on the server is stored obfuscated, journal included
+    const gone = '1004082085373427753';
+    const present = new Set(rows.map(r => String(r.id)).filter(id => id !== gone));
+    const anon = id => `anon-${id.length}`;
+    const partial = buildImport(rows, G, '2026-10-18T00:00:00.000Z', present, anon);
+    const hidden = partial.accounts.find(a => a.id === anon(gone));
+    assert.ok(hidden && hidden.userId === null && hidden.leftAt && hidden.displayName === null);
+    assert.ok(!partial.accounts.some(a => a.id === gone || a.userId === gone));
+    assert.ok(!partial.transactions.some(t => t.userId === gone) && partial.transactions.some(t => t.userId === anon(gone)));
     assert.ok(transactions.length > 700 && transactions.every(t => t.createdAt && t.amount !== 0));
     assert.strictEqual(new Set(transactions.map(t => t.id)).size, transactions.length, 'ids are unique, so a re-run overwrites instead of duplicating');
 }

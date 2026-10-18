@@ -316,7 +316,7 @@ export default function EconomyView({ guildId, revision, onOpenMember, toast }) 
                     <p className="muted small">
                         Уровни 1–{data.curve.maxLevel}: переход с уровня N стоит 5000·N опыта, награда — 100·(N−1) монет.
                         После {data.curve.maxLevel}-го каждые {number(data.curve.prestigeExp)} опыта — престиж ★ и {number(data.curve.prestigeReward)} монет.
-                        Кто покинул сервер, в топе не показывается; через 90 дней его счёт удаляется.
+                        Счёт того, кто покинул сервер, сразу обезличивается и пропадает из топа; вернётся в течение 90 дней — всё восстановится, иначе счёт удаляется.
                     </p>
                 </>
             )}

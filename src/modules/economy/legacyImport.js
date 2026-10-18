@@ -47,10 +47,11 @@ function normalizeEntry(guildId, userId, entry, index) {
 }
 
 /**
- * `presentIds` — who is on the server now (null: everyone counts as present).
+ * `presentIds` — who is on the server now (null: everyone counts as present);
+ * `anonymize(userId)` — the anonymous key for those who are not.
  * @returns {{ accounts: object[], transactions: object[], skipped: string[], mismatches: object[] }}
  */
-function buildImport(rows, guildId, now = new Date().toISOString(), presentIds = null) {
+function buildImport(rows, guildId, now = new Date().toISOString(), presentIds = null, anonymize = null) {
     const accounts = [];
     const transactions = [];
     const skipped = [];
@@ -69,20 +70,22 @@ function buildImport(rows, guildId, now = new Date().toISOString(), presentIds =
         if (Math.abs(fromCounters - total) > Math.max(1000, total * 0.01)) {
             mismatches.push({ userId, level, total, fromCounters });
         }
+        // Not on the server any more: stored obfuscated from the start, like anyone who leaves
+        const gone = Boolean(presentIds && !presentIds.has(userId));
+        const ownerId = gone && anonymize ? anonymize(userId) : userId;
         accounts.push({
-            id: userId, guildId, userId,
+            id: ownerId, guildId, userId: gone && anonymize ? null : userId,
             username: null, displayName: null,
             level: next.level, exp: next.exp, prestige: next.prestige,
             totalExp: curve.totalOf(next.level, next.exp, next.prestige),
             money: Math.max(0, Number(row.money) || 0),
             voiceSeconds, messages,
             legacy: { level, exp },
-            // Not on the server any more: kept without a name, deleted after the retention like anyone who leaves
-            leftAt: presentIds && !presentIds.has(userId) ? now : null,
+            leftAt: gone ? now : null,
             createdAt: now, updatedAt: now, importedAt: now
         });
         parseHistory(row.historytrans).forEach((entry, index) => {
-            const tx = normalizeEntry(guildId, userId, entry, index);
+            const tx = normalizeEntry(guildId, ownerId, entry, index);
             if (tx.amount !== 0 && tx.createdAt) transactions.push(tx);
         });
     }
