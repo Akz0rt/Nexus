@@ -207,7 +207,7 @@ export default function App() {
         send(drawerUserId || null);
         if (!drawerUserId) return undefined;
         const timer = setInterval(() => send(drawerUserId), VIEWING_REPEAT_MS);
-        return () => { clearInterval(timer); send(null); };
+        return () => clearInterval(timer); // the next run sends the new card or null
     }, [guildId, drawerUserId, auth?.loggedIn]);
 
     const openSettings = useCallback(section => {

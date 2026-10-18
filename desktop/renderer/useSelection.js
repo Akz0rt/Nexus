@@ -56,9 +56,10 @@ export default function useSelection(ids, { paused = false } = {}) {
     }, [paused, ids.join(','), selected.size]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const startMarquee = event => {
-        if (event.button !== 0 || event.target.closest('[data-select], button, input, a, select')) return;
+        if (event.button !== 0 || event.target.closest('button, input, a, select, [role="menu"]')) return;
+        const onRow = Boolean(event.target.closest('[data-select]'));
         event.preventDefault();
-        const base = event.shiftKey ? new Set(selected) : new Set();
+        const base = event.shiftKey || event.ctrlKey ? new Set(selected) : new Set();
         const start = { x: event.clientX, y: event.clientY };
         let moved = false;
         const onMove = e => {
@@ -79,7 +80,8 @@ export default function useSelection(ids, { paused = false } = {}) {
             window.removeEventListener('mousemove', onMove);
             window.removeEventListener('mouseup', onUp);
             setMarquee(null);
-            if (!moved && !event.shiftKey) setSelected(new Set());
+            // No drag: on a row the click handler decides (Ctrl / Shift keep working); on empty space it clears
+            if (!moved && !onRow && !event.shiftKey) setSelected(new Set());
         };
         window.addEventListener('mousemove', onMove);
         window.addEventListener('mouseup', onUp);

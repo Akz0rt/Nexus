@@ -91,6 +91,7 @@ function riskFlags(member, { youngAccountDays, bannedNames = new Set(), kickCoun
 class BannedNames {
     constructor() {
         this.cache = new Map(); // guildId -> { at, names }
+        this.loading = new Map(); // guildId -> Promise<Set>
     }
 
     invalidate(guildId) {
@@ -100,6 +101,13 @@ class BannedNames {
     async get(guild) {
         const cached = this.cache.get(guild.id);
         if (cached && Date.now() - cached.at < BANS_TTL_MS) return cached.names;
+        if (!this.loading.has(guild.id)) {
+            this.loading.set(guild.id, this.load(guild).finally(() => this.loading.delete(guild.id)));
+        }
+        return this.loading.get(guild.id);
+    }
+
+    async load(guild) {
         const names = new Set();
         try {
             let after;

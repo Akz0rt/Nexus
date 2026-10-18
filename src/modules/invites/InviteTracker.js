@@ -71,6 +71,7 @@ class InviteTracker {
     /** Someone joined: find the invite and remember it. */
     onJoin(member) {
         const guild = member.guild;
+        this.joins.delete(`${guild.id}:${member.id}`); // a previous join's invite is not this one's
         return this.enqueue(guild.id, async () => {
             const before = this.snapshots.get(guild.id);
             let after;

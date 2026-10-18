@@ -340,17 +340,29 @@ export default function QueueView({ guildId, waiting, seen, revision, presence =
     const decideMany = async (group, action, body) => {
         if (group.length === 1) { await decide(group[0], action, body); return; }
         setGroupBusy(true);
-        let done = 0;
+        const done = [];
         const failed = [];
         for (const item of group) {
-            if (await decide(item, action, body, { quiet: true })) done++;
+            if (await decide(item, action, body, { quiet: true })) done.push(item.member.id);
             else failed.push(item.member.displayName);
         }
         setGroupBusy(false);
         selection.clear();
+        if (action === 'approve') done.forEach(dropExtras);
         const verb = action === 'kick' ? 'Кикнуто' : `Пропущено · ${GENDER_LABELS[body.gender]}:`;
-        toast(`${verb} ${done} из ${group.length}${failed.length ? ` · не вышло: ${failed.slice(0, 3).join(', ')}${failed.length > 3 ? '…' : ''}` : ''}`,
-            failed.length ? { tone: 'error', ttl: 8000 } : {});
+        const text = `${verb} ${done.length} из ${group.length}${failed.length ? ` · не вышло: ${failed.slice(0, 3).join(', ')}${failed.length > 3 ? '…' : ''}` : ''}`;
+        // A pass is reversible (a kick is not): «Отменить» puts all of them back in the queue
+        const undo = action === 'approve' && done.length ? {
+            label: 'Отменить',
+            onClick: async () => {
+                let back = 0;
+                for (const id of done) if ((await apiPost(`/guilds/${guildId}/queue/${id}/undo`)).ok) back++;
+                toast(back === done.length ? `Снова в очереди: ${back}` : `Вернули ${back} из ${done.length} — для остальных время на отмену вышло`,
+                    back === done.length ? {} : { tone: 'error' });
+                onChanged();
+            }
+        } : undefined;
+        toast(text, { tone: failed.length ? 'error' : null, ttl: undo ? UNDO_TOAST_MS : 8000, action: undo });
     };
 
     const approve = (group, gender) => {
@@ -363,6 +375,8 @@ export default function QueueView({ guildId, waiting, seen, revision, presence =
         if (tab !== 'waiting' || dialogOpen) return undefined;
         const onKey = event => {
             if (event.target.closest('input, textarea, select, [role="menu"], [role="dialog"]') || event.ctrlKey || event.altKey || event.metaKey) return;
+            // Space / Enter on a focused button, link or tab press that control, not the row
+            if ((event.key === ' ' || event.key === 'Enter') && event.target.closest('button, a, [role="tab"], [role="button"]')) return;
             const index = ids.indexOf(focusedId);
             if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
                 event.preventDefault();
