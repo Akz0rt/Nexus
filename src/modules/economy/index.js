@@ -1,9 +1,13 @@
 const cron = require('node-cron');
-const { ChannelType, EmbedBuilder, Events } = require('discord.js');
+const { ChannelType, EmbedBuilder, Events, MessageFlags } = require('discord.js');
 const GuildSettingsService = require('../../services/GuildSettingsService');
 const VoiceActivityService = require('../../services/VoiceActivityService');
 const { mapLimit } = require('../../services/RoleService');
 const EconomyService = require('./EconomyService');
+const PersonalRoleService = require('./PersonalRoleService');
+const games = require('./games');
+const { buildOffer } = require('./shop');
+const { describe, number } = require('./messages');
 const curve = require('./curve');
 
 // An active minute (in voice, or chatting) is worth the same
@@ -151,8 +155,51 @@ async function housekeeping(client) {
     if (deleted) console.log(`Economy: deleted ${deleted} account(s) of members who left`);
 }
 
+/**
+ * Buttons and menus: eco:duel:yes|no:<id>, eco:shop:pick (role menu), eco:shop:buy:<roleId>.
+ */
+async function handleInteraction(interaction) {
+    const [, area, action, id] = String(interaction.customId).split(':');
+    const guild = interaction.guild;
+    if (!guild) return;
+
+    if (area === 'duel' && interaction.isButton()) {
+        const result = await games.answer(guild, id, interaction.member, action === 'yes');
+        if (!result.ok && (result.code === 'not_opponent' || result.code === 'duel_gone')) {
+            await interaction.reply({ content: describe(result), flags: MessageFlags.Ephemeral });
+            if (result.code === 'duel_gone') await interaction.message.edit({ components: [] }).catch(() => {});
+            return;
+        }
+        const duel = result.duel;
+        let text;
+        if (!result.ok) text = result.code === 'challenger_broke'
+            ? `⚔️ Дуэль отменена: у <@${duel.challengerId}> не хватает монет.`
+            : `⚔️ Дуэль отменена: у <@${duel.opponentId}> не хватает монет.`;
+        else if (result.declined) text = `⚔️ <@${duel.opponentId}> отказался от дуэли с <@${duel.challengerId}>.`;
+        else text = `⚔️ Дуэль <@${duel.challengerId}> и <@${duel.opponentId}> на ${number(duel.bet)}: побеждает <@${result.winnerId}> и забирает **${number(result.prize)}**!`;
+        await interaction.update({ content: text, components: [], allowedMentions: { users: result.ok && !result.declined ? [result.winnerId, result.loserId] : [] } });
+        return;
+    }
+
+    if (area === 'shop' && action === 'pick' && interaction.isStringSelectMenu()) {
+        await interaction.update(await buildOffer(guild, interaction.values[0]));
+        return;
+    }
+
+    if (area === 'shop' && action === 'buy' && interaction.isButton()) {
+        await interaction.deferUpdate();
+        const result = await PersonalRoleService.buy(guild, interaction.member, id);
+        const content = result.ok
+            ? `Куплено: <@&${result.role.id}> ваша до <t:${Math.floor(Date.parse(result.expiresAt) / 1000)}:D>. Баланс: ${number(result.balance)}.`
+            : describe(result);
+        await interaction.editReply({ content, embeds: [], components: [], allowedMentions: { parse: [] } });
+    }
+}
+
 module.exports = {
     name: 'economy',
+    interactionPrefix: 'eco',
+    handleInteraction,
     EXP_PER_MINUTE,
     earningVoiceMembers,
     missingLevelRoles,
@@ -173,6 +220,8 @@ module.exports = {
             if (member.user?.bot) return;
             EconomyService.markLeft(member.guild.id, member.id)
                 .catch(error => console.error(`Economy: marking ${member.id} as left failed:`, error.message || error));
+            PersonalRoleService.ownerLeft(member.guild.id, member.id)
+                .catch(error => console.error(`PersonalRoles: owner ${member.id} left, update failed:`, error.message || error));
         });
         client.on(Events.GuildMemberAdd, member => {
             if (member.user?.bot) return;
@@ -184,6 +233,7 @@ module.exports = {
     async onReady(client) {
         cron.schedule('* * * * *', () => {
             voiceTick(client).catch(error => console.error('Economy: voice tick failed:', error.message || error));
+            PersonalRoleService.processDue(client).catch(error => console.error('PersonalRoles: due check failed:', error.message || error));
         });
         const tidy = () => housekeeping(client).catch(error => console.error('Economy: housekeeping failed:', error.message || error));
         cron.schedule('30 3 * * *', tidy);

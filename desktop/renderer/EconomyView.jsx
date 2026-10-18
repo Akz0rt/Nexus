@@ -3,6 +3,7 @@ import { apiGet, apiPost, apiPut, describeError } from './api.js';
 import { formatDateTime } from './format.js';
 import Avatar, { MemberLink } from './Avatar.jsx';
 import Dialog from './Dialog.jsx';
+import PersonalRolesTab from './PersonalRolesTab.jsx';
 
 const BY = [{ id: 'level', label: 'По уровню' }, { id: 'money', label: 'По балансу' }];
 
@@ -22,7 +23,13 @@ const SETTINGS_ERRORS = {
     role_managed: 'Эту роль выдаёт интеграция, её нельзя выдавать за уровень.',
     role_dangerous: 'Роль с модераторскими правами нельзя выдавать за уровень.',
     duplicate_role: 'Одна роль указана дважды.',
-    role_not_found: 'Роль не найдена.'
+    role_not_found: 'Роль не найдена.',
+    anchor_required: 'Чтобы включить личные роли, выберите роль, над которой они будут создаваться.',
+    anchor_too_high: 'Эта роль слишком высоко: новые роли должны помещаться под ролью бота.',
+    invalid_createPrice: 'Цена создания — от 0 до 1 000 000.',
+    invalid_rentPrice: 'Цена продления — от 0 до 1 000 000.',
+    invalid_periodDays: 'Срок аренды — от 1 до 365 дней.',
+    invalid_maxActive: 'Лимит ролей на человека — от 1 до 10.'
 };
 
 export const number = n => Number(n || 0).toLocaleString('ru-RU');
@@ -143,6 +150,14 @@ function SettingsTab({ guildId, data, onSaved, toast }) {
     const [enabled, setEnabled] = useState(data.settings.enabled);
     const [channelId, setChannelId] = useState(data.settings.channelId || '');
     const [levelRoles, setLevelRoles] = useState(data.settings.levelRoles.map(r => ({ level: String(r.level), roleId: r.roleId })));
+    const [payEnabled, setPayEnabled] = useState(data.settings.payEnabled);
+    const [gamesEnabled, setGamesEnabled] = useState(data.settings.gamesEnabled);
+    const pr = data.settings.personalRoles;
+    const [roles, setRoles] = useState({
+        enabled: pr.enabled, anchorRoleId: pr.anchorRoleId || '',
+        createPrice: String(pr.createPrice), rentPrice: String(pr.rentPrice), periodDays: String(pr.periodDays), maxActive: String(pr.maxActive)
+    });
+    const setRolesField = patch => setRoles(current => ({ ...current, ...patch }));
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState(null);
     const [syncing, setSyncing] = useState(false);
@@ -150,8 +165,13 @@ function SettingsTab({ guildId, data, onSaved, toast }) {
     const save = async () => {
         setBusy(true);
         const result = await apiPut(`/guilds/${guildId}/economy/settings`, {
-            enabled, channelId: channelId || null,
-            levelRoles: levelRoles.filter(r => r.roleId).map(r => ({ level: Number(r.level), roleId: r.roleId }))
+            enabled, channelId: channelId || null, payEnabled, gamesEnabled,
+            levelRoles: levelRoles.filter(r => r.roleId).map(r => ({ level: Number(r.level), roleId: r.roleId })),
+            personalRoles: {
+                enabled: roles.enabled, anchorRoleId: roles.anchorRoleId || null,
+                createPrice: Number(roles.createPrice), rentPrice: Number(roles.rentPrice),
+                periodDays: Number(roles.periodDays), maxActive: Number(roles.maxActive)
+            }
         });
         setBusy(false);
         if (!result.ok) {
@@ -217,6 +237,36 @@ function SettingsTab({ guildId, data, onSaved, toast }) {
                     {syncing ? 'Выдаём…' : 'Выдать роли по уровням всем'}
                 </button>
             </div>
+            <h2 className="section-title">Личные роли</h2>
+            <label className="check">
+                <input type="checkbox" checked={roles.enabled} onChange={e => setRolesField({ enabled: e.target.checked })} />
+                Участники могут арендовать личные роли (/myrole) и продавать их (/shop)
+            </label>
+            <label className="field">
+                Новые личные роли создаются над ролью
+                <select value={roles.anchorRoleId} onChange={e => setRolesField({ anchorRoleId: e.target.value })}>
+                    <option value="">— выберите —</option>
+                    {data.anchorRoles.map(role => <option key={role.id} value={role.id}>{role.name}</option>)}
+                </select>
+            </label>
+            <div className="settings-grid">
+                <label className="field">Создание, монет<input type="number" min="0" value={roles.createPrice} onChange={e => setRolesField({ createPrice: e.target.value })} /></label>
+                <label className="field">Продление, монет<input type="number" min="0" value={roles.rentPrice} onChange={e => setRolesField({ rentPrice: e.target.value })} /></label>
+                <label className="field">Срок аренды, дней<input type="number" min="1" max="365" value={roles.periodDays} onChange={e => setRolesField({ periodDays: e.target.value })} /></label>
+                <label className="field">Активных ролей на человека<input type="number" min="1" max="10" value={roles.maxActive} onChange={e => setRolesField({ maxActive: e.target.value })} /></label>
+            </div>
+            <p className="muted small">Покупатель чужой роли получает её на тот же срок; владельцу — 95% цены.</p>
+
+            <h2 className="section-title">Переводы и игры</h2>
+            <label className="check">
+                <input type="checkbox" checked={payEnabled} onChange={e => setPayEnabled(e.target.checked)} />
+                Переводы между участниками (/pay, без комиссии)
+            </label>
+            <label className="check">
+                <input type="checkbox" checked={gamesEnabled} onChange={e => setGamesEnabled(e.target.checked)} />
+                Дуэли и «Орёл или решка» (/duel, /coinflip; ставка 10–50 000, выигрыш — 95%)
+            </label>
+
             {error && <p className="error">{error}</p>}
             <div className="save-bar">
                 <button type="button" className="btn btn-primary" disabled={busy} onClick={save}>{busy ? 'Сохраняем…' : 'Сохранить'}</button>
@@ -251,18 +301,20 @@ export default function EconomyView({ guildId, revision, onOpenMember, toast }) 
         <section className="view view-wide">
             <div className="view-head">
                 <h1>Экономика</h1>
-                {data?.canManage && (
-                    <div className="segmented" role="tablist">
-                        <button role="tab" aria-selected={tab === 'top'} className={`tab ${tab === 'top' ? 'is-active' : ''}`} onClick={() => setTab('top')}>Топ</button>
+                <div className="segmented" role="tablist">
+                    <button role="tab" aria-selected={tab === 'top'} className={`tab ${tab === 'top' ? 'is-active' : ''}`} onClick={() => setTab('top')}>Топ</button>
+                    <button role="tab" aria-selected={tab === 'roles'} className={`tab ${tab === 'roles' ? 'is-active' : ''}`} onClick={() => setTab('roles')}>Личные роли</button>
+                    {data?.canManage && (
                         <button role="tab" aria-selected={tab === 'settings'} className={`tab ${tab === 'settings' ? 'is-active' : ''}`} onClick={() => setTab('settings')}>Настройки</button>
-                    </div>
-                )}
+                    )}
+                </div>
             </div>
             {error && <p className="error">{error}</p>}
             {!data && !error && <p className="muted">Загружаем…</p>}
             {data && !data.settings.enabled && tab === 'top' && (
                 <p className="notice">Начисление за активность выключено{data.canManage ? ' — включается во вкладке «Настройки».' : '.'}</p>
             )}
+            {tab === 'roles' && <PersonalRolesTab guildId={guildId} revision={revision} onOpenMember={onOpenMember} toast={toast} />}
             {data && tab === 'settings' && data.canManage && (
                 <SettingsTab key={JSON.stringify(data.settings)} guildId={guildId} data={data} onSaved={() => setReload(n => n + 1)} toast={toast} />
             )}

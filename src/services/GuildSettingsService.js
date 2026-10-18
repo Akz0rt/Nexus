@@ -105,7 +105,18 @@ class GuildSettingsService {
         result.economy = {
             enabled: economy.enabled === true,
             channelId: economy.channelId || null,
-            levelRoles: Array.isArray(economy.levelRoles) ? economy.levelRoles : []
+            levelRoles: Array.isArray(economy.levelRoles) ? economy.levelRoles : [],
+            payEnabled: economy.payEnabled !== false,
+            gamesEnabled: economy.gamesEnabled !== false,
+            // Personal roles: rented; new ones go right above the anchor role
+            personalRoles: {
+                enabled: economy.personalRoles?.enabled === true,
+                anchorRoleId: economy.personalRoles?.anchorRoleId || null,
+                createPrice: Number.isInteger(economy.personalRoles?.createPrice) ? economy.personalRoles.createPrice : 3000,
+                rentPrice: Number.isInteger(economy.personalRoles?.rentPrice) ? economy.personalRoles.rentPrice : 1000,
+                periodDays: Number.isInteger(economy.personalRoles?.periodDays) ? economy.personalRoles.periodDays : 30,
+                maxActive: Number.isInteger(economy.personalRoles?.maxActive) ? economy.personalRoles.maxActive : 3
+            }
         };
 
         // Which env-backed keys come from env rather than the guild doc (shown in Settings)

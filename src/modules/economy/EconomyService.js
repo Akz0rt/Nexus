@@ -274,6 +274,41 @@ class EconomyService {
     }
 
     /**
+     * Add (amount > 0) or take (amount < 0) coins, journaled; never below zero.
+     * `member` is a guild member (its name is kept on the account) or just { id }.
+     */
+    async move(guildId, member, amount, { kind, cause, actorId = null, source = 'bot' }) {
+        if (!Number.isInteger(amount) || amount === 0) return { ok: false, code: 'invalid_amount' };
+        const result = await this.mutate(guildId, member.id, doc => {
+            if (doc.money + amount < 0) return { ok: false, code: 'insufficient_funds', balance: doc.money };
+            Object.assign(doc, member.user ? identityOf(member) : {}, { money: doc.money + amount });
+            return null;
+        });
+        if (!result.ok) return result;
+        await this.addTransactions([this.transaction(guildId, member.id, {
+            amount, balance: result.account.money, kind, cause: String(cause).slice(0, 200), actorId, source
+        })]);
+        return result;
+    }
+
+    /**
+     * Take `amount` from one member and give `amount - fee` to another. If the second
+     * write fails the first is undone. @returns {{ ok, from?, to?, code? }}
+     */
+    async transfer(guildId, from, to, amount, { fee = 0, outCause, inCause, kind = 'transfer' }) {
+        const debit = await this.move(guildId, from, -amount, { kind, cause: outCause });
+        if (!debit.ok) return debit;
+        try {
+            const credit = await this.move(guildId, to, amount - fee, { kind, cause: inCause });
+            return { ok: true, from: debit.account, to: credit.account };
+        } catch (error) {
+            await this.move(guildId, from, amount, { kind: 'refund', cause: `Возврат: ${outCause}` })
+                .catch(refundError => console.error('Economy: refund failed:', refundError.message || refundError));
+            throw error;
+        }
+    }
+
+    /**
      * Left the server: the account and its journal move to the anonymous key at once,
      * without the user id and name. Nothing to do without an account.
      */

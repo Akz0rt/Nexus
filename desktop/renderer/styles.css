@@ -864,3 +864,10 @@ body:has(.action-bar) .toasts { bottom: 96px; }
 .economy-settings { display: grid; gap: 12px; max-width: 640px; }
 .level-roles { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
 .level-roles li { display: grid; grid-template-columns: 110px minmax(0, 1fr) auto; gap: 10px; align-items: end; }
+
+.personal-roles { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.personal-role { padding: 14px 16px; background: var(--surface); border-radius: 10px; box-shadow: inset 0 0 0 1px var(--line), 0 0 0 1px var(--outline); }
+.personal-role-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.personal-role .role img { border-radius: 3px; }
+.facts.compact { margin: 10px 0 6px; gap: 6px; }
+.buyer { display: inline-flex; align-items: center; gap: 6px; margin-right: 14px; }

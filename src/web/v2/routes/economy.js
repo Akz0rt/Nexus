@@ -4,6 +4,7 @@ const GuildSettingsService = require('../../../services/GuildSettingsService');
 const AuditLogService = require('../../../services/AuditLogService');
 const { roleProblem, assignableRoles } = require('../../../services/RoleService');
 const EconomyService = require('../../../modules/economy/EconomyService');
+const PersonalRoleService = require('../../../modules/economy/PersonalRoleService');
 const economy = require('../../../modules/economy');
 const { isDangerous } = require('../../../modules/rolemenus/RoleMenuService');
 const curve = require('../../../modules/economy/curve');
@@ -50,6 +51,12 @@ function describeSettings(guild, settings) {
     return {
         enabled: settings.enabled,
         channelId: settings.channelId,
+        payEnabled: settings.payEnabled,
+        gamesEnabled: settings.gamesEnabled,
+        personalRoles: {
+            ...settings.personalRoles,
+            anchorName: guild.roles.cache.get(settings.personalRoles.anchorRoleId)?.name || null
+        },
         levelRoles: settings.levelRoles.map(entry => ({
             level: entry.level,
             roleId: entry.roleId,
@@ -94,6 +101,11 @@ router.get('/', async (req, res, next) => {
                 .sort((a, b) => (a.parent?.rawPosition ?? -1) - (b.parent?.rawPosition ?? -1) || a.rawPosition - b.rawPosition)
                 .map(c => ({ id: c.id, name: c.name, category: c.parent?.name || null })) : [],
             roles: viewer ? assignableRoles(guild, viewer).filter(role => !isDangerous(guild.roles.cache.get(role.id))) : [],
+            // Where personal roles may go: any role below the bot's own, highest first
+            anchorRoles: canManage ? [...guild.roles.cache.values()]
+                .filter(role => role.id !== guild.id && role.position + 1 < (guild.members.me?.roles.highest.position ?? 0))
+                .sort((a, b) => b.position - a.position)
+                .map(role => ({ id: role.id, name: role.name, position: role.position })) : [],
             curve: { maxLevel: curve.MAX_LEVEL, prestigeExp: curve.PRESTIGE_EXP, prestigeReward: curve.PRESTIGE_REWARD }
         });
     } catch (error) {
@@ -157,6 +169,29 @@ function sanitizeSettings(guild, actor, body, current) {
         }
         value.channelId = id || null;
     }
+    if ('payEnabled' in body) value.payEnabled = body.payEnabled === true;
+    if ('gamesEnabled' in body) value.gamesEnabled = body.gamesEnabled === true;
+    if ('personalRoles' in body) {
+        const input = body.personalRoles || {};
+        const next = { ...current.personalRoles };
+        if ('enabled' in input) next.enabled = input.enabled === true;
+        if ('anchorRoleId' in input) {
+            const anchor = guild.roles.cache.get(String(input.anchorRoleId || ''));
+            if (input.anchorRoleId && (!anchor || anchor.id === guild.id)) return fail('personalRoles', 'role_not_found');
+            // New roles go right above the anchor, so the bot's own role must be higher still
+            if (anchor && anchor.position + 1 >= (guild.members.me?.roles.highest.position ?? 0)) return fail('personalRoles', 'anchor_too_high', { roleName: anchor.name });
+            next.anchorRoleId = anchor ? anchor.id : null;
+        }
+        const ranges = { createPrice: [0, 1_000_000], rentPrice: [0, 1_000_000], periodDays: [1, 365], maxActive: [1, 10] };
+        for (const [key, [min, max]] of Object.entries(ranges)) {
+            if (!(key in input)) continue;
+            const n = Number(input[key]);
+            if (!Number.isInteger(n) || n < min || n > max) return fail('personalRoles', `invalid_${key}`);
+            next[key] = n;
+        }
+        if (next.enabled && !next.anchorRoleId) return fail('personalRoles', 'anchor_required');
+        value.personalRoles = next;
+    }
     if ('levelRoles' in body) {
         if (!Array.isArray(body.levelRoles) || body.levelRoles.length > MAX_LEVEL_ROLES) return fail('levelRoles', 'invalid_level_roles');
         const seen = new Set();
@@ -192,6 +227,61 @@ router.put('/settings', seniorOnly, async (req, res, next) => {
             details: { enabled: result.value.enabled, changed: Object.keys(req.body || {}) }
         });
         res.json({ ok: true, settings: describeSettings(guild, result.value) });
+    } catch (error) {
+        next(error);
+    }
+});
+
+// GET /economy/personal-roles — every personal role: owner, term, price, buyers
+router.get('/personal-roles', async (req, res, next) => {
+    try {
+        const guild = req.guild;
+        const docs = await PersonalRoleService.list(guild.id);
+        const person = id => {
+            const member = guild.members.cache.get(id);
+            return { id, displayName: member?.displayName || null, avatarURL: member ? member.user.displayAvatarURL({ size: 64, extension: 'png' }) : null, member: Boolean(member) };
+        };
+        res.json({
+            items: docs.map(doc => {
+                const role = guild.roles.cache.get(doc.roleId);
+                return {
+                    roleId: doc.roleId,
+                    name: role?.name || null,
+                    color: role?.hexColor || null,
+                    iconURL: role?.iconURL?.() || null,
+                    emoji: role?.unicodeEmoji || null,
+                    owner: person(doc.ownerId),
+                    ownerWears: doc.ownerWears !== false,
+                    price: doc.price || null,
+                    expiresAt: doc.expiresAt,
+                    buyers: (doc.buyers || []).map(b => ({ ...person(b.userId), expiresAt: b.expiresAt })),
+                    createdAt: doc.createdAt
+                };
+            }),
+            canManage: req.panelRole === 'senior'
+        });
+    } catch (error) {
+        next(error);
+    }
+});
+
+// POST /economy/personal-roles/:roleId/grant — { days }: free extra time
+router.post('/personal-roles/:roleId/grant', seniorOnly, async (req, res, next) => {
+    try {
+        const who = actorOf(req);
+        const result = await PersonalRoleService.grant(req.guild, req.params.roleId, Number(req.body?.days), { ...who, source: 'panel' });
+        sendResult(res, result, { not_personal: 404, invalid_days: 400 });
+    } catch (error) {
+        next(error);
+    }
+});
+
+// DELETE /economy/personal-roles/:roleId — delete the role for good
+router.delete('/personal-roles/:roleId', seniorOnly, async (req, res, next) => {
+    try {
+        const who = actorOf(req);
+        const result = await PersonalRoleService.destroy(req.guild, req.params.roleId, { ...who, source: 'panel' }, `Личная роль удалена из приложения · ${who.tag}`);
+        sendResult(res, result, { not_personal: 404, discord_error: 502 });
     } catch (error) {
         next(error);
     }

@@ -59,7 +59,13 @@ export const ACTION_LABELS = {
     'birthday.skipped': 'Поздравление пропущено',
     'economy.given': 'Выданы монеты',
     'economy.taken': 'Забраны монеты',
-    'economy.settings': 'Настройки экономики изменены'
+    'economy.settings': 'Настройки экономики изменены',
+    'personal_role.created': 'Личная роль создана',
+    'personal_role.extended': 'Личная роль продлена',
+    'personal_role.granted': 'Личная роль продлена бесплатно',
+    'personal_role.bought': 'Личная роль куплена',
+    'personal_role.deleted': 'Личная роль удалена',
+    'personal_role.expired': 'Аренда личной роли закончилась'
 };
 
 /** Groups for the journal filter ("message.*" matches every message action). */
