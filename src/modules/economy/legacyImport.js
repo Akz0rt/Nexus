@@ -48,7 +48,7 @@ function normalizeEntry(guildId, userId, entry, index) {
 
 /**
  * `presentIds` — who is on the server now (null: everyone counts as present);
- * `anonymize(userId)` — the anonymous key for those who are not.
+ * `anonymize()` — a random key for the accounts of those who are not.
  * @returns {{ accounts: object[], transactions: object[], skipped: string[], mismatches: object[] }}
  */
 function buildImport(rows, guildId, now = new Date().toISOString(), presentIds = null, anonymize = null) {
@@ -72,7 +72,7 @@ function buildImport(rows, guildId, now = new Date().toISOString(), presentIds =
         }
         // Not on the server any more: stored obfuscated from the start, like anyone who leaves
         const gone = Boolean(presentIds && !presentIds.has(userId));
-        const ownerId = gone && anonymize ? anonymize(userId) : userId;
+        const ownerId = gone && anonymize ? anonymize() : userId;
         accounts.push({
             id: ownerId, guildId, userId: gone && anonymize ? null : userId,
             username: null, displayName: null,
@@ -82,6 +82,7 @@ function buildImport(rows, guildId, now = new Date().toISOString(), presentIds =
             voiceSeconds, messages,
             legacy: { level, exp },
             leftAt: gone ? now : null,
+            linkable: false,
             createdAt: now, updatedAt: now, importedAt: now
         });
         parseHistory(row.historytrans).forEach((entry, index) => {

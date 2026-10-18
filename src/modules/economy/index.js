@@ -132,7 +132,7 @@ async function reconcileLeft(guild) {
     return gone.length;
 }
 
-/** Daily housekeeping: catch up on who left, then delete accounts away too long. */
+/** Daily housekeeping: catch up on who left, unlink those past the grace period, delete those away too long. */
 async function housekeeping(client) {
     for (const guild of client.guilds.cache.values()) {
         try {
@@ -142,6 +142,8 @@ async function housekeeping(client) {
             console.error(`Economy: reconcile in ${guild.id} failed:`, error.message || error);
         }
     }
+    const unlinked = await EconomyService.unlinkExpired();
+    if (unlinked) console.log(`Economy: ${unlinked} account(s) of members who left are no longer linkable`);
     const deleted = await EconomyService.purgeLeft();
     if (deleted) console.log(`Economy: deleted ${deleted} account(s) of members who left`);
 }
@@ -172,7 +174,7 @@ module.exports = {
         client.on(Events.GuildMemberAdd, member => {
             if (member.user?.bot) return;
             EconomyService.markReturned(member.guild.id, member)
-                .catch(error => console.error(`Economy: marking ${member.id} as returned failed:`, error.message || error));
+                .catch(error => console.error(`Economy: restoring ${member.id} failed:`, error.message || error));
         });
     },
 

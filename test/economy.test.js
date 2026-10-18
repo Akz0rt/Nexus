@@ -166,24 +166,28 @@ async function leaving() {
     const member = makeMember(guild, '200000000000000077', {});
     await EconomyService.credit(guild.id, member, { exp: 5100, money: 40 }); // level 2: one journal entry
     const key = `${guild.id}:${member.id}`;
-    const anonId = EconomyService.anonymousId(guild.id, member.id);
-    assert.match(anonId, /^anon-[0-9a-f]{40}$/);
-    assert.ok(!anonId.includes(member.id));
 
-    await EconomyService.markLeft(guild.id, member.id);
+    const left = await EconomyService.markLeft(guild.id, member.id);
+    assert.strictEqual(left.id, EconomyService.returnKey(guild.id, member.id));
+    assert.ok(!left.id.includes(member.id));
     assert.ok(!docs.has(key), 'nothing left under the user id');
-    let doc = docs.get(`${guild.id}:${anonId}`).doc;
+    const doc = docs.get(`${guild.id}:${left.id}`).doc;
     assert.ok(doc.leftAt && doc.userId === null && doc.displayName === null && doc.username === null, 'obfuscated at once');
-    assert.strictEqual(doc.money, 140, 'coins kept in case they come back');
-    assert.ok(txs.filter(t => t.userId === anonId).length === 1 && !txs.some(t => t.userId === member.id), 'journal moved too');
+    assert.ok(txs.filter(t => t.userId === left.id).length === 1 && !txs.some(t => t.userId === member.id), 'journal moved too');
     assert.strictEqual(await EconomyService.markLeft(guild.id, '200000000000000078'), null, 'no account, nothing created');
     assert.ok(!docs.has(`${guild.id}:200000000000000078`));
 
-    await EconomyService.markReturned(guild.id, member);
-    assert.ok(!docs.has(`${guild.id}:${anonId}`));
-    doc = docs.get(key).doc;
-    assert.deepStrictEqual([doc.leftAt, doc.userId, doc.displayName, doc.money, doc.level], [null, member.id, member.displayName, 140, 2]);
-    assert.ok(txs.some(t => t.userId === member.id) && !txs.some(t => t.userId === anonId), 'journal back');
+    // Back within 3 days: everything returns
+    let back = await EconomyService.markReturned(guild.id, member, Date.parse(left.leftAt) + 2 * 86400000);
+    assert.deepStrictEqual([back.userId, back.displayName, back.money, back.level, back.leftAt], [member.id, member.displayName, 140, 2, null]);
+    assert.ok(!docs.has(`${guild.id}:${left.id}`) && txs.some(t => t.userId === member.id), 'account and journal back');
+
+    // Back after 3 days: a new account from zero (the old one is unlinked by the daily job)
+    const again = await EconomyService.markLeft(guild.id, member.id);
+    back = await EconomyService.markReturned(guild.id, member, Date.parse(again.leftAt) + 4 * 86400000);
+    assert.strictEqual(back, null);
+    const result = await EconomyService.credit(guild.id, member, { exp: 60, money: 1 });
+    assert.deepStrictEqual([result.account.money, result.account.level, result.account.exp], [1, 1, 60]);
 
     // Left while the bot was offline: the daily check notices
     EconomyService.presentIds = async () => [member.id, '200000000000000079'];
@@ -191,7 +195,6 @@ async function leaving() {
     guild.members.fetch = async () => guild.members.cache;
     assert.strictEqual(await economy.reconcileLeft(guild), 1);
     assert.ok(!docs.has(`${guild.id}:200000000000000079`));
-    assert.ok(docs.get(`${guild.id}:${EconomyService.anonymousId(guild.id, '200000000000000079')}`).doc.leftAt);
     assert.strictEqual(docs.get(key).doc.leftAt, null, 'still here, untouched');
 }
 

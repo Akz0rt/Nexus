@@ -49,6 +49,6 @@ module.exports = {
     azureResourceGroup: process.env.AZURE_RESOURCE_GROUP || '',
     azureWebAppName: process.env.AZURE_WEBAPP_NAME || '',
 
-    // Key for the anonymous ids of economy accounts of people who left (defaults to the Cosmos key)
+    // Key for the anonymous ids of economy accounts in the days after their owner left (defaults to the Cosmos key)
     economyAnonSecret: process.env.ECONOMY_ANON_SECRET || ''
 };

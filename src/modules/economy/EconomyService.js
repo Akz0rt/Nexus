@@ -8,7 +8,9 @@ const ACCOUNTS_CONTAINER = 'economy';
 const TX_CONTAINER = 'economy_tx';
 const MAX_RETRIES = 8;
 const MAX_ADJUST = 10_000_000;
+const RETURN_GRACE_DAYS = 3; // coming back within this keeps the account
 const LEFT_RETENTION_DAYS = 90; // an account of someone who left is deleted after this
+const DAY_MS = 24 * 60 * 60 * 1000;
 // Accounts of people still on the server (someone who left has leftAt set)
 const PRESENT = 'NOT IS_STRING(c.leftAt)';
 
@@ -27,12 +29,18 @@ function blankAccount(guildId, userId) {
 }
 
 /**
- * The key an account is kept under while its owner is away: an HMAC of the server
- * and user id, so the record names no one, yet the same person coming back maps to it.
+ * The key an account is kept under for the first days after its owner left: an HMAC
+ * of the server and user id. The record names no one, yet the same person coming back
+ * maps to it.
  */
-function anonymousId(guildId, userId) {
+function returnKey(guildId, userId) {
     const secret = config.economyAnonSecret || config.cosmosKey || 'economy';
     return `anon-${crypto.createHmac('sha256', secret).update(`${guildId}:${userId}`).digest('hex').slice(0, 40)}`;
+}
+
+/** A random key: once the grace period is over nothing links the account back. */
+function anonymousId() {
+    return `anon-${crypto.randomUUID()}`;
 }
 
 /** A member's identity to keep on the account. */
@@ -50,8 +58,9 @@ function identityOf(member) {
  *
  * Someone who leaves the server is obfuscated at once: the account and its journal
  * move to an anonymous key (no user id, no name) and drop out of the tops. Coming back
- * within 90 days restores them; after that they are deleted. Warnings, the moderation
- * log and activity stats are not touched.
+ * within 3 days restores them; after that the key becomes random (coming back starts
+ * from zero), and after 90 days they are deleted. Warnings, the moderation log and
+ * activity stats are not touched.
  */
 class EconomyService {
     constructor() {
@@ -107,7 +116,7 @@ class EconomyService {
         return resources;
     }
 
-    /** Move a journal from one owner key to another (on leaving and on coming back). */
+    /** Move a journal from one owner key to another. */
     async rekeyTransactions(guildId, fromId, toId) {
         const entries = await this.transactionsOf(guildId, fromId);
         for (const entry of entries) {
@@ -271,10 +280,10 @@ class EconomyService {
     async markLeft(guildId, userId) {
         const raw = await this.readRaw(guildId, userId);
         if (!raw) return null;
-        const anonId = anonymousId(guildId, userId);
+        const anonId = returnKey(guildId, userId);
         const doc = {
-            ...raw.doc, id: anonId, userId: null, username: null, displayName: null,
-            leftAt: raw.doc.leftAt || new Date().toISOString(), updatedAt: new Date().toISOString()
+            ...raw.doc, id: anonId, userId: null, username: null, displayName: null, linkable: true,
+            leftAt: new Date().toISOString(), updatedAt: new Date().toISOString()
         };
         await this.upsertRaw(doc);
         await this.rekeyTransactions(guildId, userId, anonId);
@@ -292,22 +301,24 @@ class EconomyService {
         return resources;
     }
 
-    /** Came back before the account was deleted: everything is where they left it. */
-    async markReturned(guildId, member) {
-        const anonId = anonymousId(guildId, member.id);
+    /**
+     * Came back within the grace period: the account and journal return as they were
+     * (plus anything earned since coming back). Later than that: a new account from zero.
+     */
+    async markReturned(guildId, member, now = Date.now()) {
+        const anonId = returnKey(guildId, member.id);
         const raw = await this.readRaw(guildId, anonId);
-        if (!raw) return null;
-        // Earned something already since coming back (a fresh account): add it on top
+        if (!raw || now - Date.parse(raw.doc.leftAt) > RETURN_GRACE_DAYS * DAY_MS) return null;
         const fresh = (await this.readRaw(guildId, member.id))?.doc;
+        const next = curve.addExp({ level: raw.doc.level, exp: raw.doc.exp, prestige: raw.doc.prestige || 0 }, fresh?.totalExp || 0);
         const doc = {
-            ...raw.doc, ...identityOf(member), id: member.id, userId: member.id, leftAt: null,
+            ...raw.doc, ...identityOf(member), id: member.id, userId: member.id, leftAt: null, linkable: false,
+            level: next.level, exp: next.exp, prestige: next.prestige,
             money: raw.doc.money + (fresh?.money || 0),
             voiceSeconds: (raw.doc.voiceSeconds || 0) + (fresh?.voiceSeconds || 0),
             messages: (raw.doc.messages || 0) + (fresh?.messages || 0),
             updatedAt: new Date().toISOString()
         };
-        Object.assign(doc, curve.addExp({ level: doc.level, exp: doc.exp, prestige: doc.prestige || 0 }, fresh?.totalExp || 0));
-        delete doc.reached; delete doc.prestiges; delete doc.rewards;
         doc.totalExp = curve.totalOf(doc.level, doc.exp, doc.prestige);
         await this.upsertRaw(doc);
         await this.rekeyTransactions(guildId, anonId, member.id);
@@ -315,10 +326,27 @@ class EconomyService {
         return doc;
     }
 
+    /** After the grace period: move the accounts of people who left to random keys. */
+    async unlinkExpired(now = Date.now()) {
+        await this.initialize();
+        const cutoff = new Date(now - RETURN_GRACE_DAYS * DAY_MS).toISOString();
+        const { resources } = await this.accounts.items.query({
+            query: 'SELECT * FROM c WHERE c.linkable = true AND c.leftAt < @cutoff',
+            parameters: [{ name: '@cutoff', value: cutoff }]
+        }).fetchAll();
+        for (const old of resources) {
+            const id = anonymousId();
+            await this.upsertRaw({ ...old, id, linkable: false });
+            await this.rekeyTransactions(old.guildId, old.id, id);
+            await this.removeRaw(old.guildId, old.id);
+        }
+        return resources.length;
+    }
+
     /** Delete the accounts (and journals) of people away for longer than the retention. */
     async purgeLeft(now = Date.now()) {
         await this.initialize();
-        const cutoff = new Date(now - LEFT_RETENTION_DAYS * 24 * 60 * 60 * 1000).toISOString();
+        const cutoff = new Date(now - LEFT_RETENTION_DAYS * DAY_MS).toISOString();
         const { resources } = await this.accounts.items.query({
             query: 'SELECT c.guildId, c.id FROM c WHERE IS_STRING(c.leftAt) AND c.leftAt < @cutoff',
             parameters: [{ name: '@cutoff', value: cutoff }]
@@ -361,4 +389,6 @@ module.exports = new EconomyService();
 module.exports.identityOf = identityOf;
 module.exports.blankAccount = blankAccount;
 module.exports.LEFT_RETENTION_DAYS = LEFT_RETENTION_DAYS;
+module.exports.RETURN_GRACE_DAYS = RETURN_GRACE_DAYS;
 module.exports.anonymousId = anonymousId;
+module.exports.returnKey = returnKey;
