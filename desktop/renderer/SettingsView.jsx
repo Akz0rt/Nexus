@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { apiGet, apiPatch, describeError } from './api.js';
+import { ErrorState } from './States.jsx';
 
 const SECTIONS = [
     { id: 'verification', label: 'Пропуск' },
@@ -65,7 +66,7 @@ function RoleSelect({ label, value, roles, fromEnv, onChange }) {
                 {roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
             </select>
             {role && !role.belowBot && <span className="error small">Роль выше роли бота — бот не сможет её выдавать.</span>}
-            {fromEnv && <span className="muted small">Сейчас берётся из переменных окружения Azure.</span>}
+            {fromEnv && <span className="muted small">Сейчас: из Azure. После сохранения — из настроек сервера.</span>}
         </label>
     );
 }
@@ -78,7 +79,7 @@ function ChannelSelect({ label, value, channels, fromEnv, onChange }) {
                 <option value="">— не выбран —</option>
                 {channels.map(c => <option key={c.id} value={c.id}>{c.category ? `${c.category} · ` : ''}#{c.name}</option>)}
             </select>
-            {fromEnv && <span className="muted small">Сейчас берётся из переменных окружения Azure.</span>}
+            {fromEnv && <span className="muted small">Сейчас: из Azure. После сохранения — из настроек сервера.</span>}
         </label>
     );
 }
@@ -240,7 +241,7 @@ function DiagnosticsSection({ guildId }) {
         setLoading(true);
         apiGet(`/guilds/${guildId}/settings/diagnostics`)
             .then(result => { setData(result); setError(null); })
-            .catch(err => setError(describeError(err)))
+            .catch(err => setError(err))
             .finally(() => setLoading(false));
     };
     useEffect(run, [guildId]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -262,7 +263,7 @@ function DiagnosticsSection({ guildId }) {
                 )}
                 <button className="btn hint" disabled={loading} onClick={run}>{loading ? 'Проверяем…' : 'Проверить снова'}</button>
             </div>
-            {error && <p className="error">{error}</p>}
+            {error && <ErrorState what="диагностику" error={error} onRetry={run} />}
             {groups.map(group => (
                 <div key={group} className="diag-group">
                     <h3>{GROUPS[group]}</h3>
@@ -281,8 +282,12 @@ function DiagnosticsSection({ guildId }) {
     );
 }
 
-export default function SettingsView({ guildId, toast }) {
-    const [section, setSection] = useState('verification');
+export default function SettingsView({ guildId, requestedSection, toast }) {
+    const [section, setSection] = useState(requestedSection?.section || 'verification');
+    const [reload, setReload] = useState(0);
+
+    // Opened from the Lockdown banner or the bot status in the header
+    useEffect(() => { if (requestedSection?.section) setSection(requestedSection.section); }, [requestedSection]);
     const [data, setData] = useState(null);
     const [error, setError] = useState(null);
 
@@ -291,9 +296,9 @@ export default function SettingsView({ guildId, toast }) {
         setData(null);
         apiGet(`/guilds/${guildId}/settings`)
             .then(result => { if (!cancelled) { setData(result); setError(null); } })
-            .catch(err => { if (!cancelled) setError(describeError(err)); });
+            .catch(err => { if (!cancelled) setError(err); });
         return () => { cancelled = true; };
-    }, [guildId]);
+    }, [guildId, reload]);
 
     const onSaved = values => setData(d => ({ ...d, values }));
     const props = data ? { guildId, values: data.values, options: data.options, onSaved, toast } : null;
@@ -310,8 +315,8 @@ export default function SettingsView({ guildId, toast }) {
                     ))}
                 </div>
             </div>
-            <p className="muted small">Только для администраторов. Сохраняется для этого сервера и применяется сразу, без перезапуска бота. Дни рождения и AI настраиваются в старой веб-панели.</p>
-            {error && <p className="error">{error}</p>}
+            <p className="muted small">Только для администраторов. Сохраняется для этого сервера и применяется сразу, без перезапуска бота. Время и каналы дней рождения и AI задаёт администратор бота.</p>
+            {error && section !== 'diagnostics' && <ErrorState what="настройки" error={error} onRetry={() => setReload(n => n + 1)} />}
             {section === 'verification' && props && <VerificationSection {...props} />}
             {section === 'moderation' && props && <ModerationSection {...props} />}
             {section === 'lockdown' && props && <LockdownSection {...props} />}

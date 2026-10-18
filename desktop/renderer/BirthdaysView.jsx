@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { apiDelete, apiGet, apiPost, apiPut, describeError } from './api.js';
+import { ErrorState } from './States.jsx';
 import Avatar, { MemberLink } from './Avatar.jsx';
 import Dialog from './Dialog.jsx';
 
@@ -20,7 +21,7 @@ const ERRORS = {
     birthday_not_found: 'Дня рождения уже нет.',
     not_today: 'Поздравить сейчас можно только того, у кого день рождения сегодня.',
     already_congratulated: 'Уже поздравлен (или пропущен) в этом году.',
-    no_channel: 'Канал поздравлений не настроен — его выбирают в старой веб-панели.'
+    no_channel: 'Канал поздравлений не настроен — его задаёт администратор бота.'
 };
 const errorText = result => ERRORS[result.error] || describeError(result);
 
@@ -203,7 +204,7 @@ export default function BirthdaysView({ guildId, revision, onOpenMember, toast }
         let cancelled = false;
         apiGet(`/guilds/${guildId}/birthdays`)
             .then(result => { if (!cancelled) { setData(result); setError(null); } })
-            .catch(err => { if (!cancelled) setError(describeError(err)); });
+            .catch(err => { if (!cancelled) setError(err); });
         return () => { cancelled = true; };
     }, [guildId, revision, reload]);
 
@@ -238,10 +239,10 @@ export default function BirthdaysView({ guildId, revision, onOpenMember, toast }
                 <p className="muted small">
                     Бот поздравляет каждый день в {data.settings.checkTime} ({data.settings.timezone})
                     {data.settings.congratsChannel ? ` в #${data.settings.congratsChannel}` : ', но канал поздравлений не выбран'}.
-                    Время и каналы меняются в старой веб-панели. Участники сами указывают день рождения командой /birthday-set.
+                    Время и каналы задаёт администратор бота. Участники сами указывают день рождения командой /birthday-set.
                 </p>
             )}
-            {error && <p className="error">{error}</p>}
+            {error && <ErrorState what="дни рождения" error={error} onRetry={() => setReload(n => n + 1)} />}
             {!data && !error && <p className="muted">Загружаем…</p>}
 
             {data && tab === 'upcoming' && (

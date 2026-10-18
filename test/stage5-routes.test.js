@@ -61,7 +61,8 @@ guild.memberCount = guild.members.cache.size;
         const activity = await get('/activity');
         assert.strictEqual(activity.status, 200);
         assert.strictEqual(activity.body.top[0].messages, 3);
-        assert.strictEqual(activity.body.daily.length, 30);
+        assert.strictEqual(activity.body.daily.length, 7, 'the default period (week) charts 7 days');
+        assert.strictEqual((await get('/activity?period=month')).body.daily.length, 30);
         assert.strictEqual((await get('/reports')).status, 200);
         // The birthday store is shared across servers: someone not on this one can't be touched
         CosmosDBService.getBirthday = async () => ({ month: 1, day: 2 });

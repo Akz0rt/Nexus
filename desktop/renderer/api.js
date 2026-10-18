@@ -75,8 +75,27 @@ const ERROR_TEXT = {
     dm_closed: 'У человека закрыты личные сообщения.',
     event_not_found: 'Ивент не найден.',
     event_closed: 'Ивент уже прошёл или отменён.',
-    menu_not_found: 'Меню ролей уже удалено.'
+    menu_not_found: 'Меню ролей уже удалено.',
+    already_muted: 'У него уже есть мут.',
+    guild_not_found: 'Бот больше не на этом сервере.',
+    invalid_action: 'Такого действия нет.',
+    invalid_channel_id: 'Канал не найден.',
+    invalid_delete_days: 'Удалять сообщения можно за 0–7 дней.',
+    invalid_gender: 'Выберите «Парень» или «Девушка».',
+    invalid_source: 'Такого источника нет.',
+    invalid_tab: 'Такой вкладки нет.',
+    invalid_days: 'От 1 до 365 дней.',
+    role_gone: 'Этой роли уже нет в Discord.',
+    not_personal: 'Это не личная роль.',
+    discord_error: 'Discord не дал это сделать — возможно, боту не хватает прав.',
+    not_found: 'Бот не знает такого запроса — возможно, он ещё не обновился до этой версии приложения.',
+    internal_error: 'На стороне бота произошла ошибка.'
 };
+
+/** The raw code of a failed request, for tooltips (never shown as the message itself). */
+export function errorCode(result) {
+    return result?.error || (result?.status ? `HTTP ${result.status}` : null);
+}
 
 export function describeError(result) {
     if (result.error === 'already_handled' && result.body?.handledBy) {
@@ -86,5 +105,9 @@ export function describeError(result) {
             ? `Уже кикнут: ${who}`
             : `Уже пропущен: ${who}${gender ? ` · ${gender}` : ''}`;
     }
-    return ERROR_TEXT[result.error] || `Не удалось выполнить: ${result.error || 'нет связи с сервером'}`;
+    if (ERROR_TEXT[result.error]) return ERROR_TEXT[result.error];
+    // status 0: the request never got an answer (the message is a network error, not a code)
+    if (!result.status) return 'Нет связи с сервером бота.';
+    // Unknown codes stay out of the text; ErrorState shows them in its tooltip
+    return 'Что-то пошло не так. Попробуйте ещё раз.';
 }

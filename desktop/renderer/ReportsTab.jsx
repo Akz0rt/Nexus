@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { apiGet, apiPost, describeError } from './api.js';
+import { ErrorState } from './States.jsx';
 import { formatDateTime, timeAgo } from './format.js';
 import Avatar, { MemberLink } from './Avatar.jsx';
 import Dialog from './Dialog.jsx';
@@ -113,7 +114,7 @@ export default function ReportsTab({ guildId, revision, onOpenMember, toast }) {
         let cancelled = false;
         apiGet(`/guilds/${guildId}/reports?status=${group}`)
             .then(result => { if (!cancelled) { setData(result); setError(null); } })
-            .catch(err => { if (!cancelled) setError(describeError(err)); });
+            .catch(err => { if (!cancelled) setError(err); });
         return () => { cancelled = true; };
     }, [guildId, group, revision, reload]);
 
@@ -130,7 +131,7 @@ export default function ReportsTab({ guildId, revision, onOpenMember, toast }) {
                 </div>
                 <span className="muted small hint">Участники жалуются через ПКМ по сообщению → Приложения → «Пожаловаться». Автор о жалобе не узнаёт.</span>
             </div>
-            {error && <p className="error">{error}</p>}
+            {error && <ErrorState what="жалобы" error={error} onRetry={() => setReload(n => n + 1)} />}
             {!items && !error && <p className="muted">Загружаем…</p>}
             {items && items.length === 0 && (
                 <div className="empty"><h2>{group === 'open' ? 'Открытых жалоб нет' : 'Закрытых жалоб пока нет'}</h2></div>

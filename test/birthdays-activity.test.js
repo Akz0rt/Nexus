@@ -8,7 +8,7 @@ const assert = require('assert');
 const CosmosDBService = require('../src/services/CosmosDBService');
 const NotificationService = require('../src/services/NotificationService');
 const { nextBirthday, describeBirthdays } = require('../src/web/v2/routes/birthdays');
-const { mergeTop, dailySeries } = require('../src/web/v2/routes/activity');
+const { mergeTop, dailySeries, CHART_DAYS } = require('../src/web/v2/routes/activity');
 const { makeGuild, makeMember } = require('./fake-voice-guild');
 
 function nextBirthdayMaths() {
@@ -63,6 +63,11 @@ function activity() {
     assert.deepStrictEqual(series.at(-1), { date: '2026-10-18', messages: 7, voiceMinutes: 0 });
     assert.deepStrictEqual(series.at(-2), { date: '2026-10-17', messages: 0, voiceMinutes: 90 });
     assert.strictEqual(series[0].date, '2026-09-19', 'gaps filled with zeros');
+    // The charts follow the chosen period
+    assert.deepStrictEqual(CHART_DAYS, { day: 7, week: 7, month: 30 });
+    const week = dailySeries([], [], CHART_DAYS.week, today);
+    assert.strictEqual(week.length, 7);
+    assert.strictEqual(week[0].date, '2026-10-12');
 }
 
 (async () => {

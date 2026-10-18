@@ -24,6 +24,8 @@ class LockdownService {
             actorTag: state?.actorTag || null,
             invitesPaused: guild.features.includes(GuildFeature.InvitesDisabled),
             channelIds: settings.lockdown.channelIds,
+            // Names for the banner ("slowmode 30 с в #старт"); a deleted channel has none
+            channels: settings.lockdown.channelIds.map(id => ({ id, name: guild.channels.cache.get(id)?.name || null })),
             slowmodeSeconds: settings.lockdown.slowmodeSeconds
         };
     }

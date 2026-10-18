@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { apiDelete, apiGet, apiPost, describeError } from './api.js';
+import { ErrorState } from './States.jsx';
 import { formatDateTime, timeLeft } from './format.js';
 import Avatar, { MemberLink } from './Avatar.jsx';
 import Dialog from './Dialog.jsx';
@@ -57,7 +58,7 @@ export default function PersonalRolesTab({ guildId, revision, onOpenMember, toas
         let cancelled = false;
         apiGet(`/guilds/${guildId}/economy/personal-roles`)
             .then(result => { if (!cancelled) { setData(result); setError(null); } })
-            .catch(err => { if (!cancelled) setError(describeError(err)); });
+            .catch(err => { if (!cancelled) setError(err); });
         return () => { cancelled = true; };
     }, [guildId, revision, reload]);
 
@@ -71,7 +72,7 @@ export default function PersonalRolesTab({ guildId, revision, onOpenMember, toas
         setReload(n => n + 1);
     };
 
-    if (error) return <p className="error">{error}</p>;
+    if (error) return <ErrorState what="личные роли" error={error} onRetry={() => setReload(n => n + 1)} />;
     if (!data) return <p className="muted">Загружаем…</p>;
     if (data.items.length === 0) return <div className="empty"><h2>Личных ролей пока нет</h2><p>Участники создают их командой /myrole create.</p></div>;
     return (

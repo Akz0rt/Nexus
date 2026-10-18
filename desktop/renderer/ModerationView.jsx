@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { apiDelete, apiGet, apiPost, describeError } from './api.js';
+import { ErrorState } from './States.jsx';
 import { SOURCE_LABELS, formatDateTime, formatDurationMs, timeLeft } from './format.js';
 import Avatar, { MemberLink } from './Avatar.jsx';
 import PunishDialog, { useModerationOptions } from './PunishDialog.jsx';
@@ -262,7 +263,7 @@ export default function ModerationView({ guildId, revision, openReports, request
         let cancelled = false;
         apiGet(`/guilds/${guildId}/moderation/${ENDPOINTS[tab]}`)
             .then(result => { if (!cancelled) { setData({ tab, ...result }); setError(null); } })
-            .catch(err => { if (!cancelled) setError(describeError(err)); });
+            .catch(err => { if (!cancelled) setError(err); });
         return () => { cancelled = true; };
     }, [guildId, tab, revision, reload]);
 
@@ -284,7 +285,7 @@ export default function ModerationView({ guildId, revision, openReports, request
                     ))}
                 </div>
             </div>
-            {tab !== 'reports' && error && <p className="error">{error}</p>}
+            {tab !== 'reports' && error && <ErrorState what={TABS.find(t => t.id === tab)?.label.toLowerCase() || 'список'} error={error} onRetry={() => setReload(n => n + 1)} />}
             {tab !== 'reports' && !ready && !error && <p className="muted">Загружаем…</p>}
             {tab === 'reports' && <ReportsTab guildId={guildId} revision={revision} onOpenMember={onOpenMember} toast={toast} />}
             {ready && tab === 'active' && <ActiveTab {...props} />}

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { apiGet, apiPost, describeError } from './api.js';
+import { ErrorState } from './States.jsx';
 import { GENDER_LABELS, accountAge, describeAction, formatTime, timeAgo } from './format.js';
 import Avatar, { MemberLink } from './Avatar.jsx';
 
@@ -63,6 +64,7 @@ function Block({ id, title, more, editing, index, count, hidden, onMove, onToggl
 export default function OverviewView({ guildId, revision, voiceRevision, waiting, seen, onView, onOpenMember, onChanged, toast }) {
     const [data, setData] = useState(null);
     const [error, setError] = useState(null);
+    const [retry, setRetry] = useState(0);
     const [layout, setLayout] = useState(readLayout);
     const [editing, setEditing] = useState(false);
     const [busy, setBusy] = useState({});
@@ -71,9 +73,9 @@ export default function OverviewView({ guildId, revision, voiceRevision, waiting
         let cancelled = false;
         apiGet(`/guilds/${guildId}/overview`)
             .then(result => { if (!cancelled) { setData(result); setError(null); } })
-            .catch(err => { if (!cancelled) setError(describeError(err)); });
+            .catch(err => { if (!cancelled) setError(err); });
         return () => { cancelled = true; };
-    }, [guildId, revision]);
+    }, [guildId, revision, retry]);
 
     // Voice changes come often and in bursts: refresh only the voice block once they settle
     useEffect(() => {
@@ -231,7 +233,7 @@ export default function OverviewView({ guildId, revision, voiceRevision, waiting
                 {editing && <button className="btn btn-quiet" onClick={() => changeLayout(DEFAULT_LAYOUT)}>Как было</button>}
             </div>
             {editing && <p className="muted small">Стрелками поменяйте порядок блоков, «Скрыть» уберёт ненужные. Сохраняется на этом компьютере.</p>}
-            {error && <p className="error">{error}</p>}
+            {error && <ErrorState what="обзор" error={error} onRetry={() => setRetry(n => n + 1)} />}
             {!data && !error && <p className="muted">Загружаем…</p>}
             {data && (
                 <div className="overview">

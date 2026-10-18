@@ -49,6 +49,8 @@ export default function App() {
     const [eventRevision, setEventRevision] = useState(0); // bumps when an event or its sign-ups change
     const [openReports, setOpenReports] = useState(0);
     const [moderationTab, setModerationTab] = useState(null); // { tab } to open the Moderation screen on
+    const [settingsSection, setSettingsSection] = useState(null); // { section } to open the Settings screen on
+    const [lockdownConfirm, setLockdownConfirm] = useState(false); // the «close/open the server?» dialog
     const toastSeq = useRef(0);
     const dismissedJob = useRef(null);
 
@@ -197,6 +199,11 @@ export default function App() {
         setView('journal');
     }, []);
 
+    const openSettings = useCallback(section => {
+        setSettingsSection({ section, at: Date.now() });
+        setView('settings');
+    }, []);
+
     if (!auth) return <div className="splash" />;
 
     if (!auth.loggedIn) {
@@ -229,6 +236,7 @@ export default function App() {
                 canSettings={senior}
                 presence={presence}
                 version={auth.version}
+                update={update}
             />
             <div className="workspace">
                 <Header
@@ -243,9 +251,17 @@ export default function App() {
                     lockdown={lockdown}
                     canLockdown={senior}
                     onLockdown={setLockdown}
+                    lockdownConfirm={lockdownConfirm}
+                    onLockdownConfirm={setLockdownConfirm}
+                    events={liveEvents}
+                    onOpenSettings={openSettings}
+                    onOpenJournal={() => openJournal({})}
                     toast={toast}
                 />
-                {lockdown?.active && <LockdownBanner lockdown={lockdown} />}
+                {lockdown?.active && (
+                    <LockdownBanner lockdown={lockdown} canManage={senior}
+                        onEdit={() => openSettings('lockdown')} onOpen={() => setLockdownConfirm(true)} />
+                )}
                 {update && (
                     <div className="banner">
                         Версия {update.version} загружена.
@@ -305,7 +321,7 @@ export default function App() {
                         <StatsView guildId={guildId} revision={revision} onOpenMember={setDrawerUserId} onOpenJournal={openJournal} />
                     )}
                     {guildId && view === 'settings' && senior && (
-                        <SettingsView guildId={guildId} toast={toast} />
+                        <SettingsView guildId={guildId} requestedSection={settingsSection} toast={toast} />
                     )}
                 </main>
             </div>

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { apiDelete, apiGet, apiPost, apiPut, describeError } from './api.js';
+import { ErrorState } from './States.jsx';
 import { ROLE_PROBLEMS } from './format.js';
 import Dialog from './Dialog.jsx';
 import { RoleChip } from './RoleDialogs.jsx';
@@ -91,6 +92,7 @@ function MenuDialog({ guildId, menu, channels, roles, onClose, toast }) {
 export default function RoleMenusTab({ guildId, revision, toast }) {
     const [data, setData] = useState(null);
     const [error, setError] = useState(null);
+    const [retry, setRetry] = useState(0);
     const [dialog, setDialog] = useState(null); // { menu|null }
     const [removing, setRemoving] = useState(null);
 
@@ -98,9 +100,9 @@ export default function RoleMenusTab({ guildId, revision, toast }) {
         let cancelled = false;
         apiGet(`/guilds/${guildId}/roles/menus`)
             .then(result => { if (!cancelled) { setData(result); setError(null); } })
-            .catch(err => { if (!cancelled) setError(describeError(err)); });
+            .catch(err => { if (!cancelled) setError(err); });
         return () => { cancelled = true; };
-    }, [guildId, revision]);
+    }, [guildId, revision, retry]);
 
     const remove = async () => {
         const result = await apiDelete(`/guilds/${guildId}/roles/menus/${removing.id}`);
@@ -114,7 +116,7 @@ export default function RoleMenusTab({ guildId, revision, toast }) {
                 <button className="btn btn-primary" disabled={!data} onClick={() => setDialog({ menu: null })}>Новое меню</button>
                 <span className="muted small hint">Сообщение бота с кнопками — участники сами берут роли по интересам.</span>
             </div>
-            {error && <p className="error">{error}</p>}
+            {error && <ErrorState what="меню ролей" error={error} onRetry={() => setRetry(n => n + 1)} />}
             {data && data.items.length === 0 && (
                 <div className="empty"><h2>Меню ролей пока нет</h2><p>Например: «Игры», «Аниме», «Музыка» — каждый выбирает себе сам, модераторам выдавать не нужно.</p></div>
             )}

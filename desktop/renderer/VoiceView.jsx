@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { apiGet, apiPost, describeError } from './api.js';
+import { ErrorState } from './States.jsx';
 import { describeBulk, formatDateTime, formatSince } from './format.js';
 import Avatar from './Avatar.jsx';
 import ChannelPicker from './ChannelPicker.jsx';
@@ -143,6 +144,7 @@ function ChannelMenu({ channel, can, hasSplit, selectedHere, onAction, onClose }
 export default function VoiceView({ guildId, myId, revision, voiceRevision, onOpenMember, toast }) {
     const [board, setBoard] = useState(null);
     const [error, setError] = useState(null);
+    const [retry, setRetry] = useState(0);
     const [squads, setSquads] = useState(null);
     const [reloadSquads, setReloadSquads] = useState(0);
     const [selected, setSelected] = useState(() => new Set());
@@ -164,10 +166,10 @@ export default function VoiceView({ guildId, myId, revision, voiceRevision, onOp
         const timer = setTimeout(() => {
             apiGet(`/guilds/${guildId}/voice`)
                 .then(data => { if (!cancelled) { setBoard(data); setError(null); loaded.current = true; } })
-                .catch(err => { if (!cancelled) setError(describeError(err)); });
+                .catch(err => { if (!cancelled) setError(err); });
         }, loaded.current ? 250 : 0);
         return () => { cancelled = true; clearTimeout(timer); };
-    }, [guildId, revision, voiceRevision]);
+    }, [guildId, revision, voiceRevision, retry]);
 
     useEffect(() => { loaded.current = false; setBoard(null); setSelected(new Set()); setLastSplit(null); }, [guildId]);
 
@@ -386,7 +388,7 @@ export default function VoiceView({ guildId, myId, revision, voiceRevision, onOp
 
     // --- render ---------------------------------------------------------------------
 
-    if (error && !board) return <div className="view"><h1>Голосовые</h1><p className="error">{error}</p></div>;
+    if (error && !board) return <div className="view"><h1>Голосовые</h1><ErrorState what="голосовые" error={error} onRetry={() => setRetry(n => n + 1)} /></div>;
     if (!board) return <div className="view"><h1>Голосовые</h1><p className="muted">Загружаем доску…</p></div>;
 
     const inVoiceCount = where.size;

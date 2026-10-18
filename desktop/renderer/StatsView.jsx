@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { apiGet, describeError } from './api.js';
+import { apiGet } from './api.js';
+import { ErrorState } from './States.jsx';
 import Avatar, { MemberLink } from './Avatar.jsx';
 
 const PERIODS = [
@@ -33,14 +34,15 @@ export default function StatsView({ guildId, revision, onOpenMember, onOpenJourn
     const [period, setPeriod] = useState('7d');
     const [data, setData] = useState(null);
     const [error, setError] = useState(null);
+    const [retry, setRetry] = useState(0);
 
     useEffect(() => {
         let cancelled = false;
         apiGet(`/guilds/${guildId}/stats?period=${period}`)
             .then(result => { if (!cancelled) { setData(result); setError(null); } })
-            .catch(err => { if (!cancelled) setError(describeError(err)); });
+            .catch(err => { if (!cancelled) setError(err); });
         return () => { cancelled = true; };
-    }, [guildId, period, revision]);
+    }, [guildId, period, revision, retry]);
 
     const queue = data?.queue;
     return (
@@ -55,7 +57,7 @@ export default function StatsView({ guildId, revision, onOpenMember, onOpenJourn
                     ))}
                 </div>
             </div>
-            {error && <p className="error">{error}</p>}
+            {error && <ErrorState what="статистику" error={error} onRetry={() => setRetry(n => n + 1)} />}
             {queue && (
                 <div className="tile-stats">
                     <div className="tile-stat is-static">

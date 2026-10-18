@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { apiDelete, apiGet, apiPost, describeError } from './api.js';
+import { ErrorState } from './States.jsx';
 import { ROLE_PROBLEMS, describeBulk, formatDateTime, timeLeft } from './format.js';
 import Avatar, { MemberLink } from './Avatar.jsx';
 import Dialog from './Dialog.jsx';
@@ -55,6 +56,7 @@ function ConfirmRemove({ count, role, onClose, onConfirm, busy }) {
 function Owners({ guildId, role, revision, dialogOpen, onOpenMember, onStartJob, onGrant }) {
     const [data, setData] = useState(null);
     const [error, setError] = useState(null);
+    const [retry, setRetry] = useState(0);
     const [query, setQuery] = useState('');
     const [selected, setSelected] = useState(() => new Set());
     const [anchor, setAnchor] = useState(null);
@@ -68,9 +70,9 @@ function Owners({ guildId, role, revision, dialogOpen, onOpenMember, onStartJob,
         let cancelled = false;
         apiGet(`/guilds/${guildId}/roles/${role.id}/members`)
             .then(result => { if (!cancelled) { setData(result); setError(null); } })
-            .catch(err => { if (!cancelled) setError(describeError(err)); });
+            .catch(err => { if (!cancelled) setError(err); });
         return () => { cancelled = true; };
-    }, [guildId, role.id, revision]);
+    }, [guildId, role.id, revision, retry]);
 
     const items = useMemo(() => {
         const needle = query.trim().toLowerCase();
@@ -173,7 +175,7 @@ function Owners({ guildId, role, revision, dialogOpen, onOpenMember, onStartJob,
             {data && data.items.length > 8 && (
                 <input type="search" className="owners-search" placeholder="Найти среди владельцев" value={query} onChange={e => setQuery(e.target.value)} />
             )}
-            {error && <p className="error">{error}</p>}
+            {error && <ErrorState what="владельцев роли" error={error} onRetry={() => setRetry(n => n + 1)} />}
             <div className="owners-list" ref={listRef} onMouseDown={startMarquee}>
                 {data && items.length === 0 && <p className="muted">{data.items.length === 0 ? 'Ни у кого нет этой роли.' : 'Никого не нашли.'}</p>}
                 <ul>
@@ -252,6 +254,7 @@ function RolesTab({ guildId, roles, revision, onOpenMember, onStartJob, toast })
 function PresetsTab({ guildId, revision, toast }) {
     const [presets, setPresets] = useState(null);
     const [error, setError] = useState(null);
+    const [retry, setRetry] = useState(0);
     const [dialog, setDialog] = useState(null); // { preset|null }
     const [removing, setRemoving] = useState(null);
 
@@ -259,9 +262,9 @@ function PresetsTab({ guildId, revision, toast }) {
         let cancelled = false;
         apiGet(`/guilds/${guildId}/roles/presets`)
             .then(data => { if (!cancelled) setPresets(data.items); })
-            .catch(err => { if (!cancelled) setError(describeError(err)); });
+            .catch(err => { if (!cancelled) setError(err); });
         return () => { cancelled = true; };
-    }, [guildId, revision]);
+    }, [guildId, revision, retry]);
 
     const remove = async () => {
         const result = await apiDelete(`/guilds/${guildId}/roles/presets/${removing.id}`);
@@ -275,7 +278,7 @@ function PresetsTab({ guildId, revision, toast }) {
                 <button className="btn btn-primary" onClick={() => setDialog({ preset: null })}>Новый пресет</button>
                 <span className="muted small hint">Пресет применяют из карточки участника и при пропуске («Доп. роли…»).</span>
             </div>
-            {error && <p className="error">{error}</p>}
+            {error && <ErrorState what="пресеты" error={error} onRetry={() => setRetry(n => n + 1)} />}
             {presets && presets.length === 0 && (
                 <div className="empty"><h2>Пресетов пока нет</h2><p>Пресет — именованный набор ролей, например «Ивентер» или «Хелпер». Выдаётся одним нажатием.</p></div>
             )}
@@ -309,14 +312,15 @@ function PresetsTab({ guildId, revision, toast }) {
 function TempTab({ guildId, revision, onOpenMember, toast }) {
     const [items, setItems] = useState(null);
     const [error, setError] = useState(null);
+    const [retry, setRetry] = useState(0);
 
     useEffect(() => {
         let cancelled = false;
         apiGet(`/guilds/${guildId}/roles/temp`)
             .then(data => { if (!cancelled) setItems(data.items); })
-            .catch(err => { if (!cancelled) setError(describeError(err)); });
+            .catch(err => { if (!cancelled) setError(err); });
         return () => { cancelled = true; };
-    }, [guildId, revision]);
+    }, [guildId, revision, retry]);
 
     const takeNow = async item => {
         const result = await apiDelete(`/guilds/${guildId}/roles/temp/${item.user.id}/${item.roleId}`);
@@ -327,7 +331,7 @@ function TempTab({ guildId, revision, onOpenMember, toast }) {
     return (
         <>
             <p className="muted small">Роли, выданные на время. Бот снимает их сам, проверка раз в минуту.</p>
-            {error && <p className="error">{error}</p>}
+            {error && <ErrorState what="временные роли" error={error} onRetry={() => setRetry(n => n + 1)} />}
             {items && items.length === 0 && <div className="empty"><h2>Временных ролей нет</h2><p>Выдать роль на срок можно из карточки участника или в «Массовой выдаче».</p></div>}
             {items && items.length > 0 && (
                 <div className="table-wrap">
@@ -355,6 +359,7 @@ export default function RolesView({ guildId, revision, job, onJob, onOpenMember,
     const [tab, setTab] = useState('roles');
     const [roles, setRoles] = useState(null);
     const [error, setError] = useState(null);
+    const [reloadRoles, setReloadRoles] = useState(0);
 
     useEffect(() => { setTab('roles'); }, [guildId]);
     useEffect(() => {
@@ -366,9 +371,9 @@ export default function RolesView({ guildId, revision, job, onJob, onOpenMember,
                 setError(null);
                 if (data.job) onJob(data.job);
             })
-            .catch(err => { if (!cancelled) setError(describeError(err)); });
+            .catch(err => { if (!cancelled) setError(err); });
         return () => { cancelled = true; };
-    }, [guildId, revision, onJob]);
+    }, [guildId, revision, onJob, reloadRoles]);
 
     const startJob = useCallback(async request => {
         const result = await apiPost(`/guilds/${guildId}/roles/jobs`, request);
@@ -395,7 +400,7 @@ export default function RolesView({ guildId, revision, job, onJob, onOpenMember,
                 </div>
             </div>
             <JobBar job={job} onRetry={job?.failedIds?.length ? retry : null} onClose={() => onJob(null)} />
-            {error && <p className="error">{error}</p>}
+            {error && <ErrorState what="роли" error={error} onRetry={() => setReloadRoles(n => n + 1)} />}
             {tab === 'roles' && roles && (
                 <RolesTab guildId={guildId} roles={roles} revision={revision} onOpenMember={onOpenMember} onStartJob={startJob} toast={toast} />
             )}

@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { apiGet, describeError } from './api.js';
+import { ErrorState } from './States.jsx';
 import { ACTION_GROUPS, ACTION_LABELS, SOURCE_LABELS, describeAction, describeMessage, formatDateTime, toCsv } from './format.js';
 import { MemberLink } from './Avatar.jsx';
 
@@ -75,7 +76,7 @@ export default function JournalView({ guildId, liveEvents, preset, onOpenMember,
             setCursor(page.cursor);
             setError(null);
         } catch (err) {
-            setError(describeError(err));
+            setError(err);
         }
         setLoading(false);
     };
@@ -161,7 +162,7 @@ export default function JournalView({ guildId, liveEvents, preset, onOpenMember,
             </div>
             <p className="muted small">Клик по имени открывает карточку, ⏷ рядом с именем оставляет только записи этого человека. Удалённые и изменённые сообщения видны только из каналов, которые вы можете читать. Записи хранятся 30 дней.</p>
 
-            {error && <p className="error">{error}</p>}
+            {error && <ErrorState what="журнал" error={error} onRetry={() => load(null)} />}
             <div className="table-wrap">
                 <table className="journal">
                     <thead>
@@ -170,7 +171,7 @@ export default function JournalView({ guildId, liveEvents, preset, onOpenMember,
                     <tbody>
                         {rows.map(entry => (
                             <tr key={entry.id}>
-                                <td className="numeric nowrap">{formatDateTime(entry.createdAt, true)}</td>
+                                <td className="numeric nowrap">{formatDateTime(entry.createdAt)}</td>
                                 <td>
                                     {entry.actorId ? (
                                         <span className="who">

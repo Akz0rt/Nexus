@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { apiGet, apiPost, describeError } from './api.js';
+import { ErrorState } from './States.jsx';
 import { describeBulk } from './format.js';
 import Avatar, { MemberLink } from './Avatar.jsx';
 import Dialog from './Dialog.jsx';
@@ -97,15 +98,16 @@ export default function EventsView({ guildId, revision, eventRevision, onOpenMem
     const [group, setGroup] = useState('upcoming');
     const [data, setData] = useState(null);
     const [error, setError] = useState(null);
+    const [retry, setRetry] = useState(0);
     const [dialog, setDialog] = useState(null); // { event|null }
 
     useEffect(() => {
         let cancelled = false;
         apiGet(`/guilds/${guildId}/meetups?group=${group}`)
             .then(result => { if (!cancelled) { setData(result); setError(null); } })
-            .catch(err => { if (!cancelled) setError(describeError(err)); });
+            .catch(err => { if (!cancelled) setError(err); });
         return () => { cancelled = true; };
-    }, [guildId, group, revision, eventRevision]);
+    }, [guildId, group, revision, eventRevision, retry]);
 
     const items = data?.group === group ? data.items : null;
     return (
@@ -121,7 +123,7 @@ export default function EventsView({ guildId, revision, eventRevision, onOpenMem
                 </div>
                 <button className="btn btn-primary" disabled={!data} onClick={() => setDialog({ event: null })}>Новый ивент</button>
             </div>
-            {error && <p className="error">{error}</p>}
+            {error && <ErrorState what="ивенты" error={error} onRetry={() => setRetry(n => n + 1)} />}
             {!items && !error && <p className="muted">Загружаем…</p>}
             {items && items.length === 0 && (
                 <div className="empty">

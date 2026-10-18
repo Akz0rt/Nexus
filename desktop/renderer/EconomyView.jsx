@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { apiGet, apiPost, apiPut, describeError } from './api.js';
+import { ErrorState } from './States.jsx';
 import { formatDateTime } from './format.js';
 import Avatar, { MemberLink } from './Avatar.jsx';
 import Dialog from './Dialog.jsx';
@@ -293,7 +294,7 @@ export default function EconomyView({ guildId, revision, onOpenMember, toast }) 
         let cancelled = false;
         apiGet(`/guilds/${guildId}/economy?by=${by}${search ? `&q=${encodeURIComponent(search)}` : ''}`)
             .then(result => { if (!cancelled) { setData(result); setError(null); } })
-            .catch(err => { if (!cancelled) setError(describeError(err)); });
+            .catch(err => { if (!cancelled) setError(err); });
         return () => { cancelled = true; };
     }, [guildId, by, search, revision, reload]);
 
@@ -309,7 +310,7 @@ export default function EconomyView({ guildId, revision, onOpenMember, toast }) 
                     )}
                 </div>
             </div>
-            {error && <p className="error">{error}</p>}
+            {error && <ErrorState what="экономику" error={error} onRetry={() => setReload(n => n + 1)} />}
             {!data && !error && <p className="muted">Загружаем…</p>}
             {data && !data.settings.enabled && tab === 'top' && (
                 <p className="notice">Начисление за активность выключено{data.canManage ? ' — включается во вкладке «Настройки».' : '.'}</p>

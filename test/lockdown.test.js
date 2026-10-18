@@ -54,6 +54,7 @@ async function roundTrip() {
     assert.strictEqual(guild.channels.cache.get(START).rateLimitPerUser, 60);
     assert.deepStrictEqual(guild.channels.cache.get(RULES).calls, [], 'a slower slowmode is left alone');
     assert.strictEqual(on.status.active, true);
+    assert.deepStrictEqual(on.status.channels, [{ id: START, name: 'старт' }, { id: RULES, name: 'правила' }], 'the banner gets channel names');
     assert.strictEqual(logged[0].action, 'server.lockdown_on');
     assert.strictEqual((await LockdownService.enable(guild, admin, 'panel')).code, 'already_active');
 
