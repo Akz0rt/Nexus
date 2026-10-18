@@ -1,6 +1,7 @@
 const cron = require('node-cron');
 const { ChannelType, EmbedBuilder, Events } = require('discord.js');
 const GuildSettingsService = require('../../services/GuildSettingsService');
+const VoiceActivityService = require('../../services/VoiceActivityService');
 const { mapLimit } = require('../../services/RoleService');
 const EconomyService = require('./EconomyService');
 const curve = require('./curve');
@@ -14,17 +15,13 @@ const VOICE_TYPES = new Set([ChannelType.GuildVoice, ChannelType.GuildStageVoice
 
 const lastMessageCredit = new Map(); // guildId:userId -> ms
 
-/**
- * Who earns for this minute in voice: not in the AFK channel, not deafened,
- * and with at least one other such person in the channel.
- */
+/** Who earns for this minute in voice: not in the AFK channel and not deafened. */
 function earningVoiceMembers(guild) {
     const earning = [];
     for (const channel of guild.channels.cache.values()) {
         if (!VOICE_TYPES.has(channel.type) || channel.id === guild.afkChannelId) continue;
-        const active = [...channel.members.values()].filter(member =>
-            !member.user.bot && !member.voice?.selfDeaf && !member.voice?.serverDeaf);
-        if (active.length >= 2) earning.push(...active);
+        earning.push(...[...channel.members.values()].filter(member =>
+            !member.user.bot && !member.voice?.selfDeaf && !member.voice?.serverDeaf));
     }
     return earning;
 }
@@ -80,12 +77,18 @@ async function onMessage(message, now = Date.now()) {
     return result;
 }
 
-/** Every minute: credit everyone earning in voice, on every server with the economy on. */
+/**
+ * Every minute: the voice time that counts goes to the activity stats (always), and
+ * earns exp and coins where the economy is on.
+ */
 async function voiceTick(client) {
     for (const guild of client.guilds.cache.values()) {
+        const earning = earningVoiceMembers(guild);
+        await VoiceActivityService.addCountedTime(guild.id, earning)
+            .catch(error => console.error(`Voice stats for ${guild.id} failed:`, error.message || error));
         const settings = (await GuildSettingsService.get(guild.id)).economy;
         if (!settings.enabled) continue;
-        await mapLimit(earningVoiceMembers(guild), async member => {
+        await mapLimit(earning, async member => {
             try {
                 const result = await EconomyService.credit(guild.id, member, { exp: EXP_PER_MINUTE, money: COINS_PER_MINUTE, voiceSeconds: 60 });
                 await celebrate(guild, member, result, settings);

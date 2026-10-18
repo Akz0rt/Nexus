@@ -11,6 +11,7 @@ class VoiceActivityService {
         this.client = null;
         this.container = null;
         this.initialized = false;
+        this.dailyDocs = new Map(); // id -> the day's doc, so each minute is one write
     }
 
     async initialize() {
@@ -42,6 +43,40 @@ class VoiceActivityService {
         }
 
         this.initialized = true;
+    }
+
+    /**
+     * Counted voice time: `seconds` more for each of these members today. Called every
+     * minute with the people who earn in voice (not in the AFK channel, not deafened),
+     * so the stats show the same time the economy pays for. One document per member
+     * per day, in the same shape as a session (date, durationSeconds, endedAt), so
+     * every report reads it unchanged.
+     */
+    async addCountedTime(guildId, members, seconds = 60, now = Date.now()) {
+        if (members.length === 0) return 0;
+        await this.initialize();
+        const date = new Date(now).toISOString().split('T')[0];
+        for (const member of members) {
+            const id = `${guildId}-${member.id}-day-${date}`;
+            let doc = this.dailyDocs.get(id);
+            if (!doc) {
+                doc = await this.container.item(id, guildId).read().then(r => r.resource || null).catch(error => {
+                    if (error.code === 404) return null;
+                    throw error;
+                });
+                doc = doc || { id, guildId, userId: member.id, date, startedAt: now, durationSeconds: 0, isActive: false, createdAt: now, ttl: TTL_35_DAYS };
+            }
+            doc.durationSeconds += seconds;
+            doc.endedAt = now;
+            doc.lastMeasuredAt = now;
+            doc.displayName = member.displayName || member.user?.username || doc.displayName || null;
+            doc.avatarURL = member.user?.displayAvatarURL?.({ size: 128, extension: 'png' }) || doc.avatarURL || null;
+            const { resource } = await this.container.items.upsert(doc);
+            this.dailyDocs.set(id, resource || doc);
+        }
+        // Yesterday's docs are done
+        for (const [id, doc] of this.dailyDocs) if (doc.date !== date) this.dailyDocs.delete(id);
+        return members.length;
     }
 
     /**

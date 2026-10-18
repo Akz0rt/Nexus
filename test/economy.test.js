@@ -8,6 +8,7 @@ const { ChannelType, Collection } = require('discord.js');
 
 const AuditLogService = require('../src/services/AuditLogService');
 const GuildSettingsService = require('../src/services/GuildSettingsService');
+const VoiceActivityService = require('../src/services/VoiceActivityService');
 const EconomyService = require('../src/modules/economy/EconomyService');
 const economy = require('../src/modules/economy');
 const curve = require('../src/modules/economy/curve');
@@ -111,6 +112,22 @@ async function adjustments() {
     assert.strictEqual((await EconomyService.adjust(guild, stranger, 5, 'x', mod)).code, 'member_not_found');
 }
 
+async function voiceStats() {
+    // The counted minutes go to the stats even with the economy off, and only those
+    const guild = makeGuild();
+    guild.channels.cache.set('v', { id: 'v', type: ChannelType.GuildVoice, members: new Collection([
+        ['1', { id: '1', user: { bot: false }, voice: {} }],
+        ['2', { id: '2', user: { bot: false }, voice: { selfDeaf: true } }]
+    ]) });
+    const recorded = [];
+    VoiceActivityService.addCountedTime = async (guildId, members) => { recorded.push(...members.map(m => m.id)); };
+    GuildSettingsService.get = async () => ({ economy: { enabled: false, levelRoles: [] } });
+    const before = docs.size;
+    await economy.voiceTick({ guilds: { cache: new Map([[guild.id, guild]]) } });
+    assert.deepStrictEqual(recorded, ['1']);
+    assert.strictEqual(docs.size, before, 'economy off: no exp or coins');
+}
+
 function voiceRules() {
     const guild = makeGuild();
     guild.afkChannelId = 'afk';
@@ -124,7 +141,7 @@ function voiceRules() {
     channel('deaf', [person('6'), person('7', { selfDeaf: true })]);
     channel('trio', [person('8'), person('9'), person('10', { serverDeaf: true })]);
     guild.channels.cache.set('text', { id: 'text', type: ChannelType.GuildText, members: new Collection() });
-    assert.deepStrictEqual(economy.earningVoiceMembers(guild).map(m => m.id).sort(), ['1', '2', '8', '9']);
+    assert.deepStrictEqual(economy.earningVoiceMembers(guild).map(m => m.id).sort(), ['1', '2', '3', '6', '8', '9'], 'alone counts too; AFK channel, deafened and bots do not');
 }
 
 async function messagesAndLevelUps() {
@@ -219,6 +236,7 @@ function settingsChecks() {
     await credits();
     await adjustments();
     voiceRules();
+    await voiceStats();
     await messagesAndLevelUps();
     await leaving();
     settingsChecks();
