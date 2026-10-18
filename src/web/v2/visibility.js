@@ -10,8 +10,13 @@ const state = require('../../state');
  */
 function canSeeEntry(guild, viewer, entry) {
     if (!String(entry?.action || '').startsWith('message.')) return true;
+    return canSeeChannel(guild, viewer, entry.details?.channelId);
+}
+
+/** Can the viewer read this channel's messages (deleted channel: administrators only)? Also gates reports. */
+function canSeeChannel(guild, viewer, channelId) {
     if (!viewer) return false;
-    const channel = guild.channels.cache.get(entry.details?.channelId);
+    const channel = guild.channels.cache.get(channelId);
     if (!channel) return Boolean(viewer.permissions?.has(PermissionFlagsBits.Administrator));
     const permissions = channel.permissionsFor(viewer);
     return Boolean(permissions?.has(PermissionFlagsBits.ViewChannel) && permissions.has(PermissionFlagsBits.ReadMessageHistory));
@@ -25,4 +30,4 @@ function canUserSee(guildId, userId, entry) {
     return canSeeEntry(guild, guild.members.cache.get(userId), entry);
 }
 
-module.exports = { canSeeEntry, canUserSee };
+module.exports = { canSeeEntry, canSeeChannel, canUserSee };

@@ -7,12 +7,15 @@ const ITEMS = [
     { id: 'voice', label: 'Голосовые' },
     { id: 'moderation', label: 'Модерация' },
     { id: 'roles', label: 'Роли', needs: 'roles' },
+    { id: 'events', label: 'Ивенты' },
+    { id: 'birthdays', label: 'Дни рождения' },
+    { id: 'activity', label: 'Активность' },
     { id: 'journal', label: 'Журнал' },
     { id: 'stats', label: 'Статистика' },
     { id: 'settings', label: 'Настройки', needs: 'settings' }
 ];
 
-export default function Sidebar({ view, onView, waitingCount, newCount, canRoles, canSettings, presence, version }) {
+export default function Sidebar({ view, onView, waitingCount, newCount, openReports, canRoles, canSettings, presence, version }) {
     return (
         <aside className="sidebar">
             <div className="brand">
@@ -30,6 +33,9 @@ export default function Sidebar({ view, onView, waitingCount, newCount, canRoles
                         <span>{item.label}</span>
                         {item.id === 'queue' && newCount > 0 && (
                             <span className="counter" title={`Новых: ${newCount} · всего ждут: ${waitingCount}`}>{newCount}</span>
+                        )}
+                        {item.id === 'moderation' && openReports > 0 && (
+                            <span className="counter" title={`Новых жалоб: ${openReports}`}>{openReports}</span>
                         )}
                         {item.id === 'queue' && !newCount && waitingCount > 0 && (
                             <span className="counter-quiet" title="Всех уже просмотрели">{waitingCount}</span>

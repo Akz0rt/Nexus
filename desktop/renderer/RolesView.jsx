@@ -4,11 +4,13 @@ import { ROLE_PROBLEMS, describeBulk, formatDateTime, timeLeft } from './format.
 import Avatar, { MemberLink } from './Avatar.jsx';
 import Dialog from './Dialog.jsx';
 import { MassRoleDialog, PresetDialog, RoleChip } from './RoleDialogs.jsx';
+import RoleMenusTab from './RoleMenusTab.jsx';
 
 const TABS = [
     { id: 'roles', label: 'Роли' },
     { id: 'presets', label: 'Пресеты' },
-    { id: 'temp', label: 'Временные' }
+    { id: 'temp', label: 'Временные' },
+    { id: 'menus', label: 'Меню ролей' }
 ];
 
 const roleColor = color => (!color || color === '#000000' ? 'var(--muted)' : color);
@@ -399,6 +401,7 @@ export default function RolesView({ guildId, revision, job, onJob, onOpenMember,
             )}
             {tab === 'presets' && <PresetsTab guildId={guildId} revision={revision} toast={toast} />}
             {tab === 'temp' && <TempTab guildId={guildId} revision={revision} onOpenMember={onOpenMember} toast={toast} />}
+            {tab === 'menus' && <RoleMenusTab guildId={guildId} revision={revision} toast={toast} />}
         </section>
     );
 }

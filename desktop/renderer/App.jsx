@@ -10,6 +10,9 @@ import RolesView from './RolesView.jsx';
 import OverviewView from './OverviewView.jsx';
 import StatsView from './StatsView.jsx';
 import SettingsView from './SettingsView.jsx';
+import EventsView from './EventsView.jsx';
+import BirthdaysView from './BirthdaysView.jsx';
+import ActivityView from './ActivityView.jsx';
 import { LockdownBanner } from './LockdownButton.jsx';
 import { playChime } from './sound.js';
 import { useSeen } from './seen.js';
@@ -42,6 +45,9 @@ export default function App() {
     const [roleJob, setRoleJob] = useState(null); // running or last mass role change
     const [lockdown, setLockdown] = useState(null);
     const [journalPreset, setJournalPreset] = useState(null); // filters to open the journal with
+    const [eventRevision, setEventRevision] = useState(0); // bumps when an event or its sign-ups change
+    const [openReports, setOpenReports] = useState(0);
+    const [moderationTab, setModerationTab] = useState(null); // { tab } to open the Moderation screen on
     const toastSeq = useRef(0);
     const dismissedJob = useRef(null);
 
@@ -73,7 +79,15 @@ export default function App() {
         const offs = [
             window.panel.onAuthChanged(state => { setAuthError(null); setAuth(prev => ({ ...prev, ...state })); }),
             window.panel.onAuthError(({ message }) => setAuthError(message)),
-            window.panel.onNavigate(({ view: next }) => setView(next)),
+            window.panel.onNavigate(({ view: next }) => {
+                // A report notification opens Moderation → «Жалобы»
+                if (next === 'reports') {
+                    setView('moderation');
+                    setModerationTab({ tab: 'reports', at: Date.now() });
+                } else {
+                    setView(next);
+                }
+            }),
             window.panel.onUpdateReady(info => setUpdate(info))
         ];
         return () => offs.forEach(off => off());
@@ -105,7 +119,7 @@ export default function App() {
             if (event === 'presence') setPresence(data.users);
             if (event === 'audit') {
                 setLiveEvents(list => [data, ...list].slice(0, 300));
-                if (data.action === 'verification.queued') {
+                if (data.action === 'verification.queued' || data.action === 'report.created') {
                     window.panel.getSettings().then(prefs => { if (prefs.sound) playChime(); }).catch(() => {});
                 }
                 // Message edits and deletes are frequent and change nothing on the other screens
@@ -113,6 +127,7 @@ export default function App() {
             }
             if (event === 'voice') setVoiceRevision(r => r + 1);
             if (event === 'job') updateJob(data);
+            if (event === 'event') setEventRevision(r => r + 1);
         });
         const offState = window.panel.onStreamState(({ guildId: id, state }) => { if (id === guildId) setStreamState(state); });
         return () => { offEvent(); offState(); };
@@ -156,6 +171,16 @@ export default function App() {
 
     const seen = useSeen(guildId, waiting);
 
+    // Open reports: the Moderation counter
+    useEffect(() => {
+        if (!guildId) { setOpenReports(0); return; }
+        let cancelled = false;
+        apiGet(`/guilds/${guildId}/reports?status=open`)
+            .then(data => { if (!cancelled) setOpenReports(data.items.filter(r => r.status === 'open').length); })
+            .catch(() => { if (!cancelled) setOpenReports(0); });
+        return () => { cancelled = true; };
+    }, [guildId, revision]);
+
     // Lockdown: everyone sees the banner, administrators get the button
     useEffect(() => {
         if (!guildId) { setLockdown(null); return; }
@@ -198,6 +223,7 @@ export default function App() {
                 onView={setView}
                 waitingCount={waiting?.items?.length ?? null}
                 newCount={seen.newCount}
+                openReports={openReports}
                 canRoles={Boolean(guild?.can?.roles)}
                 canSettings={senior}
                 presence={presence}
@@ -256,10 +282,20 @@ export default function App() {
                         <RolesView guildId={guildId} revision={revision} job={roleJob} onJob={updateJob} onOpenMember={setDrawerUserId} toast={toast} />
                     )}
                     {guildId && view === 'moderation' && (
-                        <ModerationView guildId={guildId} revision={revision} onOpenMember={setDrawerUserId} toast={toast} />
+                        <ModerationView guildId={guildId} revision={revision} openReports={openReports} requestedTab={moderationTab}
+                            onOpenMember={setDrawerUserId} toast={toast} />
                     )}
                     {guildId && view === 'journal' && (
                         <JournalView guildId={guildId} liveEvents={liveEvents} preset={journalPreset} onOpenMember={setDrawerUserId} toast={toast} />
+                    )}
+                    {guildId && view === 'events' && (
+                        <EventsView guildId={guildId} revision={revision} eventRevision={eventRevision} onOpenMember={setDrawerUserId} toast={toast} />
+                    )}
+                    {guildId && view === 'birthdays' && (
+                        <BirthdaysView guildId={guildId} revision={revision} onOpenMember={setDrawerUserId} toast={toast} />
+                    )}
+                    {guildId && view === 'activity' && (
+                        <ActivityView guildId={guildId} onOpenMember={setDrawerUserId} />
                     )}
                     {guildId && view === 'stats' && (
                         <StatsView guildId={guildId} revision={revision} onOpenMember={setDrawerUserId} onOpenJournal={openJournal} />

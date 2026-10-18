@@ -7,6 +7,7 @@ const { EventEmitter } = require('node:events');
  *   'voice' — ({ guildId, userId?, channelId?, channels? }) someone joined, left or
  *             changed state in voice, or voice channels changed
  *   'job'   — (job) progress of a mass role change (RoleJobService)
+ *   'event' — ({ guildId, eventId }) an event or its sign-ups changed (EventService)
  */
 const bus = new EventEmitter();
 bus.setMaxListeners(50);

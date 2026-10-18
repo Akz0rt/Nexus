@@ -99,7 +99,7 @@ class CosmosDBService {
             const { resources: items } = await this.container.items.readAll().fetchAll();
             const birthdays = {};
             items.forEach((item) => {
-                birthdays[item.userId] = { month: item.month, day: item.day };
+                birthdays[item.userId] = { month: item.month, day: item.day, lastCongratulatedOn: item.lastCongratulatedOn || null };
             });
             return birthdays;
         } catch (error) {

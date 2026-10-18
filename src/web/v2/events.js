@@ -99,6 +99,7 @@ class SseHub {
             user => this.canSee(entry.guildId, user?.id, entry)));
         bus.on('voice', change => this.broadcast(change.guildId, 'voice', change));
         bus.on('job', job => this.broadcast(job.guildId, 'job', job));
+        bus.on('event', change => this.broadcast(change.guildId, 'event', change));
         return this;
     }
 }

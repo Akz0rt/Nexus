@@ -117,7 +117,7 @@ function AccountMenu({ me, theme, onTheme }) {
                     <label className="check">
                         <input type="checkbox" checked={Boolean(settings?.sound)} disabled={!settings}
                             onChange={() => toggle('sound')} />
-                        Звук, когда заходит новичок
+                        Звук: новичок или жалоба
                     </label>
                     <label className="check">
                         <input type="checkbox" checked={Boolean(settings?.closeToTray)} disabled={!settings}

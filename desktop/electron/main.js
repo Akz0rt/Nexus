@@ -118,6 +118,7 @@ function notify(title, body, view) {
 
 const NOTIFICATIONS = {
     'verification.queued': () => notify('Новичок ждёт пропуска', 'Нажмите, чтобы открыть очередь.', 'queue'),
+    'report.created': () => notify('Новая жалоба', 'Участник пожаловался на сообщение. Нажмите, чтобы открыть жалобы.', 'reports'),
     'moderation.ban_proposed': entry => notify(
         'Предложен бан',
         `У участника ${entry.reason || 'много варнов'}. Решение — кнопкой в канале модераторов.`,

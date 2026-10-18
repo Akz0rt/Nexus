@@ -41,6 +41,11 @@ function createV2Router({ hub = new SseHub().attach() } = {}) {
     guildRouter.use('/overview', require('./routes/overview'));
     guildRouter.use('/stats', require('./routes/stats'));
     guildRouter.use('/lockdown', require('./routes/lockdown'));
+    guildRouter.use('/reports', require('./routes/reports'));
+    // Not /events: that path is the live stream
+    guildRouter.use('/meetups', require('./routes/events'));
+    guildRouter.use('/birthdays', require('./routes/birthdays'));
+    guildRouter.use('/activity', require('./routes/activity'));
     // Settings: administrators ("senior") only
     guildRouter.use('/settings', (req, res, next) => (req.panelRole === 'senior'
         ? next()

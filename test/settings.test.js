@@ -168,7 +168,9 @@ async function counting() {
 function birthdays() {
     const today = new Date();
     const inDays = n => { const d = new Date(today); d.setDate(d.getDate() + n); return { month: d.getMonth() + 1, day: d.getDate() }; };
-    const list = upcomingBirthdays(guild, { [ADMIN]: inDays(3), [MOD]: inDays(0), '999': inDays(1), [UNV]: inDays(20) });
+    const pad = n => String(n).padStart(2, '0');
+    const todayStr = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`;
+    const list = upcomingBirthdays(guild, { [ADMIN]: inDays(3), [MOD]: inDays(0), '999': inDays(1), [UNV]: inDays(20) }, todayStr);
     assert.deepStrictEqual(list.map(b => [b.id, b.inDays]), [[MOD, 0], [ADMIN, 3]], 'only members, next 7 days, soonest first');
 }
 

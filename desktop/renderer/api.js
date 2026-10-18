@@ -69,7 +69,13 @@ const ERROR_TEXT = {
     too_many_targets: 'Слишком много людей за раз: не больше 5000.',
     already_active: 'Lockdown уже включён.',
     not_active: 'Lockdown уже снят.',
-    bot_missing_manage_guild: 'Боту не хватает права «Управлять сервером».'
+    bot_missing_manage_guild: 'Боту не хватает права «Управлять сервером».',
+    report_not_found: 'Жалоба не найдена.',
+    report_closed: 'Жалоба уже закрыта.',
+    dm_closed: 'У человека закрыты личные сообщения.',
+    event_not_found: 'Ивент не найден.',
+    event_closed: 'Ивент уже прошёл или отменён.',
+    menu_not_found: 'Меню ролей уже удалено.'
 };
 
 export function describeError(result) {

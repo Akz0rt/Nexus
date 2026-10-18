@@ -40,7 +40,23 @@ export const ACTION_LABELS = {
     'message.bulk_deleted': 'Сообщения очищены',
     'server.lockdown_on': 'Lockdown включён',
     'server.lockdown_off': 'Lockdown снят',
-    'settings.updated': 'Настройки изменены'
+    'settings.updated': 'Настройки изменены',
+    'report.created': 'Жалоба',
+    'report.taken': 'Жалоба взята',
+    'report.resolved': 'Жалоба решена',
+    'report.rejected': 'Жалоба отклонена',
+    'report.replied': 'Ответ на жалобу',
+    'event.created': 'Ивент создан',
+    'event.updated': 'Ивент изменён',
+    'event.cancelled': 'Ивент отменён',
+    'event.started': 'Ивент начался',
+    'rolemenu.created': 'Меню ролей создано',
+    'rolemenu.updated': 'Меню ролей изменено',
+    'rolemenu.deleted': 'Меню ролей удалено',
+    'birthday.set': 'День рождения указан',
+    'birthday.deleted': 'День рождения удалён',
+    'birthday.congratulated': 'Поздравлен вручную',
+    'birthday.skipped': 'Поздравление пропущено'
 };
 
 /** Groups for the journal filter ("message.*" matches every message action). */
@@ -153,7 +169,8 @@ export function describeAction(entry) {
     if (entry.action === 'roles.added' && entry.details?.durationMs) {
         return `${label} · ${entry.details.roleName} · на ${formatDurationMs(entry.details.durationMs)}`;
     }
-    const subject = entry.details?.roleName || entry.details?.presetName || entry.details?.squadName || entry.details?.channelName;
+    const subject = entry.details?.roleName || entry.details?.presetName || entry.details?.squadName
+        || entry.details?.eventTitle || entry.details?.menuTitle || entry.details?.channelName;
     const many = entry.details?.count > 1 && (entry.action === 'roles.added' || entry.action === 'roles.removed')
         ? ` · ${entry.details.count} чел.` : '';
     if (subject) return `${label} · ${subject}${many}`;

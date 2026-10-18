@@ -1,9 +1,10 @@
 const express = require('express');
-const { PermissionFlagsBits } = require('discord.js');
+const { ChannelType, PermissionFlagsBits } = require('discord.js');
 const RoleService = require('../../../services/RoleService');
 const PresetService = require('../../../modules/roles/PresetService');
 const TempRoleService = require('../../../modules/roles/TempRoleService');
 const RoleJobService = require('../../../modules/roles/RoleJobService');
+const RoleMenuService = require('../../../modules/rolemenus/RoleMenuService');
 const { actorOf, sendResult } = require('../result');
 const { userRef } = require('../serialize');
 
@@ -25,6 +26,10 @@ const STATUS = {
     bot_cannot_role: 409,
     bot_cannot: 409,
     job_running: 409,
+    bot_cannot_channel: 409,
+    invalid_title: 400,
+    role_dangerous: 400,
+    menu_not_found: 404,
     nobody: 409,
     too_many_targets: 413
 };
@@ -171,6 +176,57 @@ router.get('/jobs/current', (req, res) => {
 router.post('/jobs/preview', handle((req, actor) => RoleJobService.preview(req.guild, jobRequest(req.body), actor)));
 
 router.post('/jobs', handle((req, actor) => RoleJobService.start(req.guild, jobRequest(req.body), actor, 'panel')));
+
+// --- Self-service role menus («роли по интересам») -----------------------------------
+
+function describeMenu(guild, menu) {
+    return {
+        id: menu.id,
+        title: menu.title,
+        description: menu.description,
+        mode: menu.mode,
+        channel: { id: menu.channelId, name: guild.channels.cache.get(menu.channelId)?.name || null },
+        roles: menu.roleIds.map(roleId => {
+            const role = guild.roles.cache.get(roleId);
+            return { id: roleId, name: role?.name || null, color: role?.hexColor || null, problem: role ? null : 'role_not_found' };
+        }),
+        messageUrl: menu.messageId ? `https://discord.com/channels/${guild.id}/${menu.channelId}/${menu.messageId}` : null,
+        updatedAt: menu.updatedAt
+    };
+}
+
+const menuResult = run => async (req, res, next) => {
+    try {
+        const result = await run(req, actorOf(req));
+        if (!result.ok) return res.status(STATUS[result.code] || 400).json({ error: result.code, field: result.field || null, roleName: result.roleName || null });
+        res.json({ ok: true, menu: result.menu ? describeMenu(req.guild, result.menu) : undefined });
+    } catch (error) {
+        next(error);
+    }
+};
+
+router.get('/menus', async (req, res, next) => {
+    try {
+        const guild = req.guild;
+        const menus = await RoleMenuService.list(guild.id);
+        const viewer = viewerOf(req);
+        res.json({
+            items: menus.map(menu => describeMenu(guild, menu)),
+            // For the form: text channels, and which roles may go into a menu
+            channels: [...guild.channels.cache.values()]
+                .filter(c => c.type === ChannelType.GuildText || c.type === ChannelType.GuildAnnouncement)
+                .sort((a, b) => (a.parent?.rawPosition ?? -1) - (b.parent?.rawPosition ?? -1) || a.rawPosition - b.rawPosition)
+                .map(c => ({ id: c.id, name: c.name, category: c.parent?.name || null })),
+            roles: RoleService.assignableRoles(guild, viewer)
+                .filter(role => !RoleMenuService.isDangerous(guild.roles.cache.get(role.id)))
+        });
+    } catch (error) {
+        next(error);
+    }
+});
+router.post('/menus', menuResult((req, actor) => RoleMenuService.create(req.guild, req.body || {}, actor, 'panel')));
+router.put('/menus/:menuId', menuResult((req, actor) => RoleMenuService.update(req.guild, req.params.menuId, req.body || {}, actor, 'panel')));
+router.delete('/menus/:menuId', menuResult((req, actor) => RoleMenuService.delete(req.guild, req.params.menuId, actor, 'panel')));
 
 // GET /roles/:roleId/members — who holds a role
 router.get('/:roleId/members', async (req, res, next) => {

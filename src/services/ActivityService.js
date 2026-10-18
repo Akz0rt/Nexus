@@ -201,6 +201,22 @@ class ActivityService {
         }
     }
 
+    /**
+     * Messages per day for the last N days (for the server chart), summed here
+     * rather than with GROUP BY. Days without messages are missing.
+     * @returns {Promise<Array<{ date: string, messages: number }>>}
+     */
+    async getDailyTotals(days = 30) {
+        await this.initialize();
+        const { resources } = await this.container.items.query({
+            query: 'SELECT c.date, c.messageCount FROM c WHERE c.date >= @cutoffDate',
+            parameters: [{ name: '@cutoffDate', value: this._getCutoffDateString(days) }]
+        }).fetchAll();
+        const byDate = new Map();
+        for (const { date, messageCount } of resources) byDate.set(date, (byDate.get(date) || 0) + Number(messageCount || 0));
+        return [...byDate].map(([date, messages]) => ({ date, messages })).sort((a, b) => a.date.localeCompare(b.date));
+    }
+
     _getCutoffDateString(periodOrDays) {
         const now = new Date();
 

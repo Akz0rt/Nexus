@@ -94,7 +94,8 @@ client.on(Events.InteractionCreate, async interaction => {
         return;
     }
 
-    if (interaction.isChatInputCommand()) {
+    // Slash commands and right-click menu commands ("Пожаловаться")
+    if (interaction.isChatInputCommand() || interaction.isMessageContextMenuCommand()) {
         const command = client.commands.get(interaction.commandName);
         if (!command) return;
 

@@ -3,11 +3,13 @@ import { apiDelete, apiGet, apiPost, describeError } from './api.js';
 import { SOURCE_LABELS, formatDateTime, formatDurationMs, timeLeft } from './format.js';
 import Avatar, { MemberLink } from './Avatar.jsx';
 import PunishDialog, { useModerationOptions } from './PunishDialog.jsx';
+import ReportsTab from './ReportsTab.jsx';
 
 const TABS = [
     { id: 'active', label: 'Активные наказания' },
     { id: 'bans', label: 'Баны' },
-    { id: 'warnings', label: 'Варны' }
+    { id: 'warnings', label: 'Варны' },
+    { id: 'reports', label: 'Жалобы' }
 ];
 const TAB_KEY = 'panel.moderation.tab';
 
@@ -241,7 +243,7 @@ function WarningsTab({ data, guildId, onOpenMember, onChanged, toast }) {
 
 const ENDPOINTS = { active: 'active', bans: 'bans', warnings: 'warnings' };
 
-export default function ModerationView({ guildId, revision, onOpenMember, toast }) {
+export default function ModerationView({ guildId, revision, openReports, requestedTab, onOpenMember, toast }) {
     const [tab, setTab] = useState(readTab);
     const [data, setData] = useState(null);
     const [error, setError] = useState(null);
@@ -252,7 +254,11 @@ export default function ModerationView({ guildId, revision, onOpenMember, toast 
         try { localStorage.setItem(TAB_KEY, tab); } catch { /* per-viewer convenience only */ }
     }, [tab]);
 
+    // Opened from a notification about a new report
+    useEffect(() => { if (requestedTab?.tab) setTab(requestedTab.tab); }, [requestedTab]);
+
     useEffect(() => {
+        if (tab === 'reports') return undefined; // the reports tab loads its own list
         let cancelled = false;
         apiGet(`/guilds/${guildId}/moderation/${ENDPOINTS[tab]}`)
             .then(result => { if (!cancelled) { setData({ tab, ...result }); setError(null); } })
@@ -273,12 +279,14 @@ export default function ModerationView({ guildId, revision, onOpenMember, toast 
                         <button key={item.id} role="tab" aria-selected={tab === item.id}
                             className={`tab ${tab === item.id ? 'is-active' : ''}`} onClick={() => setTab(item.id)}>
                             {item.label}
+                            {item.id === 'reports' && openReports > 0 && <span className="tab-count">{openReports}</span>}
                         </button>
                     ))}
                 </div>
             </div>
-            {error && <p className="error">{error}</p>}
-            {!ready && !error && <p className="muted">Загружаем…</p>}
+            {tab !== 'reports' && error && <p className="error">{error}</p>}
+            {tab !== 'reports' && !ready && !error && <p className="muted">Загружаем…</p>}
+            {tab === 'reports' && <ReportsTab guildId={guildId} revision={revision} onOpenMember={onOpenMember} toast={toast} />}
             {ready && tab === 'active' && <ActiveTab {...props} />}
             {ready && tab === 'bans' && <BansTab {...props} onBanById={() => setBanById(true)} />}
             {ready && tab === 'warnings' && <WarningsTab {...props} />}

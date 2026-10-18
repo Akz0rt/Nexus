@@ -12,7 +12,10 @@ const modules = [
     require('./moderation'),
     require('./voice'),
     require('./roles'),
-    require('./messagelog')
+    require('./messagelog'),
+    require('./reports'),
+    require('./events'),
+    require('./rolemenus')
 ];
 
 function registerModules(client) {

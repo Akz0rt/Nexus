@@ -141,6 +141,26 @@ class VoiceActivityService {
         return this._aggregateUsers(resources || []);
     }
 
+    /**
+     * Voice minutes per day (by the day a session ended) for the last N days.
+     * @returns {Promise<Array<{ date: string, minutes: number }>>}
+     */
+    async getDailyTotals(days = 30) {
+        await this.initialize();
+        const { resources } = await this.container.items.query({
+            query: 'SELECT c.date, c.durationSeconds FROM c WHERE c.date >= @cutoffDate',
+            parameters: [{ name: '@cutoffDate', value: this._getCutoffDateString(days) }]
+        }).fetchAll();
+        const byDate = new Map();
+        for (const { date, durationSeconds } of resources) {
+            if (!date) continue;
+            byDate.set(date, (byDate.get(date) || 0) + Number(durationSeconds || 0));
+        }
+        return [...byDate]
+            .map(([date, seconds]) => ({ date, minutes: Math.round(seconds / 60) }))
+            .sort((a, b) => a.date.localeCompare(b.date));
+    }
+
     async getPeriodDebugStats(periodOrDays = 'week') {
         await this.initialize();
 
