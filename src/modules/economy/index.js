@@ -220,13 +220,15 @@ module.exports = {
             if (member.user?.bot) return;
             EconomyService.markLeft(member.guild.id, member.id)
                 .catch(error => console.error(`Economy: marking ${member.id} as left failed:`, error.message || error));
-            PersonalRoleService.ownerLeft(member.guild.id, member.id)
-                .catch(error => console.error(`PersonalRoles: owner ${member.id} left, update failed:`, error.message || error));
+            PersonalRoleService.memberLeft(member.guild.id, member.id)
+                .catch(error => console.error(`PersonalRoles: ${member.id} left, update failed:`, error.message || error));
         });
         client.on(Events.GuildMemberAdd, member => {
             if (member.user?.bot) return;
             EconomyService.markReturned(member.guild.id, member)
                 .catch(error => console.error(`Economy: restoring ${member.id} failed:`, error.message || error));
+            PersonalRoleService.memberReturned(member.guild, member)
+                .catch(error => console.error(`PersonalRoles: restoring ${member.id} failed:`, error.message || error));
         });
     },
 

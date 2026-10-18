@@ -7,6 +7,7 @@ const EconomyService = require('./EconomyService');
 const CONTAINER = 'personal_roles';
 const DAY_MS = 24 * 60 * 60 * 1000;
 const REMIND_BEFORE_MS = 3 * DAY_MS;
+const OWNER_RETURN_MS = EconomyService.RETURN_GRACE_DAYS * DAY_MS;
 const SELLER_SHARE = 0.95;
 const MAX_PREPAID_DAYS = 365;
 const MAX_PRICE = 1_000_000;
@@ -36,6 +37,10 @@ function isUnicodeEmoji(value) {
  * it before it runs out, and may sell it — buyers wear it for their own term, the
  * owner gets 95% of the price. A role nobody extends is deleted from Discord.
  * Stored in `personal_roles` (partition /guildId, id = Discord role id).
+ *
+ * Leaving follows the economy's rule: a buyer who leaves drops off the role at once;
+ * an owner's id is replaced by the anonymous return key, the role comes off sale, and
+ * unless they are back within 3 days the role is deleted.
  */
 class PersonalRoleService {
     constructor() {
@@ -109,6 +114,15 @@ class PersonalRoleService {
         }).catch(error => console.error('PersonalRoles: audit log failed:', error.message || error));
     }
 
+    /** Take a price (a free one when the administrator set it to 0). */
+    async charge(guildId, member, price, cause) {
+        if (price <= 0) {
+            const account = await EconomyService.get(guildId, member.id);
+            return { ok: true, account: { money: account?.money || 0 } };
+        }
+        return EconomyService.move(guildId, member, -price, { kind: 'personal_role', cause });
+    }
+
     /** The owner's role, or a refusal. */
     async owned(guild, member, roleId) {
         const doc = await this.get(guild.id, roleId);
@@ -164,7 +178,7 @@ class PersonalRoleService {
         const active = (await this.list(guild.id)).filter(doc => doc.ownerId === member.id);
         if (active.length >= settings.maxActive) return { ok: false, code: 'too_many_roles', limit: settings.maxActive };
 
-        const paid = await EconomyService.move(guild.id, member, -settings.createPrice, { kind: 'personal_role', cause: `Создание личной роли «${checked.look.name}»` });
+        const paid = await this.charge(guild.id, member, settings.createPrice, `Создание личной роли «${checked.look.name}»`);
         if (!paid.ok) return { ...paid, price: settings.createPrice };
         let role;
         try {
@@ -182,7 +196,7 @@ class PersonalRoleService {
             await member.roles.add(role, 'Личная роль');
         } catch (error) {
             if (role) await role.delete('Не удалось выдать личную роль').catch(() => {});
-            await EconomyService.move(guild.id, member, settings.createPrice, { kind: 'refund', cause: 'Возврат: личная роль не создана' });
+            if (settings.createPrice > 0) await EconomyService.move(guild.id, member, settings.createPrice, { kind: 'refund', cause: 'Возврат: личная роль не создана' });
             console.error('PersonalRoles: create failed:', error.message || error);
             return { ok: false, code: 'discord_error' };
         }
@@ -207,7 +221,7 @@ class PersonalRoleService {
         const until = from + periods * this.periodMs(settings);
         if (until - Date.now() > MAX_PREPAID_DAYS * DAY_MS) return { ok: false, code: 'too_far' };
         const cost = periods * settings.rentPrice;
-        const paid = await EconomyService.move(guild.id, member, -cost, { kind: 'personal_role', cause: `Продление личной роли «${found.role.name}»` });
+        const paid = await this.charge(guild.id, member, cost, `Продление личной роли «${found.role.name}»`);
         if (!paid.ok) return { ...paid, price: cost };
         found.doc.expiresAt = new Date(until).toISOString();
         found.doc.remindedAt = null;
@@ -316,9 +330,9 @@ class PersonalRoleService {
         try {
             await member.roles.add(role, 'Личная роль куплена');
         } catch (error) {
-            await EconomyService.transfer(guild.id, owner, member, Math.floor(price * SELLER_SHARE), {
-                kind: 'refund', outCause: `Возврат за роль «${role.name}»`, inCause: `Возврат за роль «${role.name}»`
-            }).catch(() => {});
+            // The buyer gets the whole price back; the owner returns their share
+            await EconomyService.move(guild.id, owner, -Math.floor(price * SELLER_SHARE), { kind: 'refund', cause: `Возврат за роль «${role.name}»` }).catch(() => {});
+            await EconomyService.move(guild.id, member, price, { kind: 'refund', cause: `Возврат за роль «${role.name}»` }).catch(() => {});
             console.error('PersonalRoles: giving a bought role failed:', error.message || error);
             return { ok: false, code: 'discord_error' };
         }
@@ -352,6 +366,14 @@ class PersonalRoleService {
                 if (!role) {
                     // Deleted in Discord by hand: forget it
                     await this.remove(doc.guildId, doc.id);
+                    changed++;
+                    continue;
+                }
+                if (doc.ownerLeftAt && now - Date.parse(doc.ownerLeftAt) > OWNER_RETURN_MS) {
+                    // The owner left and did not come back in time
+                    await role.delete('Владелец личной роли покинул сервер').catch(error => { if (error.code !== 10011) throw error; });
+                    await this.remove(doc.guildId, doc.id);
+                    await this.log(guild, 'personal_role.deleted', null, [], { roleName: role.name, reason: 'owner_left' });
                     changed++;
                     continue;
                 }
@@ -392,11 +414,30 @@ class PersonalRoleService {
         return changed;
     }
 
-    /** The owner left the server: their roles come off sale (buyers keep their term). */
-    async ownerLeft(guildId, userId) {
-        for (const doc of (await this.list(guildId)).filter(d => d.ownerId === userId && d.price)) {
-            doc.price = null;
+    /**
+     * Someone left: as a buyer they drop off every role at once; as an owner their id
+     * gives way to the anonymous return key and the role comes off sale.
+     */
+    async memberLeft(guildId, userId, now = Date.now()) {
+        for (const doc of await this.list(guildId)) {
+            const buyers = (doc.buyers || []).filter(b => b.userId !== userId);
+            const owns = doc.ownerId === userId;
+            if (!owns && buyers.length === (doc.buyers || []).length) continue;
+            doc.buyers = buyers;
+            if (owns) Object.assign(doc, { ownerId: EconomyService.returnKey(guildId, userId), price: null, ownerLeftAt: new Date(now).toISOString() });
             await this.save(doc);
+        }
+    }
+
+    /** The owner is back within 3 days: the roles are theirs again (and worn, if they wore them). */
+    async memberReturned(guild, member, now = Date.now()) {
+        const key = EconomyService.returnKey(guild.id, member.id);
+        for (const doc of (await this.list(guild.id)).filter(d => d.ownerId === key)) {
+            if (now - Date.parse(doc.ownerLeftAt) > OWNER_RETURN_MS) continue;
+            Object.assign(doc, { ownerId: member.id, ownerLeftAt: null });
+            await this.save(doc);
+            const role = guild.roles.cache.get(doc.roleId);
+            if (role && doc.ownerWears !== false) await member.roles.add(role, 'Личная роль: владелец вернулся').catch(() => {});
         }
     }
 }

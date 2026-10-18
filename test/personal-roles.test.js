@@ -33,6 +33,7 @@ EconomyService.transfer = async (guildId, from, to, amount, { fee = 0, outCause,
     const credit = await EconomyService.move(guildId, to, amount - fee, { cause: inCause });
     return { ok: true, from: debit.account, to: credit.account };
 };
+EconomyService.get = async (guildId, userId) => ({ money: balances.get(userId) || 0 });
 const store = new Map();
 PersonalRoleService.initialize = async () => {};
 PersonalRoleService.get = async (guildId, id) => (store.has(id) ? { ...store.get(id) } : null);
@@ -148,12 +149,42 @@ async function adminAndLeaving() {
     balances.set(OWNER, 5000);
     const other = (await PersonalRoleService.create(guild, owner, { name: 'Ёж' })).doc;
     await PersonalRoleService.setPrice(guild, owner, other.roleId, 500);
-    await PersonalRoleService.ownerLeft(guild.id, OWNER);
-    assert.strictEqual(store.get(other.roleId).price, null, 'off sale when the owner leaves');
-    const granted = await PersonalRoleService.grant(guild, other.roleId, 10, { id: 'mod', source: 'panel' });
+    store.get(other.roleId).buyers = [{ userId: BUYER, expiresAt: new Date(Date.now() + DAY).toISOString() }];
+    // A buyer leaves: off the role at once
+    await PersonalRoleService.memberLeft(guild.id, BUYER);
+    assert.deepStrictEqual(store.get(other.roleId).buyers, []);
+    // The owner leaves: anonymous key, off sale; back within 3 days — theirs again
+    const leftAt = Date.now();
+    await PersonalRoleService.memberLeft(guild.id, OWNER, leftAt);
+    let doc = store.get(other.roleId);
+    assert.ok(doc.ownerId.startsWith('anon-') && doc.ownerId !== OWNER && doc.price === null && doc.ownerLeftAt);
+    owner.roles.cache.clear();
+    await PersonalRoleService.memberReturned(guild, owner, leftAt + 2 * DAY);
+    doc = store.get(other.roleId);
+    assert.deepStrictEqual([doc.ownerId, doc.ownerLeftAt], [OWNER, null]);
+    assert.ok(owner.roles.cache.has(other.roleId), 'worn again');
+    // Leaves again and stays away: the role is deleted after 3 days
+    await PersonalRoleService.memberLeft(guild.id, OWNER, leftAt);
+    await PersonalRoleService.memberReturned(guild, owner, leftAt + 4 * DAY);
+    assert.ok(store.get(other.roleId).ownerId.startsWith('anon-'), 'too late to come back');
+    await PersonalRoleService.processDue(client, leftAt + 4 * DAY);
+    assert.ok(!store.has(other.roleId) && !guild.roles.cache.has(other.roleId));
+
+    // Free roles (price 0 in the settings) work too
+    settings = { ...settings, createPrice: 0, rentPrice: 0 };
+    balances.set(OWNER, 0);
+    const free = await PersonalRoleService.create(guild, owner, { name: 'Бесплатная' });
+    assert.ok(free.ok, 'created for free');
+    assert.ok((await PersonalRoleService.extend(guild, owner, free.role.id)).ok, 'extended for free');
+    assert.strictEqual(balances.get(OWNER), 0);
+    settings = { ...settings, createPrice: 3000, rentPrice: 1000 };
+    await PersonalRoleService.destroy(guild, free.role.id, { id: OWNER, source: 'discord' });
+    balances.set(OWNER, 5000);
+    const again = (await PersonalRoleService.create(guild, owner, { name: 'Ёж-2' })).doc;
+    const granted = await PersonalRoleService.grant(guild, again.roleId, 10, { id: 'mod', source: 'panel' });
     assert.ok(granted.ok);
-    assert.strictEqual((await PersonalRoleService.destroy(guild, other.roleId, { id: BUYER, source: 'discord' })).code, 'not_owner');
-    assert.ok((await PersonalRoleService.destroy(guild, other.roleId, { id: 'mod', source: 'panel' })).ok, 'an administrator may delete');
+    assert.strictEqual((await PersonalRoleService.destroy(guild, again.roleId, { id: BUYER, source: 'discord' })).code, 'not_owner');
+    assert.ok((await PersonalRoleService.destroy(guild, again.roleId, { id: 'mod', source: 'panel' })).ok, 'an administrator may delete');
     assert.strictEqual(store.size, 0);
 }
 
