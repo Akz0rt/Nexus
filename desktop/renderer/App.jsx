@@ -13,6 +13,7 @@ import SettingsView from './SettingsView.jsx';
 import EventsView from './EventsView.jsx';
 import BirthdaysView from './BirthdaysView.jsx';
 import ActivityView from './ActivityView.jsx';
+import EconomyView from './EconomyView.jsx';
 import { LockdownBanner } from './LockdownButton.jsx';
 import { playChime } from './sound.js';
 import { useSeen } from './seen.js';
@@ -296,6 +297,9 @@ export default function App() {
                     )}
                     {guildId && view === 'activity' && (
                         <ActivityView guildId={guildId} onOpenMember={setDrawerUserId} />
+                    )}
+                    {guildId && view === 'economy' && (
+                        <EconomyView guildId={guildId} revision={revision} onOpenMember={setDrawerUserId} toast={toast} />
                     )}
                     {guildId && view === 'stats' && (
                         <StatsView guildId={guildId} revision={revision} onOpenMember={setDrawerUserId} onOpenJournal={openJournal} />

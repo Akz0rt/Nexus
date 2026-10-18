@@ -849,3 +849,18 @@ body:has(.action-bar) .toasts { bottom: 96px; }
 }
 .daily-axis { display: flex; justify-content: space-between; }
 .section-title { margin: 18px 0 8px; font-size: 16px; }
+
+/* ---------- economy ---------- */
+
+.level-badge { display: inline-flex; align-items: baseline; gap: 6px; font-weight: 600; }
+.prestige { color: var(--amber); font-weight: 700; }
+.xp-bar { display: inline-block; width: 120px; height: 8px; border-radius: 4px; background: var(--raised); box-shadow: inset 0 0 0 1px var(--line); overflow: hidden; vertical-align: middle; }
+.xp-bar > span { display: block; height: 100%; background: var(--ink); border-radius: 4px; }
+.xp-line { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.tx-plus { color: var(--ok); font-weight: 600; }
+.tx-minus { color: var(--danger); font-weight: 600; }
+.economy-search { width: 220px; }
+.notice { margin: 0 0 12px; padding: 10px 14px; border-radius: 8px; background: color-mix(in srgb, var(--amber) 12%, var(--surface)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--amber) 45%, transparent); }
+.economy-settings { display: grid; gap: 12px; max-width: 640px; }
+.level-roles { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.level-roles li { display: grid; grid-template-columns: 110px minmax(0, 1fr) auto; gap: 10px; align-items: end; }

@@ -46,6 +46,7 @@ function createV2Router({ hub = new SseHub().attach() } = {}) {
     guildRouter.use('/meetups', require('./routes/events'));
     guildRouter.use('/birthdays', require('./routes/birthdays'));
     guildRouter.use('/activity', require('./routes/activity'));
+    guildRouter.use('/economy', require('./routes/economy'));
     // Settings: administrators ("senior") only
     guildRouter.use('/settings', (req, res, next) => (req.panelRole === 'senior'
         ? next()

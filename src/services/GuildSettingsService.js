@@ -99,6 +99,15 @@ class GuildSettingsService {
         };
         result.lockdownState = doc?.lockdownState || null;
 
+        // Economy: off until turned on in the app (so it never runs alongside the old economy bot),
+        // the channel for level-up announcements and the roles given at levels
+        const economy = doc?.economy || {};
+        result.economy = {
+            enabled: economy.enabled === true,
+            channelId: economy.channelId || null,
+            levelRoles: Array.isArray(economy.levelRoles) ? economy.levelRoles : []
+        };
+
         // Which env-backed keys come from env rather than the guild doc (shown in Settings)
         result.fromEnv = Object.keys(ENV_DEFAULTS).filter(key =>
             (doc?.[key] === undefined || doc[key] === '') && result[key] !== undefined);

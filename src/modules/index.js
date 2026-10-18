@@ -15,7 +15,8 @@ const modules = [
     require('./messagelog'),
     require('./reports'),
     require('./events'),
-    require('./rolemenus')
+    require('./rolemenus'),
+    require('./economy')
 ];
 
 function registerModules(client) {

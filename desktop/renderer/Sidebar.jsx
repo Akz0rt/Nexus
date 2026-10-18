@@ -10,6 +10,7 @@ const ITEMS = [
     { id: 'events', label: 'Ивенты' },
     { id: 'birthdays', label: 'Дни рождения' },
     { id: 'activity', label: 'Активность' },
+    { id: 'economy', label: 'Экономика' },
     { id: 'journal', label: 'Журнал' },
     { id: 'stats', label: 'Статистика' },
     { id: 'settings', label: 'Настройки', needs: 'settings' }

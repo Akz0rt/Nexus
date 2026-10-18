@@ -56,7 +56,10 @@ export const ACTION_LABELS = {
     'birthday.set': 'День рождения указан',
     'birthday.deleted': 'День рождения удалён',
     'birthday.congratulated': 'Поздравлен вручную',
-    'birthday.skipped': 'Поздравление пропущено'
+    'birthday.skipped': 'Поздравление пропущено',
+    'economy.given': 'Выданы монеты',
+    'economy.taken': 'Забраны монеты',
+    'economy.settings': 'Настройки экономики изменены'
 };
 
 /** Groups for the journal filter ("message.*" matches every message action). */
@@ -168,6 +171,9 @@ export function describeAction(entry) {
     }
     if (entry.action === 'roles.added' && entry.details?.durationMs) {
         return `${label} · ${entry.details.roleName} · на ${formatDurationMs(entry.details.durationMs)}`;
+    }
+    if ((entry.action === 'economy.given' || entry.action === 'economy.taken') && entry.details?.amount) {
+        return `${label} · ${Number(entry.details.amount).toLocaleString('ru-RU')} · ${entry.details.reason}`;
     }
     const subject = entry.details?.roleName || entry.details?.presetName || entry.details?.squadName
         || entry.details?.eventTitle || entry.details?.menuTitle || entry.details?.channelName;

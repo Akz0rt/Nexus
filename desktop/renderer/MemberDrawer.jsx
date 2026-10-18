@@ -5,6 +5,7 @@ import Avatar, { MemberLink } from './Avatar.jsx';
 import PunishDialog from './PunishDialog.jsx';
 import ChannelPicker from './ChannelPicker.jsx';
 import { PresetApplyDialog, RoleDialog } from './RoleDialogs.jsx';
+import { EconomyBlock } from './EconomyView.jsx';
 
 const CARD_STATUS = {
     pending: 'Ждёт пропуска',
@@ -183,6 +184,8 @@ export default function MemberDrawer({ guildId, userId, revision, onClose, onOpe
                             <button className="btn" onClick={() => setDialog('preset')}>Применить пресет</button>
                         </div>
                     )}
+
+                    <EconomyBlock guildId={guildId} userId={member.id} name={member.displayName} revision={revision} toast={toast} />
 
                     <h3>История</h3>
                     {data.history.length === 0 && <p className="muted small">За 30 дней действий с этим человеком не было.</p>}
