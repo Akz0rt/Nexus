@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Nexus v2 — Ивенты</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>body{margin:0;background:#0f1218} button{font:inherit;cursor:pointer}</style>
+</helmet>
+<div style="width: 1400px; height: 900px; overflow: hidden; display: flex; background: #0f1218; color: #e6edf5; font-family: 'Segoe UI', system-ui, sans-serif; font-size: 14px">
+<dc-import name="Sidebar" active="events" hint-size="240px,900px"></dc-import>
+<div style="flex: 1; min-width: 0; display: flex; flex-direction: column">
+<dc-import name="Topbar" lockdown="{{ false }}" hint-size="1160px,56px"></dc-import>
+<main style="flex: 1; padding: 22px 28px; display: flex; flex-direction: column; gap: 14px; box-sizing: border-box">
+
+<div style="display: flex; align-items: center; gap: 12px">
+<h1 style="margin: 0; font-size: 24px; font-weight: 600; flex: 1">Ивенты</h1>
+<div role="tablist" style="display: flex; gap: 2px; padding: 3px; border-radius: 9px; background: #131820; border: 1px solid #2d3644">
+<button type="button" role="tab" aria-selected="true" style="height: 30px; padding: 0 12px; border-radius: 7px; border: 0; background: #222a35; color: #e6edf5; font-weight: 600">Предстоящие · 3</button>
+<button type="button" role="tab" aria-selected="false" style="height: 30px; padding: 0 12px; border-radius: 7px; border: 0; background: transparent; color: #aeb9c7">Прошедшие</button>
+</div>
+<button type="button" style="height: 36px; padding: 0 14px; border-radius: 8px; border: 0; background: #2ec4ff; color: #0f1218; font-weight: 600">+ Новый ивент</button>
+</div>
+
+<section aria-label="Эта неделя" style="display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 8px">
+<sc-for list="{{week}}" as="d" hint-placeholder-count="7">
+<div style="height: 76px; box-sizing: border-box; padding: 8px 10px; border-radius: 9px; background: #1a2029; border: 1px solid {{d.border}}; display: flex; flex-direction: column; gap: 4px">
+<span style="font-size: 12px; color: {{d.c}}">{{d.label}}</span>
+<sc-for list="{{d.ev}}" as="e" hint-placeholder-count="1"><span style="font-size: 12px; padding: 2px 6px; border-radius: 5px; background: {{e.bg}}; color: {{e.c}}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{e.t}}</span></sc-for>
+</div>
+</sc-for>
+</section>
+
+<sc-for list="{{events}}" as="e" hint-placeholder-count="3">
+<article style="display: flex; gap: 18px; align-items: stretch; padding: 14px 16px; border-radius: 10px; background: #1a2029; border: 1px solid #2d3644; border-left: 3px solid {{e.accent}}">
+<div style="width: 76px; flex: none; display: flex; flex-direction: column; align-items: center; justify-content: center; border-radius: 8px; background: #222a35; padding: 8px 0">
+<span style="font-size: 12px; color: #8b97a8">{{e.wd}}</span>
+<span style="font-size: 26px; font-weight: 700; line-height: 1.1">{{e.day}}</span>
+<span style="font-size: 12px; color: #8b97a8">{{e.mon}}</span>
+</div>
+<div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px">
+<div style="display: flex; align-items: center; gap: 8px">
+<span style="font-size: 16px; font-weight: 600">{{e.title}}</span>
+<sc-if value="{{e.weekly}}" hint-placeholder-val="{{ false }}"><span style="font-size: 11px; font-weight: 600; padding: 1px 8px; border-radius: 999px; border: 1px solid #ffb020; color: #ffb020">каждую неделю</span></sc-if>
+<span style="font-size: 13px; color: {{e.whenColor}}">{{e.time}} · {{e.when}}</span>
+</div>
+<span style="color: #c7d1dd">{{e.desc}}</span>
+<span style="font-size: 12px; color: #8b97a8">{{e.meta}}</span>
+<div style="display: flex; align-items: center; gap: 8px; margin-top: 2px">
+<div style="display: flex">
+<sc-for list="{{e.ppl}}" as="p" hint-placeholder-count="3"><span style="width: 24px; height: 24px; border-radius: 50%; background: {{p}}; margin-left: -6px; box-shadow: 0 0 0 2px #1a2029"></span></sc-for>
+</div>
+<span style="font-size: 13px; color: #c7d1dd">{{e.going}}</span>
+</div>
+</div>
+<div style="width: 210px; flex: none; display: flex; flex-direction: column; justify-content: center; gap: 6px">
+<div style="display: flex; gap: 6px">
+<button type="button" disabled="{{e.noOne}}" style="flex: 1; height: 34px; border-radius: 8px; border: 0; background: {{e.primBg}}; color: {{e.primC}}; font-weight: 600">Собрать в канал</button>
+<button type="button" aria-label="Ещё: изменить, сделать состав, отменить" style="width: 34px; height: 34px; border-radius: 8px; border: 1px solid #2d3644; background: #222a35; color: #e6edf5; display: flex; align-items: center; justify-content: center"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8"></circle><circle cx="12" cy="12" r="1.8"></circle><circle cx="19" cy="12" r="1.8"></circle></svg></button>
+</div>
+<button type="button" style="height: 30px; border-radius: 8px; border: 1px solid #2d3644; background: transparent; color: #c7d1dd">Изменить</button>
+<sc-if value="{{e.noOne}}" hint-placeholder-val="{{ false }}"><span style="font-size: 12px; color: #8b97a8; text-align: center">Собирать некого — никто не записался</span></sc-if>
+</div>
+</article>
+</sc-for>
+
+</main>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1400,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const MAF = { t: '00:34 Мафия', bg: '#3a2c12', c: '#ffc65c' };
+    const KINO = { t: '21:34 Кино', bg: '#10324a', c: '#8ae6ff' };
+    const DOTA = { t: '19:00 Турнир', bg: '#2a1f3d', c: '#d5a6ff' };
+    const day = (label, ev, today) => ({ label: label, ev: ev, border: today ? '#2ec4ff' : '#2d3644', c: today ? '#8ae6ff' : '#8b97a8' });
+    const ev = (o) => Object.assign({ weekly: false, noOne: false, primBg: '#2ec4ff', primC: '#0f1218', whenColor: '#8b97a8' }, o, o.noOne ? { primBg: '#222a35', primC: '#5f6b7c' } : {});
+    return {
+      week: [day('Вс 18 · сегодня', [], true), day('Пн 19', [MAF]), day('Вт 20', [KINO]), day('Ср 21', []), day('Чт 22', []), day('Пт 23', [DOTA]), day('Сб 24', [])],
+      events: [
+        ev({ wd: 'пн', day: '19', mon: 'окт', time: '00:34', when: 'через 3 ч', whenColor: '#ffb020', title: 'Мафия', weekly: true, accent: '#ffb020', desc: 'Ведущий — Kira. Правила в #мафия-правила', meta: 'Карточка в #ивенты · сбор в «Мафия — лобби» · напомним за 15 мин', ppl: ['#3ccf8e', '#ffb020', '#e84393', '#5865f2'], going: 'Идут 4: Зоя, Илья, Даша, Flix' }),
+        ev({ wd: 'вт', day: '20', mon: 'окт', time: '21:34', when: 'через 2 дн.', title: 'Кино: Дюна 2', accent: '#2ec4ff', desc: 'Смотрим вместе в «Кинозале», стрим ведёт Вика', meta: 'Карточка в #ивенты · сбор в «Кинозал»', ppl: [], going: 'Пока никто не записался', noOne: true }),
+        ev({ wd: 'пт', day: '23', mon: 'окт', time: '19:00', when: 'через 5 дн.', title: 'Турнир по Dota 2', accent: '#b48cff', desc: 'Команды по 5, капитаны — Lev и Mira', meta: 'Карточка в #ивенты · сбор в «Игра · Dota»', ppl: ['#ff5d5d', '#3ccf8e', '#5865f2', '#ffb020', '#8b97a8'], going: 'Идут 7' })
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Nexus v2 — Карточка участника</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>body{margin:0;background:#0f1218} button{font:inherit;cursor:pointer}</style>
+</helmet>
+<div style="position: relative; width: 1400px; height: 900px; overflow: hidden; display: flex; background: #0f1218; color: #e6edf5; font-family: 'Segoe UI', system-ui, sans-serif; font-size: 14px">
+<dc-import name="Sidebar" active="economy" hint-size="240px,900px"></dc-import>
+<div style="flex: 1; min-width: 0; display: flex; flex-direction: column">
+<dc-import name="Topbar" lockdown="{{ false }}" hint-size="1160px,56px"></dc-import>
+<main aria-hidden="true" style="flex: 1; padding: 22px 28px; display: flex; flex-direction: column; gap: 14px">
+<h1 style="margin: 0; font-size: 24px; font-weight: 600">Экономика</h1>
+<div style="background: #1a2029; border: 1px solid #2d3644; border-radius: 10px">
+<sc-for list="{{bgRows}}" as="b" hint-placeholder-count="8">
+<div style="display: flex; align-items: center; gap: 12px; height: 46px; padding: 0 16px; border-bottom: 1px solid #222a35; background: {{b.bg}}">
+<span style="width: 20px; color: #8b97a8">{{b.n}}</span><span style="width: 24px; height: 24px; border-radius: 50%; background: {{b.av}}"></span><span style="flex: 1; font-weight: 600">{{b.name}}</span><span style="width: 120px">{{b.lvl}}</span><span style="width: 120px; text-align: right">{{b.bal}}</span>
+</div>
+</sc-for>
+</div>
+</main>
+</div>
+<div aria-hidden="true" style="position: absolute; inset: 0; background: rgba(5,7,10,0.6)"></div>
+
+<aside role="dialog" aria-label="Карточка участника: Борис" style="position: absolute; top: 0; right: 0; width: 470px; height: 900px; background: #131820; border-left: 1px solid #05070a; display: flex; flex-direction: column">
+<div style="padding: 18px 20px 0; background: #131820; border-bottom: 1px solid #2d3644; display: flex; flex-direction: column; gap: 12px">
+<div style="display: flex; align-items: flex-start; gap: 14px">
+<span style="width: 56px; height: 56px; border-radius: 50%; background: #3ccf8e; color: #0f1218; font-size: 22px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; flex: none">Б</span>
+<div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px">
+<span style="font-size: 20px; font-weight: 700">Борис</span>
+<span style="color: #8b97a8; font-size: 13px">@boris</span>
+<button type="button" aria-label="Скопировать ID" style="align-self: flex-start; display: flex; align-items: center; gap: 6px; height: 24px; padding: 0 8px; border-radius: 6px; border: 1px solid #2d3644; background: #1a2029; color: #aeb9c7; font-size: 12px; font-family: Consolas, monospace">400000000000000003<svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="12" height="12" rx="2"></rect><path d="M5 15V5a2 2 0 0 1 2-2h10"></path></svg></button>
+</div>
+<button type="button" aria-label="Закрыть" style="width: 32px; height: 32px; border-radius: 8px; border: 0; background: transparent; color: #8b97a8"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"></path></svg></button>
+</div>
+<div style="display: flex; align-items: center; gap: 8px; font-size: 13px; padding: 8px 10px; border-radius: 8px; background: #1a2029"><span style="width: 8px; height: 8px; border-radius: 50%; background: #3ccf8e"></span><span>В «Болталке» 34 мин</span><span style="color: #ff8a8a">· микро выключен сервером</span></div>
+<div style="display: flex; gap: 6px">
+<button type="button" style="height: 32px; padding: 0 12px; border-radius: 7px; border: 0; background: #2ec4ff; color: #0f1218; font-weight: 600; white-space: nowrap">Вкл. микро</button>
+<button type="button" style="height: 32px; padding: 0 12px; border-radius: 7px; border: 1px solid #2d3644; background: #1a2029; color: #e6edf5">Переместить</button>
+<button type="button" style="height: 32px; padding: 0 12px; border-radius: 7px; border: 1px solid #2d3644; background: #1a2029; color: #e6edf5; white-space: nowrap">Мут ▾</button>
+<button type="button" style="height: 32px; padding: 0 12px; border-radius: 7px; border: 1px solid #2d3644; background: #1a2029; color: #e6edf5">Варн</button>
+<button type="button" aria-label="Ещё: отключить от голоса, сменить ник, кик, бан" style="width: 32px; height: 32px; border-radius: 7px; border: 1px solid #2d3644; background: #1a2029; color: #e6edf5; display: flex; align-items: center; justify-content: center"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8"></circle><circle cx="12" cy="12" r="1.8"></circle><circle cx="19" cy="12" r="1.8"></circle></svg></button>
+</div>
+<div role="tablist" style="display: flex; gap: 18px">
+<sc-for list="{{tabs}}" as="t" hint-placeholder-count="4">
+<button type="button" role="tab" aria-selected="{{t.sel}}" style="height: 38px; border: 0; background: transparent; color: {{t.c}}; font-weight: {{t.w}}; box-shadow: {{t.line}}; padding: 0 2px">{{t.label}}</button>
+</sc-for>
+</div>
+</div>
+
+<div style="flex: 1; overflow: hidden; padding: 16px 20px; display: flex; flex-direction: column; gap: 18px">
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px">
+<sc-for list="{{facts}}" as="f" hint-placeholder-count="4">
+<div style="display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: 8px; background: #1a2029; border: 1px solid #2d3644">
+<span style="font-size: 12px; color: #8b97a8">{{f.k}}</span><span style="font-weight: 600">{{f.v}}</span>
+</div>
+</sc-for>
+</div>
+
+<section aria-labelledby="mr" style="display: flex; flex-direction: column; gap: 8px">
+<h3 id="mr" style="margin: 0; font-size: 13px; color: #8b97a8; font-weight: 600">Роли</h3>
+<div style="display: flex; flex-wrap: wrap; gap: 6px">
+<span style="display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border-radius: 999px; border: 1px solid #2d3644; background: #1a2029"><span style="width: 8px; height: 8px; border-radius: 50%; background: #ffb020"></span>Ивент <span style="font-size: 12px; color: #ffb020">5 ч</span><button type="button" aria-label="Снять роль Ивент" style="border: 0; background: transparent; color: #8b97a8; padding: 0">×</button></span>
+<span style="display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border-radius: 999px; border: 1px solid #2d3644; background: #1a2029"><span style="width: 8px; height: 8px; border-radius: 50%; background: #2ec4ff"></span>Парень<button type="button" aria-label="Снять роль Парень" style="border: 0; background: transparent; color: #8b97a8; padding: 0">×</button></span>
+<span title="Выше роли бота — снять можно только в Discord" style="display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border-radius: 999px; border: 1px solid #2d3644; background: #1a2029; color: #aeb9c7"><span style="width: 8px; height: 8px; border-radius: 50%; background: #ff5d5d"></span>Админ<svg role="img" aria-label="Выше роли бота" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8b97a8" stroke-width="2.2"><rect x="5" y="11" width="14" height="10" rx="2"></rect><path d="M8 11V7a4 4 0 0 1 8 0v4"></path></svg></span>
+<button type="button" style="height: 28px; padding: 0 10px; border-radius: 999px; border: 1px dashed #2d3644; background: transparent; color: #aeb9c7">+ роль или пресет</button>
+</div>
+</section>
+
+<section aria-labelledby="me" style="display: flex; flex-direction: column; gap: 8px">
+<div style="display: flex; align-items: center"><h3 id="me" style="margin: 0; font-size: 13px; color: #8b97a8; font-weight: 600; flex: 1">Экономика</h3><a href="#" style="font-size: 12px; color: #2ec4ff">Подробно →</a></div>
+<div style="padding: 12px; border-radius: 8px; background: #1a2029; border: 1px solid #2d3644; display: flex; flex-direction: column; gap: 8px">
+<div style="display: flex; align-items: baseline; gap: 8px"><span style="font-size: 18px; font-weight: 700">Уровень 27</span><span style="color: #8b97a8; font-size: 13px">4-е место · 110 197 монет</span></div>
+<div style="height: 8px; border-radius: 4px; background: #222a35"><div style="width: 32%; height: 8px; border-radius: 4px; background: #2ec4ff"></div></div>
+<span style="font-size: 12px; color: #8b97a8">43 695 / 135 000 опыта до 28-го</span>
+</div>
+</section>
+
+<section aria-labelledby="mn" style="display: flex; flex-direction: column; gap: 8px">
+<div style="display: flex; align-items: center"><h3 id="mn" style="margin: 0; font-size: 13px; color: #8b97a8; font-weight: 600; flex: 1">Заметки модераторов · 1</h3><a href="#" style="font-size: 12px; color: #2ec4ff">+ Добавить</a></div>
+<div style="padding: 10px 12px; border-radius: 8px; background: #1a2029; border-left: 3px solid #b48cff; display: flex; flex-direction: column; gap: 4px">
+<span>Просил не выключать микро на ивентах — ведущий мафии</span>
+<span style="font-size: 12px; color: #8b97a8">Kira · 2 нед. назад</span>
+</div>
+</section>
+</div>
+</aside>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1400,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const tab = (label, sel) => ({ label: label, sel: sel ? 'true' : 'false', c: sel ? '#e6edf5' : '#8b97a8', w: sel ? '600' : '400', line: sel ? 'inset 0 -2px 0 #2ec4ff' : 'none' });
+    return {
+      tabs: [tab('Обзор', true), tab('Модерация · 0', false), tab('Экономика', false), tab('История', false)],
+      facts: [
+        { k: 'Аккаунту', v: '13 мес.' },
+        { k: 'На сервере', v: 'с 18.09.26 · 1 мес.' },
+        { k: 'Последняя активность', v: '5 мин назад' },
+        { k: 'День рождения', v: '3 марта' }
+      ],
+      bgRows: [
+        { n: '1', name: 'Flix', av: '#5865f2', lvl: '50 ★23', bal: '635 362' },
+        { n: '2', name: 'Ina', av: '#8b97a8', lvl: '50 ★23', bal: '683 283' },
+        { n: '3', name: 'Ayla Vanel', av: '#3ccf8e', lvl: '50 ★8', bal: '373 525' },
+        { n: '4', name: 'Борис', av: '#3ccf8e', lvl: '27', bal: '110 197', bg: '#152536' },
+        { n: '5', name: 'BigBoss', av: '#ff5d5d', lvl: '26', bal: '60 110' },
+        { n: '6', name: 'omae wa', av: '#e84393', lvl: '26', bal: '59 661' },
+        { n: '7', name: 'макс.', av: '#5865f2', lvl: '25', bal: '18 070' }
+      ].map((r) => Object.assign({ bg: 'transparent' }, r))
+    };
+  }
+}
+</script>
+</body>
+</html>

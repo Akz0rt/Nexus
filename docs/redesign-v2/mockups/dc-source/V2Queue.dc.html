@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Nexus v2 — Пропуск</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>body{margin:0;background:#0f1218} button,select{font:inherit;cursor:pointer}</style>
+</helmet>
+<div style="width: 1400px; height: 900px; overflow: hidden; display: flex; background: #0f1218; color: #e6edf5; font-family: 'Segoe UI', system-ui, sans-serif; font-size: 14px">
+<dc-import name="Sidebar" active="queue" hint-size="240px,900px"></dc-import>
+<div style="flex: 1; min-width: 0; display: flex; flex-direction: column">
+<dc-import name="Topbar" lockdown="{{ false }}" hint-size="1160px,56px"></dc-import>
+<main style="flex: 1; padding: 22px 28px; display: flex; flex-direction: column; gap: 14px; box-sizing: border-box">
+
+<div style="display: flex; align-items: center; gap: 12px">
+<h1 style="margin: 0; font-size: 24px; font-weight: 600; flex: 1">Пропуск новичков</h1>
+<div role="tablist" style="display: flex; gap: 2px; padding: 3px; border-radius: 9px; background: #131820; border: 1px solid #2d3644">
+<button type="button" role="tab" aria-selected="true" style="height: 30px; padding: 0 12px; border-radius: 7px; border: 0; background: #222a35; color: #e6edf5; font-weight: 600">Ждут · 7</button>
+<button type="button" role="tab" aria-selected="false" style="height: 30px; padding: 0 12px; border-radius: 7px; border: 0; background: transparent; color: #aeb9c7">Пропущены сегодня · 12</button>
+<button type="button" role="tab" aria-selected="false" style="height: 30px; padding: 0 12px; border-radius: 7px; border: 0; background: transparent; color: #aeb9c7">Отклонены · 1</button>
+</div>
+</div>
+
+<div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap">
+<label for="sort" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Сортировка</label>
+<select id="sort" style="height: 32px; border-radius: 8px; border: 1px solid #2d3644; background: #1a2029; color: #e6edf5; padding: 0 10px"><option>Сначала давно ждущие</option></select>
+<button type="button" aria-pressed="true" style="height: 32px; padding: 0 12px; border-radius: 999px; border: 1px solid #2ec4ff; background: #10324a; color: #8ae6ff">С флагами · 2</button>
+<button type="button" aria-pressed="false" style="height: 32px; padding: 0 12px; border-radius: 999px; border: 1px solid #2d3644; background: transparent; color: #c7d1dd">Аккаунт младше 7 дней · 5</button>
+<button type="button" aria-pressed="false" style="height: 32px; padding: 0 12px; border-radius: 999px; border: 1px solid #2d3644; background: transparent; color: #c7d1dd">Инвайт ▾</button>
+<div style="flex: 1"></div>
+<span style="font-size: 12px; color: #8b97a8">M / F — пропуск · K — кик</span>
+<div role="group" aria-label="Плотность" style="display: flex; gap: 2px; padding: 2px; border-radius: 8px; background: #131820; border: 1px solid #2d3644">
+<button type="button" aria-pressed="true" style="height: 26px; padding: 0 10px; border-radius: 6px; border: 0; background: #222a35; color: #e6edf5; font-size: 12px">Компактно</button>
+<button type="button" aria-pressed="false" style="height: 26px; padding: 0 10px; border-radius: 6px; border: 0; background: transparent; color: #aeb9c7; font-size: 12px">Подробно</button>
+</div>
+</div>
+
+<div style="display: flex; align-items: center; gap: 10px; height: 44px; padding: 0 14px; border-radius: 10px; background: #10324a; border: 1px solid #1d5d84">
+<span style="font-weight: 600">Выбрано 2</span>
+<span style="color: #8ae6ff; font-size: 13px">Тимур, Новичок</span>
+<div style="flex: 1"></div>
+<button type="button" style="height: 30px; padding: 0 12px; border-radius: 7px; border: 1px solid #2d3644; background: #1a2029; color: #e6edf5">Парень</button>
+<button type="button" style="height: 30px; padding: 0 12px; border-radius: 7px; border: 1px solid #2d3644; background: #1a2029; color: #e6edf5">Девушка</button>
+<button type="button" style="height: 30px; padding: 0 12px; border-radius: 7px; border: 1px solid #7a2c2c; background: #1a2029; color: #ff8a8a">Кикнуть 2</button>
+<button type="button" style="height: 30px; padding: 0 10px; border-radius: 7px; border: 0; background: transparent; color: #aeb9c7">Снять выделение</button>
+</div>
+
+<section aria-label="Очередь" style="background: #1a2029; border: 1px solid #2d3644; border-radius: 10px; overflow: hidden">
+<div style="display: grid; grid-template-columns: 36px 196px 236px 70px 76px 88px 120px minmax(0, 1fr); align-items: center; height: 36px; padding: 0 12px; font-size: 12px; color: #8b97a8; border-bottom: 1px solid #2d3644">
+<span></span><span>Участник</span><span>Флаги</span><span>Ждёт</span><span>Аккаунт</span><span>Инвайт</span><span>Статус</span><span style="text-align: right">Решение</span>
+</div>
+<sc-for list="{{rows}}" as="r" hint-placeholder-count="9">
+<div style="display: grid; grid-template-columns: 36px 196px 236px 70px 76px 88px 120px minmax(0, 1fr); align-items: center; height: 58px; padding: 0 12px; border-bottom: 1px solid #222a35; background: {{r.bg}}; box-shadow: {{r.ring}}">
+<span style="width: 16px; height: 16px; border-radius: 4px; border: 1.5px solid {{r.checkBorder}}; background: {{r.checkBg}}; display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box"><sc-if value="{{r.sel}}" hint-placeholder-val="{{ false }}"><svg aria-hidden="true" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#0f1218" stroke-width="3.5" stroke-linecap="round"><path d="M5 12l5 5 9-10"></path></svg></sc-if></span>
+<div style="display: flex; align-items: center; gap: 10px; min-width: 0">
+<span style="width: 32px; height: 32px; border-radius: 50%; background: {{r.av}}; color: #0f1218; font-weight: 700; font-size: 13px; display: inline-flex; align-items: center; justify-content: center; flex: none">{{r.ini}}</span>
+<div style="display: flex; flex-direction: column; min-width: 0">
+<span style="font-weight: 600">{{r.name}}</span>
+<span style="font-size: 12px; color: #8b97a8">@{{r.handle}}</span>
+</div>
+</div>
+<div style="display: flex; gap: 4px; flex-wrap: wrap">
+<sc-for list="{{r.flags}}" as="f" hint-placeholder-count="1"><span style="font-size: 11px; font-weight: 600; padding: 2px 7px; border-radius: 999px; background: {{f.bg}}; color: {{f.c}}">{{f.t}}</span></sc-for>
+<sc-if value="{{r.clean}}" hint-placeholder-val="{{ true }}"><span style="font-size: 12px; color: #5f6b7c">—</span></sc-if>
+</div>
+<span style="font-variant-numeric: tabular-nums; color: {{r.waitColor}}">{{r.wait}}</span>
+<span style="font-variant-numeric: tabular-nums">{{r.acc}}</span>
+<span style="color: #c7d1dd">{{r.inv}}</span>
+<div>
+<sc-if value="{{r.watching}}" hint-placeholder-val="{{ false }}"><span style="display: inline-flex; align-items: center; gap: 5px; font-size: 12px; padding: 2px 8px; border-radius: 999px; border: 1px solid #6b3a8f; color: #d5a6ff"><span style="width: 6px; height: 6px; border-radius: 50%; background: #d5a6ff"></span>Смотрит Kira</span></sc-if>
+</div>
+<div style="display: flex; justify-content: flex-end; gap: 6px">
+<button type="button" style="height: 32px; padding: 0 10px; border-radius: 7px; border: 1px solid #2d3644; background: #222a35; color: #e6edf5; display: flex; align-items: center; gap: 8px">Парень<span style="font-size: 10px; color: #8b97a8; border: 1px solid #2d3644; border-radius: 3px; padding: 0 4px">M</span></button>
+<button type="button" style="height: 32px; padding: 0 10px; border-radius: 7px; border: 1px solid #2d3644; background: #222a35; color: #e6edf5; display: flex; align-items: center; gap: 8px">Девушка<span style="font-size: 10px; color: #8b97a8; border: 1px solid #2d3644; border-radius: 3px; padding: 0 4px">F</span></button>
+<button type="button" aria-label="Ещё: доп. роли, задать вопрос, кик, бан" style="width: 32px; height: 32px; border-radius: 7px; border: 0; background: transparent; color: #8b97a8; display: flex; align-items: center; justify-content: center"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8"></circle><circle cx="12" cy="12" r="1.8"></circle><circle cx="19" cy="12" r="1.8"></circle></svg></button>
+</div>
+</div>
+</sc-for>
+</section>
+</main>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1400,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const NEW = { t: 'новый аккаунт', bg: '#3a1d1f', c: '#ff8a8a' };
+    const KICK = { t: 'кикали 2 раза', bg: '#3a1d1f', c: '#ff8a8a' };
+    const NICK = { t: 'ник как у забаненного', bg: '#3a2c12', c: '#ffc65c' };
+    const AV = { t: 'без аватара', bg: '#26303d', c: '#aeb9c7' };
+    const data = [
+      { ini: 'Т', name: 'Тимур', handle: 'timur_06', av: '#5865f2', flags: [], wait: '7 ч', acc: '8 дн.', inv: '@Lev', sel: true },
+      { ini: 'Н', name: 'Новичок', handle: 'novi4ok', av: '#2ec4ff', flags: [NEW, KICK], wait: '6 ч 40', acc: '2 дн.', inv: 'vanity', sel: true, focus: true },
+      { ini: 'К', name: 'Ксюша', handle: 'ksu.sha', av: '#e84393', flags: [], wait: '6 ч', acc: '7 дн.', inv: '@Kira', watching: true },
+      { ini: 'О', name: 'Оля', handle: 'olya_m', av: '#ff5d5d', flags: [], wait: '5 ч', acc: '6 дн.', inv: '@Mira' },
+      { ini: 'П', name: 'Петя', handle: 'petya', av: '#ffb020', flags: [AV], wait: '4 ч', acc: '5 дн.', inv: '@Lev' },
+      { ini: 'Л', name: 'Лёша', handle: 'lyosha_x', av: '#8b97a8', flags: [NICK], wait: '2 ч', acc: '3 дн.', inv: '@Nyx' },
+      { ini: 'М', name: 'Маша', handle: 'masha', av: '#3ccf8e', flags: [], wait: '1 ч', acc: '1 год', inv: '@Zoya' },
+      { ini: 'А', name: 'Артём', handle: 'art.em', av: '#b48cff', flags: [], wait: '24 мин', acc: '2 года', inv: '@Lev' },
+      { ini: 'Д', name: 'Дина', handle: 'dina', av: '#ff7a1a', flags: [], wait: '3 мин', acc: '9 мес.', inv: '@Kira' }
+    ];
+    return {
+      rows: data.map((d) => Object.assign({}, d, {
+        clean: d.flags.length === 0,
+        watching: !!d.watching,
+        sel: !!d.sel,
+        bg: d.sel ? '#152536' : 'transparent',
+        ring: d.focus ? 'inset 0 0 0 2px #2ec4ff' : 'none',
+        checkBorder: d.sel ? '#2ec4ff' : '#5f6b7c',
+        checkBg: d.sel ? '#2ec4ff' : 'transparent',
+        waitColor: d.wait.indexOf('ч') > -1 && parseInt(d.wait, 10) >= 5 ? '#ffb020' : '#e6edf5'
+      }))
+    };
+  }
+}
+</script>
+</body>
+</html>

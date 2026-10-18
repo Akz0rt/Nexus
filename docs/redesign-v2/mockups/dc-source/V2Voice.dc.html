@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Nexus v2 — Голосовые</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>body{margin:0;background:#0f1218} button,select{font:inherit;cursor:pointer}</style>
+</helmet>
+<div style="width: 1400px; height: 900px; overflow: hidden; display: flex; background: #0f1218; color: #e6edf5; font-family: 'Segoe UI', system-ui, sans-serif; font-size: 14px">
+<dc-import name="Sidebar" active="voice" hint-size="240px,900px"></dc-import>
+<div style="flex: 1; min-width: 0; display: flex; flex-direction: column">
+<dc-import name="Topbar" lockdown="{{ false }}" hint-size="1160px,56px"></dc-import>
+<main style="position: relative; flex: 1; padding: 22px 28px; display: flex; flex-direction: column; gap: 12px; box-sizing: border-box">
+
+<div style="display: flex; align-items: center; gap: 10px">
+<h1 style="margin: 0; font-size: 24px; font-weight: 600">Голосовые</h1>
+<span style="color: #8b97a8">10 в голосе · 3 канала</span>
+<div style="flex: 1"></div>
+<label for="vs" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Найти по нику</label>
+<input id="vs" placeholder="Найти по нику" style="width: 200px; height: 32px; box-sizing: border-box; border-radius: 8px; border: 1px solid #2d3644; background: #1a2029; color: #e6edf5; padding: 0 10px; font: inherit">
+<button type="button" aria-pressed="true" style="height: 32px; padding: 0 12px; border-radius: 999px; border: 1px solid #2ec4ff; background: #10324a; color: #8ae6ff">Скрыть пустые</button>
+</div>
+
+<div style="display: flex; align-items: center; gap: 16px; font-size: 12px; color: #8b97a8">
+<span style="display: flex; align-items: center; gap: 5px"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8b97a8" stroke-width="2" stroke-linecap="round"><path d="{{mic}}"></path></svg>выключил сам</span>
+<span style="display: flex; align-items: center; gap: 5px"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ff5d5d" stroke-width="2" stroke-linecap="round"><path d="{{mic}}"></path></svg>выключен сервером</span>
+<span style="display: flex; align-items: center; gap: 5px"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ff5d5d" stroke-width="2" stroke-linecap="round"><path d="{{deaf}}"></path></svg>заглушён сервером</span>
+<span style="display: flex; align-items: center; gap: 5px"><span style="font-size: 10px; font-weight: 700; background: #ff7a1a; color: #0f1218; border-radius: 3px; padding: 0 4px">LIVE</span>стримит</span>
+<div style="flex: 1"></div>
+<span>Клик — выбрать · рамка — группа · Shift — добавить · перетащите на канал</span>
+</div>
+
+<div style="display: flex; gap: 16px; min-height: 0">
+<div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 10px">
+<sc-for list="{{cats}}" as="cat" hint-placeholder-count="2">
+<div style="display: flex; flex-direction: column; gap: 8px">
+<span style="font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: #8b97a8">{{cat.name}}</span>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px">
+<sc-for list="{{cat.channels}}" as="ch" hint-placeholder-count="2">
+<div style="background: #1a2029; border: 1px solid {{ch.border}}; border-radius: 10px; overflow: hidden">
+<div style="display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 12px; border-bottom: 1px solid #222a35; background: {{ch.headBg}}">
+<span style="font-weight: 600; flex: 1">{{ch.name}}</span>
+<span style="font-size: 12px; color: {{ch.countColor}}">{{ch.count}}</span>
+<button type="button" aria-label="Меню канала {{ch.name}}" style="width: 28px; height: 28px; border: 0; background: transparent; color: #8b97a8; border-radius: 6px"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8"></circle><circle cx="12" cy="12" r="1.8"></circle><circle cx="19" cy="12" r="1.8"></circle></svg></button>
+</div>
+<div style="padding: 4px 6px 6px">
+<sc-for list="{{ch.members}}" as="m" hint-placeholder-count="3">
+<div style="display: flex; align-items: center; gap: 10px; height: 38px; padding: 0 8px; border-radius: 7px; background: {{m.bg}}; box-shadow: {{m.ring}}">
+<span style="width: 26px; height: 26px; border-radius: 50%; background: {{m.av}}; color: #0f1218; font-size: 11px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; flex: none">{{m.ini}}</span>
+<span style="flex: 1; min-width: 0; font-weight: {{m.weight}}">{{m.name}}</span>
+<sc-if value="{{m.live}}" hint-placeholder-val="{{ false }}"><span style="font-size: 10px; font-weight: 700; background: #ff7a1a; color: #0f1218; border-radius: 3px; padding: 0 4px">LIVE</span></sc-if>
+<sc-for list="{{m.icons}}" as="ic" hint-placeholder-count="1"><svg role="img" aria-label="{{ic.label}}" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="{{ic.c}}" stroke-width="2" stroke-linecap="round"><path d="{{ic.d}}"></path></svg></sc-for>
+<span style="font-size: 12px; color: #8b97a8; width: 56px; text-align: right; font-variant-numeric: tabular-nums">{{m.time}}</span>
+</div>
+</sc-for>
+</div>
+</div>
+</sc-for>
+</div>
+</div>
+</sc-for>
+<div style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: #8b97a8">
+<span>Пустые:</span>
+<span style="padding: 3px 10px; border-radius: 999px; border: 1px dashed #2d3644">AFK</span>
+<span style="padding: 3px 10px; border-radius: 999px; border: 1px dashed #2d3644">Приват</span>
+<span style="padding: 3px 10px; border-radius: 999px; border: 1px dashed #2d3644">Команда 1</span>
+<span style="padding: 3px 10px; border-radius: 999px; border: 1px dashed #2d3644">Команда 2</span>
+<span style="padding: 3px 10px; border-radius: 999px; border: 1px dashed #2d3644">Сцена ивентов</span>
+<span>— на них тоже можно перетаскивать</span>
+</div>
+</div>
+
+<aside aria-label="Составы" style="width: 250px; flex: none; display: flex; flex-direction: column; gap: 10px">
+<div style="display: flex; align-items: center"><h2 style="margin: 0; font-size: 15px; font-weight: 600; flex: 1">Составы</h2><button type="button" style="height: 28px; padding: 0 10px; border-radius: 7px; border: 1px solid #2d3644; background: transparent; color: #c7d1dd; font-size: 12px">+ Новый</button></div>
+<div style="background: #1a2029; border: 1px solid #2d3644; border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 8px">
+<div style="display: flex; align-items: center"><span style="font-weight: 600; flex: 1">Мафия, пятница</span><span style="font-size: 12px; color: #8b97a8">3 из 4 в голосе</span></div>
+<div style="display: flex"><span style="width: 24px; height: 24px; border-radius: 50%; background: #3ccf8e; box-shadow: 0 0 0 2px #1a2029"></span><span style="width: 24px; height: 24px; border-radius: 50%; background: #ffb020; margin-left: -6px; box-shadow: 0 0 0 2px #1a2029"></span><span style="width: 24px; height: 24px; border-radius: 50%; background: #e84393; margin-left: -6px; box-shadow: 0 0 0 2px #1a2029"></span><span style="width: 24px; height: 24px; border-radius: 50%; background: #2d3644; margin-left: -6px; box-shadow: 0 0 0 2px #1a2029"></span></div>
+<div style="display: flex; gap: 6px"><button type="button" style="flex: 1; height: 30px; border-radius: 7px; border: 0; background: #2ec4ff; color: #0f1218; font-weight: 600">Собрать</button><button type="button" style="height: 30px; padding: 0 10px; border-radius: 7px; border: 1px solid #2d3644; background: #222a35; color: #e6edf5">Выделить</button></div>
+</div>
+<div style="background: #1a2029; border: 1px solid #2d3644; border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 8px">
+<div style="display: flex; align-items: center"><span style="font-weight: 600; flex: 1">Стримеры</span><span style="font-size: 12px; color: #8b97a8">1 из 1</span></div>
+<div style="display: flex; gap: 6px"><button type="button" style="flex: 1; height: 30px; border-radius: 7px; border: 1px solid #2d3644; background: #222a35; color: #e6edf5">Собрать</button><button type="button" style="height: 30px; padding: 0 10px; border-radius: 7px; border: 1px solid #2d3644; background: #222a35; color: #e6edf5">Выделить</button></div>
+</div>
+</aside>
+</div>
+
+<div role="status" style="position: absolute; right: 28px; bottom: 92px; width: 330px; background: #1a2029; border: 1px solid #2d3644; border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; box-shadow: 0 0 0 1px #05070a">
+<div style="display: flex; align-items: center; gap: 8px"><span style="font-weight: 600; flex: 1">Перенос в «Мафия — лобби»</span><span style="font-size: 12px; color: #8b97a8">5 / 6</span></div>
+<div style="height: 6px; border-radius: 3px; background: #222a35"><div style="width: 83%; height: 6px; border-radius: 3px; background: #2ec4ff"></div></div>
+<div style="display: flex; align-items: center; gap: 8px; font-size: 12px"><span style="color: #ff8a8a; flex: 1">Bob вышел из голоса — не перенесён</span><a href="#" style="color: #2ec4ff">Отменить всё</a></div>
+</div>
+
+<div style="position: absolute; left: 28px; right: 28px; bottom: 20px; height: 56px; display: flex; align-items: center; gap: 8px; padding: 0 14px; border-radius: 12px; background: #10324a; border: 1px solid #1d5d84">
+<span style="font-weight: 700">Выбрано 3</span><span style="color: #8ae6ff; font-size: 13px">Аня, Борис, Даша</span>
+<div style="flex: 1"></div>
+<button type="button" style="height: 34px; padding: 0 12px; border-radius: 8px; border: 0; background: #2ec4ff; color: #0f1218; font-weight: 600">Переместить в… ▾</button>
+<button type="button" style="height: 34px; padding: 0 12px; border-radius: 8px; border: 1px solid #2d3644; background: #1a2029; color: #e6edf5">Выкл. микро</button>
+<button type="button" style="height: 34px; padding: 0 12px; border-radius: 8px; border: 1px solid #2d3644; background: #1a2029; color: #e6edf5">Заглушить</button>
+<button type="button" style="height: 34px; padding: 0 12px; border-radius: 8px; border: 1px solid #2d3644; background: #1a2029; color: #e6edf5">Тайм-аут ▾</button>
+<button type="button" style="height: 34px; padding: 0 12px; border-radius: 8px; border: 1px solid #7a2c2c; background: #1a2029; color: #ff8a8a">Отключить</button>
+<button type="button" style="height: 34px; padding: 0 12px; border-radius: 8px; border: 1px solid #2d3644; background: #1a2029; color: #e6edf5">В состав</button>
+<span style="font-size: 11px; color: #8ae6ff; border: 1px solid #1d5d84; border-radius: 4px; padding: 1px 5px">Esc</span>
+</div>
+
+</main>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1400,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const mic = 'M2 2l20 20M9 9v3a3 3 0 0 0 5.1 2.1M15 9.3V5a3 3 0 0 0-5.9-.7M17 16.9A7 7 0 0 1 5 12v-2M19 10v2c0 .8-.1 1.5-.4 2.2M12 19v3';
+    const deaf = 'M2 2l20 20M3 18v-6a9 9 0 0 1 14.5-7.1M21 12v6M21 19a2 2 0 0 1-2 2h-1v-6h3zM3 19a2 2 0 0 0 2 2h1v-6H3z';
+    const cam = 'M23 7l-7 5 7 5V7zM1 5h15v14H1z';
+    const SELF = { d: mic, c: '#8b97a8', label: 'Микрофон выключил сам' };
+    const SRV = { d: mic, c: '#ff5d5d', label: 'Микрофон выключен сервером' };
+    const DEAF = { d: deaf, c: '#ff5d5d', label: 'Заглушён сервером' };
+    const CAM = { d: cam, c: '#8b97a8', label: 'Камера включена' };
+    const m = (ini, name, av, time, opts) => {
+      const o = opts || {};
+      return { ini: ini, name: name, av: av, time: time, icons: o.icons || [], live: !!o.live, bg: o.sel ? '#152536' : 'transparent', ring: o.sel ? 'inset 0 0 0 1.5px #2ec4ff' : 'none', weight: o.sel ? '600' : '400' };
+    };
+    const ch = (name, count, members, opts) => {
+      const o = opts || {};
+      return { name: name, count: count, members: members, border: o.hot ? '#1d5d84' : '#2d3644', headBg: o.hot ? '#132130' : 'transparent', countColor: o.full ? '#ffb020' : '#8b97a8' };
+    };
+    return {
+      mic: mic, deaf: deaf,
+      cats: [
+        { name: 'Общение', channels: [
+          ch('Болталка', '6', [m('F', 'Flix', '#5865f2', '0 мин'), m('А', 'Аня', '#8b97a8', '17 мин', { icons: [SELF], sel: true }), m('Б', 'Борис', '#3ccf8e', '34 мин', { icons: [SRV], sel: true }), m('В', 'Вика', '#ffb020', '51 мин', { live: true }), m('Г', 'Гриша', '#ff5d5d', '1 ч 08', { icons: [CAM, SELF, DEAF] }), m('Д', 'Даша', '#e84393', '1 ч 25', { sel: true })], { hot: true }),
+          ch('Музыка', '2 / 5', [m('Ж', 'Женя', '#8b97a8', '17 мин'), m('R', 'Rythm · бот', '#3ccf8e', '34 мин')])
+        ] },
+        { name: 'Игры', channels: [
+          ch('Мафия — лобби', '2 / 2', [m('З', 'Зоя', '#3ccf8e', '34 мин'), m('И', 'Илья', '#ffb020', '51 мин', { icons: [SRV] })], { full: true })
+        ] }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

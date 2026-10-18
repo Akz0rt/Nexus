@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Nexus v2 — Жалобы, Lockdown включён</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>body{margin:0;background:#0f1218} button{font:inherit;cursor:pointer}</style>
+</helmet>
+<div style="width: 1400px; height: 900px; overflow: hidden; display: flex; background: #0f1218; color: #e6edf5; font-family: 'Segoe UI', system-ui, sans-serif; font-size: 14px">
+<dc-import name="Sidebar" active="moderation" hint-size="240px,900px"></dc-import>
+<div style="flex: 1; min-width: 0; display: flex; flex-direction: column">
+<dc-import name="Topbar" lockdown="{{ true }}" hint-size="1160px,56px"></dc-import>
+<div role="alert" style="display: flex; align-items: center; gap: 12px; height: 52px; padding: 0 28px; background: #3a1618; border-bottom: 1px solid #7a2c2c">
+<svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ff8a8a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"></rect><path d="M8 11V7a4 4 0 0 1 8 0v4"></path></svg>
+<span><b>Сервер закрыт</b> <span style="color: #ffb3b3">с 21:24 · включил Flix · инвайты на паузе, slowmode 30 с в #старт</span></span>
+<div style="flex: 1"></div>
+<button type="button" style="height: 32px; padding: 0 12px; border-radius: 7px; border: 1px solid #7a2c2c; background: transparent; color: #ffb3b3">Изменить</button>
+<button type="button" style="height: 32px; padding: 0 14px; border-radius: 7px; border: 0; background: #ff5d5d; color: #0f1218; font-weight: 700">Открыть сервер</button>
+</div>
+<main style="flex: 1; padding: 20px 28px; display: flex; flex-direction: column; gap: 14px; box-sizing: border-box">
+
+<div style="display: flex; align-items: center; gap: 12px">
+<h1 style="margin: 0; font-size: 24px; font-weight: 600; flex: 1">Модерация</h1>
+<div role="tablist" style="display: flex; gap: 2px; padding: 3px; border-radius: 9px; background: #131820; border: 1px solid #2d3644">
+<button type="button" role="tab" aria-selected="false" style="height: 30px; padding: 0 12px; border-radius: 7px; border: 0; background: transparent; color: #aeb9c7">Активные наказания · 2</button>
+<button type="button" role="tab" aria-selected="false" style="height: 30px; padding: 0 12px; border-radius: 7px; border: 0; background: transparent; color: #aeb9c7">Баны · 14</button>
+<button type="button" role="tab" aria-selected="false" style="height: 30px; padding: 0 12px; border-radius: 7px; border: 0; background: transparent; color: #aeb9c7">Варны · 5</button>
+<button type="button" role="tab" aria-selected="true" style="height: 30px; padding: 0 12px; border-radius: 7px; border: 0; background: #222a35; color: #e6edf5; font-weight: 600; display: flex; align-items: center; gap: 8px">Жалобы<span style="min-width: 20px; height: 18px; padding: 0 4px; box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; background: #ff7a1a; color: #0f1218; font-size: 11px; font-weight: 700; clip-path: polygon(22% 0, 78% 0, 100% 50%, 78% 100%, 22% 100%, 0 50%)">1</span></button>
+</div>
+</div>
+
+<div style="display: flex; align-items: center; gap: 8px">
+<button type="button" aria-pressed="true" style="height: 30px; padding: 0 12px; border-radius: 999px; border: 1px solid #2ec4ff; background: #10324a; color: #8ae6ff">Открытые · 2</button>
+<button type="button" aria-pressed="false" style="height: 30px; padding: 0 12px; border-radius: 999px; border: 1px solid #2d3644; background: transparent; color: #c7d1dd">Мои · 1</button>
+<button type="button" aria-pressed="false" style="height: 30px; padding: 0 12px; border-radius: 999px; border: 1px solid #2d3644; background: transparent; color: #c7d1dd">Закрытые</button>
+</div>
+
+<div style="display: flex; gap: 16px; align-items: flex-start">
+<div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 12px">
+
+<article style="position: relative; background: #1a2029; border: 1px solid #2d3644; border-left: 3px solid #ff7a1a; border-radius: 10px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px">
+<div style="display: flex; align-items: center; gap: 10px">
+<span style="width: 32px; height: 32px; border-radius: 50%; background: #ff5d5d; color: #0f1218; font-weight: 700; display: inline-flex; align-items: center; justify-content: center">Г</span>
+<div style="flex: 1; display: flex; flex-direction: column"><span>На <b>Гриша</b></span><span style="font-size: 12px; color: #8b97a8">#общий · 12 мин назад · у него 1 варн и мут сегодня</span></div>
+<span style="font-size: 12px; font-weight: 600; padding: 2px 9px; border-radius: 999px; border: 1px solid #ff7a1a; color: #ff9d57">новая · никто не взял</span>
+</div>
+<blockquote style="margin: 0; padding: 10px 12px; border-radius: 8px; background: #222a35; color: #e6edf5">да вы все тут клоуны, сервер мусор</blockquote>
+<span style="color: #c7d1dd; font-size: 13px">Жалоба от <b>Вика</b>: «Оскорбляет всех в чате уже второй день»</span>
+<div style="display: flex; align-items: center; gap: 8px">
+<button type="button" style="height: 34px; padding: 0 14px; border-radius: 8px; border: 0; background: #2ec4ff; color: #0f1218; font-weight: 600">Наказать…</button>
+<button type="button" style="height: 34px; padding: 0 12px; border-radius: 8px; border: 1px solid #2d3644; background: #222a35; color: #e6edf5">Взять себе</button>
+<button type="button" style="height: 34px; padding: 0 12px; border-radius: 8px; border: 1px solid #2d3644; background: #222a35; color: #e6edf5">Решено без наказания</button>
+<button type="button" aria-label="Ещё действия" aria-expanded="true" style="width: 34px; height: 34px; border-radius: 8px; border: 1px solid #2ec4ff; background: #222a35; color: #e6edf5; display: flex; align-items: center; justify-content: center"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8"></circle><circle cx="12" cy="12" r="1.8"></circle><circle cx="19" cy="12" r="1.8"></circle></svg></button>
+</div>
+<div role="menu" style="position: absolute; left: 420px; top: 180px; width: 230px; background: #222a35; border: 1px solid #2d3644; border-radius: 10px; padding: 6px; box-shadow: 0 0 0 1px #05070a; z-index: 2; display: flex; flex-direction: column">
+<a role="menuitem" href="#" style="padding: 8px 10px; border-radius: 6px; color: #e6edf5; text-decoration: none">Открыть в Discord</a>
+<a role="menuitem" href="#" style="padding: 8px 10px; border-radius: 6px; color: #e6edf5; text-decoration: none">Ответить заявителю</a>
+<a role="menuitem" href="#" style="padding: 8px 10px; border-radius: 6px; color: #e6edf5; text-decoration: none">Открыть карточку Гриши</a>
+<div style="height: 1px; background: #2d3644; margin: 4px 0"></div>
+<a role="menuitem" href="#" style="padding: 8px 10px; border-radius: 6px; color: #e6edf5; text-decoration: none">Отклонить жалобу</a>
+</div>
+</article>
+
+<article style="background: #1a2029; border: 1px solid #2d3644; border-radius: 10px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px">
+<div style="display: flex; align-items: center; gap: 10px">
+<span style="width: 32px; height: 32px; border-radius: 50%; background: #3ccf8e; color: #0f1218; font-weight: 700; display: inline-flex; align-items: center; justify-content: center">И</span>
+<div style="flex: 1; display: flex; flex-direction: column"><span>На <b>Илья</b></span><span style="font-size: 12px; color: #8b97a8">#общий · 3 ч назад · нарушений раньше не было</span></div>
+<span style="font-size: 12px; font-weight: 600; padding: 2px 9px; border-radius: 999px; border: 1px solid #2ec4ff; color: #8ae6ff">в работе · Flix</span>
+</div>
+<blockquote style="margin: 0; padding: 10px 12px; border-radius: 8px; background: #222a35; color: #e6edf5">заходите на мой сервер discord.gg/xxxx <span style="color: #8b97a8">· скрин.png</span></blockquote>
+<span style="color: #c7d1dd; font-size: 13px">Жалоба от <b>Зоя</b>: «Реклама»</span>
+<div style="display: flex; align-items: center; gap: 8px">
+<button type="button" style="height: 34px; padding: 0 14px; border-radius: 8px; border: 0; background: #2ec4ff; color: #0f1218; font-weight: 600">Наказать…</button>
+<button type="button" style="height: 34px; padding: 0 12px; border-radius: 8px; border: 1px solid #2d3644; background: #222a35; color: #e6edf5">Решено без наказания</button>
+<button type="button" aria-label="Ещё действия" style="width: 34px; height: 34px; border-radius: 8px; border: 1px solid #2d3644; background: #222a35; color: #e6edf5; display: flex; align-items: center; justify-content: center"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8"></circle><circle cx="12" cy="12" r="1.8"></circle><circle cx="19" cy="12" r="1.8"></circle></svg></button>
+</div>
+</article>
+</div>
+
+<aside aria-labelledby="tpl" style="width: 290px; flex: none; background: #1a2029; border: 1px solid #2d3644; border-radius: 10px; padding: 14px; display: flex; flex-direction: column; gap: 8px">
+<h2 id="tpl" style="margin: 0; font-size: 15px; font-weight: 600">Шаблоны наказаний</h2>
+<span style="font-size: 12px; color: #8b97a8">«Наказать…» сразу предлагает их</span>
+<sc-for list="{{tpl}}" as="t" hint-placeholder-count="4">
+<button type="button" style="display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 10px 12px; border-radius: 8px; border: 1px solid #2d3644; background: #222a35; color: #e6edf5; text-align: left">
+<span style="font-weight: 600">{{t.name}}</span>
+<span style="font-size: 12px; color: #8b97a8">{{t.what}}</span>
+</button>
+</sc-for>
+<button type="button" style="height: 32px; border-radius: 8px; border: 1px dashed #2d3644; background: transparent; color: #aeb9c7">+ Новый шаблон</button>
+</aside>
+</div>
+
+</main>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1400,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      tpl: [
+        { name: 'Флуд', what: 'мут 10 мин + варн' },
+        { name: 'Оскорбления', what: 'мут 1 ч + варн' },
+        { name: 'Реклама', what: 'удалить сообщения за 24 ч + бан 7 дн.' },
+        { name: 'Скам-ссылки', what: 'бан навсегда, удалить за 7 дн.' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

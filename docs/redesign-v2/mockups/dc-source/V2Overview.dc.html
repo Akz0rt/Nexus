@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Nexus v2 — Обзор</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>body{margin:0;background:#0f1218} button{font:inherit;cursor:pointer}</style>
+</helmet>
+<div style="width: 1400px; height: 900px; overflow: hidden; display: flex; background: #0f1218; color: #e6edf5; font-family: 'Segoe UI', system-ui, sans-serif; font-size: 14px">
+<dc-import name="Sidebar" active="overview" hint-size="240px,900px"></dc-import>
+<div style="flex: 1; min-width: 0; display: flex; flex-direction: column">
+<dc-import name="Topbar" lockdown="{{ false }}" hint-size="1160px,56px"></dc-import>
+<main style="flex: 1; padding: 22px 28px; display: flex; flex-direction: column; gap: 16px; box-sizing: border-box">
+
+<div style="display: flex; align-items: flex-end; gap: 12px">
+<div style="flex: 1; display: flex; flex-direction: column; gap: 2px">
+<h1 style="margin: 0; font-size: 24px; font-weight: 600">Обзор</h1>
+<span style="color: #8b97a8; font-size: 13px">Воскресенье, 18 октября · требует внимания: очередь и 1 жалоба</span>
+</div>
+<button type="button" style="height: 34px; padding: 0 14px; border-radius: 8px; border: 1px solid #2d3644; background: #1a2029; color: #e6edf5">Настроить</button>
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px">
+<sc-for list="{{tiles}}" as="t" hint-placeholder-count="4">
+<a href="#" style="display: flex; flex-direction: column; gap: 4px; padding: 14px 16px; border-radius: 10px; background: #1a2029; border: 1px solid {{t.border}}; text-decoration: none; color: #e6edf5">
+<div style="display: flex; align-items: center; justify-content: space-between">
+<span style="font-size: 13px; color: #aeb9c7">{{t.label}}</span>
+<svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8b97a8" stroke-width="2" stroke-linecap="round"><path d="M9 6l6 6-6 6"></path></svg>
+</div>
+<span style="font-size: 28px; font-weight: 700; font-variant-numeric: tabular-nums">{{t.value}}</span>
+<span style="font-size: 12px; color: {{t.noteColor}}">{{t.note}}</span>
+</a>
+</sc-for>
+</div>
+
+<div style="display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 16px; flex: 1; min-height: 0">
+<div style="display: flex; flex-direction: column; gap: 16px; min-width: 0">
+<section aria-labelledby="oq" style="background: #1a2029; border: 1px solid #2d3644; border-radius: 10px; padding: 14px 16px 8px">
+<div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px">
+<h2 id="oq" style="margin: 0; font-size: 15px; font-weight: 600; flex: 1">Очередь на пропуск</h2>
+<a href="#" style="color: #2ec4ff; font-size: 13px; text-decoration: none">Все 7 →</a>
+</div>
+<sc-for list="{{queue}}" as="q" hint-placeholder-count="5">
+<div style="display: flex; align-items: center; gap: 10px; height: 52px; border-top: 1px solid #222a35">
+<span style="width: 32px; height: 32px; border-radius: 50%; background: {{q.bg}}; color: #0f1218; font-weight: 700; font-size: 13px; display: inline-flex; align-items: center; justify-content: center; flex: none">{{q.ini}}</span>
+<div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px">
+<div style="display: flex; align-items: center; gap: 6px">
+<span style="font-weight: 600">{{q.name}}</span>
+<sc-if value="{{q.hasFlag}}" hint-placeholder-val="{{ false }}"><span style="font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 999px; background: {{q.flagBg}}; color: {{q.flagColor}}">{{q.flag}}</span></sc-if>
+</div>
+<span style="font-size: 12px; color: #8b97a8">{{q.meta}}</span>
+</div>
+<button type="button" style="height: 32px; padding: 0 12px; border-radius: 7px; border: 1px solid #2d3644; background: #222a35; color: #e6edf5">Парень</button>
+<button type="button" style="height: 32px; padding: 0 12px; border-radius: 7px; border: 1px solid #2d3644; background: #222a35; color: #e6edf5">Девушка</button>
+<button type="button" aria-label="Ещё действия: {{q.name}}" style="width: 32px; height: 32px; border-radius: 7px; border: 0; background: transparent; color: #8b97a8; display: flex; align-items: center; justify-content: center"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8"></circle><circle cx="12" cy="12" r="1.8"></circle><circle cx="19" cy="12" r="1.8"></circle></svg></button>
+</div>
+</sc-for>
+</section>
+
+<section aria-labelledby="oj" style="background: #1a2029; border: 1px solid #2d3644; border-radius: 10px; padding: 14px 16px">
+<div style="display: flex; align-items: center; margin-bottom: 8px">
+<h2 id="oj" style="margin: 0; font-size: 15px; font-weight: 600; flex: 1">Журнал</h2>
+<a href="#" style="color: #2ec4ff; font-size: 13px; text-decoration: none">Все →</a>
+</div>
+<sc-for list="{{log}}" as="l" hint-placeholder-count="3">
+<div style="display: flex; align-items: center; gap: 10px; height: 30px">
+<span style="width: 8px; height: 8px; border-radius: 50%; background: {{l.dot}}; flex: none"></span>
+<span style="flex: 1; min-width: 0"><b>{{l.who}}</b> <span style="color: #8b97a8">→</span> <b>{{l.whom}}</b> <span style="color: #c7d1dd">· {{l.what}}</span></span>
+<span style="font-size: 12px; color: #8b97a8">{{l.when}}</span>
+</div>
+</sc-for>
+</section>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 16px; min-width: 0">
+<section aria-labelledby="ov" style="background: #1a2029; border: 1px solid #2d3644; border-radius: 10px; padding: 14px 16px">
+<div style="display: flex; align-items: center; margin-bottom: 8px">
+<h2 id="ov" style="margin: 0; font-size: 15px; font-weight: 600; flex: 1">Голосовые · 9 человек</h2>
+<a href="#" style="color: #2ec4ff; font-size: 13px; text-decoration: none">Доска →</a>
+</div>
+<sc-for list="{{voice}}" as="v" hint-placeholder-count="3">
+<div style="display: flex; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid #222a35">
+<div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px">
+<span style="font-weight: 600">{{v.name}}</span>
+<span style="font-size: 12px; color: #8b97a8">{{v.people}}</span>
+</div>
+<div style="display: flex">
+<sc-for list="{{v.av}}" as="a" hint-placeholder-count="3"><span style="width: 26px; height: 26px; border-radius: 50%; background: {{a.bg}}; color: #0f1218; font-size: 11px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; margin-left: -6px; box-shadow: 0 0 0 2px #1a2029">{{a.i}}</span></sc-for>
+</div>
+</div>
+</sc-for>
+</section>
+
+<section aria-labelledby="or" style="background: #1a2029; border: 1px solid #5a3412; border-radius: 10px; padding: 14px 16px; display: flex; flex-direction: column; gap: 8px">
+<div style="display: flex; align-items: center; gap: 8px">
+<h2 id="or" style="margin: 0; font-size: 15px; font-weight: 600; flex: 1">Новая жалоба</h2>
+<span style="font-size: 12px; color: #8b97a8">12 мин назад</span>
+</div>
+<span style="color: #c7d1dd">Вика → <b>Гриша</b>: «оскорбляет всех в чате второй день»</span>
+<div style="display: flex; gap: 8px">
+<button type="button" style="height: 32px; padding: 0 12px; border-radius: 7px; border: 0; background: #2ec4ff; color: #0f1218; font-weight: 600">Наказать…</button>
+<button type="button" style="height: 32px; padding: 0 12px; border-radius: 7px; border: 1px solid #2d3644; background: #222a35; color: #e6edf5">Открыть</button>
+</div>
+</section>
+
+<section aria-labelledby="ob" style="background: #1a2029; border: 1px solid #2d3644; border-radius: 10px; padding: 14px 16px; display: flex; flex-direction: column; gap: 8px">
+<h2 id="ob" style="margin: 0; font-size: 15px; font-weight: 600">Дни рождения</h2>
+<div style="display: flex; align-items: center; gap: 10px">
+<span style="width: 28px; height: 28px; border-radius: 50%; background: #ffb020; color: #0f1218; font-size: 12px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center">В</span>
+<span style="flex: 1"><b>Вика</b> <span style="color: #ffb020">· сегодня</span></span>
+<span style="font-size: 12px; color: #3ccf8e">поздравил в 09:00</span>
+</div>
+<div style="display: flex; align-items: center; gap: 10px">
+<span style="width: 28px; height: 28px; border-radius: 50%; background: #ff5d5d; color: #0f1218; font-size: 12px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center">Г</span>
+<span style="flex: 1"><b>Гриша</b> <span style="color: #8b97a8">· 21 октября, через 3 дн.</span></span>
+</div>
+</section>
+</div>
+</div>
+
+</main>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1400,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      tiles: [
+        { label: 'Ждут пропуска', value: '7', note: 'дольше всех ждёт Тимур — 7 ч', noteColor: '#ffb020', border: '#ff7a1a' },
+        { label: 'Пропущено сегодня', value: '12', note: '+3 за последний час', noteColor: '#8b97a8', border: '#2d3644' },
+        { label: 'В голосовых', value: '9', note: 'в 3 каналах', noteColor: '#8b97a8', border: '#2d3644' },
+        { label: 'Активные муты', value: '2', note: 'ближайший снимется через 42 мин', noteColor: '#8b97a8', border: '#2d3644' }
+      ],
+      queue: [
+        { ini: 'Т', name: 'Тимур', bg: '#5865f2', meta: 'ждёт 7 ч · аккаунту 8 дн. · инвайт @Lev', hasFlag: false },
+        { ini: 'Н', name: 'Новичок', bg: '#2ec4ff', meta: 'ждёт 1 ч · аккаунту 2 дн. · vanity-ссылка', hasFlag: true, flag: 'новый аккаунт', flagBg: '#3a1d1f', flagColor: '#ff8a8a' },
+        { ini: 'К', name: 'Ксюша', bg: '#e84393', meta: 'ждёт 6 ч · аккаунту 7 дн. · инвайт @Kira', hasFlag: false },
+        { ini: 'Л', name: 'Лёша', bg: '#8b97a8', meta: 'ждёт 2 ч · аккаунту 3 дн. · инвайт @Nyx', hasFlag: true, flag: 'ник как у забаненного', flagBg: '#3a2c12', flagColor: '#ffc65c' },
+        { ini: 'О', name: 'Оля', bg: '#ff5d5d', meta: 'ждёт 5 ч · аккаунту 6 дн. · инвайт @Mira', hasFlag: false }
+      ],
+      log: [
+        { who: 'Flix', whom: 'Вика', what: 'пропуск, Девушка', when: '4 мин', dot: '#3ccf8e' },
+        { who: 'Flix', whom: 'Гриша', what: 'мут 1 ч — флуд', when: '8 мин', dot: '#ffb020' },
+        { who: 'Kira', whom: 'сервер', what: 'Lockdown снят', when: '13 мин', dot: '#2ec4ff' }
+      ],
+      voice: [
+        { name: 'Болталка', people: 'Flix, Аня, Борис и ещё 3', av: [{ i: 'F', bg: '#5865f2' }, { i: 'А', bg: '#8b97a8' }, { i: 'Б', bg: '#3ccf8e' }, { i: '+3', bg: '#e6edf5' }] },
+        { name: 'Музыка', people: 'Женя, Rythm (бот)', av: [{ i: 'Ж', bg: '#8b97a8' }, { i: 'R', bg: '#3ccf8e' }] },
+        { name: 'Мафия — лобби', people: 'Зоя, Илья', av: [{ i: 'З', bg: '#3ccf8e' }, { i: 'И', bg: '#ffb020' }] }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>
