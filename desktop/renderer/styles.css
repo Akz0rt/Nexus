@@ -140,8 +140,9 @@ kbd {
     border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; padding: 2px 5px;
 }
 .check { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; }
-.field { display: grid; gap: 4px; color: var(--muted); font-size: 12px; }
-.field select { color: var(--text); font-size: 14px; }
+.field { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; color: var(--muted); font-size: 12px; }
+/* A select is as wide as its longest option: long channel names must not push it out of the dialog */
+.field select { color: var(--text); font-size: 14px; width: 100%; min-width: 0; text-overflow: ellipsis; }
 .field-inline { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); }
 .member-link { background: none; border: 0; padding: 0; color: inherit; font-weight: 600; cursor: pointer; text-align: left; }
 .member-link:hover { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
