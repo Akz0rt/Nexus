@@ -142,6 +142,17 @@ export default function EventsView({ guildId, revision, eventRevision, onOpenMem
     }, [guildId, group, revision, eventRevision, retry]);
 
     const items = data?.group === group ? data.items : null;
+
+    // A running event moves to «Прошедшие» at its end: nothing is emitted then, so ask again
+    useEffect(() => {
+        const ends = (items || [])
+            .filter(event => event.status === 'done')
+            .map(event => Date.parse(event.endsAt))
+            .filter(at => at > Date.now());
+        if (ends.length === 0) return undefined;
+        const timer = setTimeout(() => setRetry(n => n + 1), Math.min(Math.min(...ends) - Date.now() + 1000, 2 ** 31 - 1));
+        return () => clearTimeout(timer);
+    }, [items]);
     const tones = new Map((group === 'upcoming' ? items || [] : []).map((event, index) => [event.id, TONES[index % TONES.length]]));
     const weekEnd = Date.now() + 7 * DAY_MS;
     const week = (group === 'upcoming' ? items || [] : [])

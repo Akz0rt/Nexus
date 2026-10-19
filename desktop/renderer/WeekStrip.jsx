@@ -1,7 +1,5 @@
 import React from 'react';
 
-const DAY_MS = 24 * 60 * 60 * 1000;
-
 const dayKey = date => `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
 const timeOf = iso => new Date(iso).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
 
@@ -10,9 +8,9 @@ const timeOf = iso => new Date(iso).toLocaleTimeString('ru-RU', { hour: '2-digit
  * events: [{ id, title, startsAt, tone }]; onPick(id) scrolls to the event's card.
  */
 export default function WeekStrip({ events, onPick }) {
-    const start = new Date();
-    start.setHours(0, 0, 0, 0);
-    const days = Array.from({ length: 7 }, (_, i) => new Date(start.getTime() + i * DAY_MS));
+    // By calendar date, not 24-hour steps: a clock change keeps every day in its cell
+    const today = new Date();
+    const days = Array.from({ length: 7 }, (_, i) => new Date(today.getFullYear(), today.getMonth(), today.getDate() + i));
     const byDay = new Map();
     for (const event of events) {
         const key = dayKey(new Date(event.startsAt));

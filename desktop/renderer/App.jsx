@@ -72,9 +72,12 @@ export default function App() {
     const checkUpdates = useCallback(async () => {
         manualCheck.current = true;
         const state = await window.panel.checkForUpdates();
-        if (state.status === 'dev') { manualCheck.current = false; toast('Обновления приходят только в установленную версию приложения'); }
-        if (state.status === 'ready') { manualCheck.current = false; toast(`Версия ${state.version} уже загружена — перезапустите приложение`); }
-        if (state.status === 'downloading') { manualCheck.current = false; toast(`Версия ${state.version} уже загружается`); }
+        // Only a check that is running reports back later
+        if (state.status !== 'checking') manualCheck.current = false;
+        if (state.status === 'dev') toast('Обновления приходят только в установленную версию приложения');
+        if (state.status === 'ready') toast(`Версия ${state.version} уже загружена — перезапустите приложение`);
+        if (state.status === 'downloading') toast(`Версия ${state.version} уже загружается`);
+        if (state.status === 'idle') toast('Проверка обновлений ещё не запустилась — попробуйте через минуту');
     }, [toast]);
     // How a check started by hand ended
     useEffect(() => {

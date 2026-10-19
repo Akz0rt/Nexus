@@ -211,7 +211,10 @@ function checkForUpdates() {
     // Already downloading or downloaded: nothing to ask GitHub
     if (updater && !['downloading', 'ready', 'checking'].includes(updateState.status)) {
         setUpdateState({ status: 'checking' });
-        updater.checkForUpdates().catch(error => setUpdateState({ status: 'error', error: error?.message || String(error) }));
+        updater.checkForUpdates()
+            // null: the updater is inactive (no app-update.yml) and emits nothing — don't stay on «проверяем…»
+            .then(result => { if (!result && updateState.status === 'checking') setUpdateState({ status: 'error', error: 'обновления для этой сборки не настроены' }); })
+            .catch(error => setUpdateState({ status: 'error', error: error?.message || String(error) }));
     }
     return updateState;
 }
