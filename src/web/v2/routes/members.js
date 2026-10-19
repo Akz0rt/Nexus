@@ -1,16 +1,34 @@
 const express = require('express');
 const { PermissionFlagsBits } = require('discord.js');
+const config = require('../../../config');
 const AuditLogService = require('../../../services/AuditLogService');
+const ActivityService = require('../../../services/ActivityService');
+const CosmosDBService = require('../../../services/CosmosDBService');
+const VoiceService = require('../../../modules/voice/VoiceService');
+const MemberNoteService = require('../../../modules/members/MemberNoteService');
 const QueueCardService = require('../../../modules/verification/QueueCardService');
 const WarningService = require('../../../modules/moderation/WarningService');
 const TempRoleService = require('../../../modules/roles/TempRoleService');
 const { roleProblem } = require('../../../services/RoleService');
 const { canSeeEntry } = require('../visibility');
 const { describeMember, flagContext, serializeCard, userRef } = require('../serialize');
+const { actorOf, sendResult } = require('../result');
 
 const router = express.Router({ mergeParams: true });
 
 const SNOWFLAKE_RE = /^\d{17,20}$/;
+const MAX_NICK = 32;
+
+/** Why the viewer can't take a role away: above the bot, above the viewer, an integration's, or no Manage Roles */
+function roleLock(guild, viewer, role, manageRoles) {
+    if (role.managed) return 'managed';
+    if (!role.editable) return 'bot';
+    if (!manageRoles) return 'no_permission';
+    return roleProblem(guild, viewer, role) ? 'higher' : null;
+}
+
+// A missing database (or another server than the activity one) leaves the fact empty
+const quiet = promise => promise.catch(() => null);
 
 // "<@123>", "<@!123>" or a bare ID → ID
 function extractId(query) {
@@ -73,6 +91,7 @@ router.get('/:userId', async (req, res, next) => {
                 managed: role.managed,
                 // May the viewer take it away (and give it): below their and the bot's highest role
                 editable: manageRoles && !roleProblem(guild, viewer, role),
+                lock: roleLock(guild, viewer, role, manageRoles),
                 expiresAt: temporary.get(role.id) || null
             }));
 
@@ -81,15 +100,21 @@ router.get('/:userId', async (req, res, next) => {
                 id: member.voice.channel.id,
                 name: member.voice.channel.name,
                 serverMute: Boolean(member.voice.serverMute),
-                serverDeaf: Boolean(member.voice.serverDeaf)
+                serverDeaf: Boolean(member.voice.serverDeaf),
+                since: VoiceService.inChannelSince(guild.id, userId)
             }
             : null;
 
-        const [history, card, warnings] = await Promise.all([
+        // Messages are collected for the main server only
+        const activityHere = !config.guildId || config.guildId === guild.id;
+        const [history, card, warnings, notes, lastMessageAt, birthday] = await Promise.all([
             AuditLogService.query({ guildId: guild.id, targetId: userId }, { limit: 50 })
                 .then(r => r.items.filter(entry => canSeeEntry(guild, viewer, entry))),
             QueueCardService.get(guild.id, userId),
-            WarningService.listActive(guild.id, userId)
+            WarningService.listActive(guild.id, userId),
+            quiet(MemberNoteService.list(guild.id, userId)),
+            activityHere ? quiet(ActivityService.lastMessageAt(userId)) : null,
+            quiet(CosmosDBService.getBirthday(userId))
         ]);
 
         const mutedUntil = (member.communicationDisabledUntilTimestamp || 0) > Date.now()
@@ -105,15 +130,26 @@ router.get('/:userId', async (req, res, next) => {
             ban: has(PermissionFlagsBits.BanMembers),
             move: has(PermissionFlagsBits.MoveMembers),
             voiceMute: has(PermissionFlagsBits.MuteMembers),
-            deafen: has(PermissionFlagsBits.DeafenMembers)
+            deafen: has(PermissionFlagsBits.DeafenMembers),
+            nick: has(PermissionFlagsBits.ManageNicknames)
         };
 
         res.json({
-            member: describeMember(member, await flagContext(guild, new Map([[member.id, card?.kickCount || 0]]))),
+            member: { ...describeMember(member, await flagContext(guild, new Map([[member.id, card?.kickCount || 0]]))), nickname: member.nickname || null },
             roles,
             voice,
             card: serializeCard(card),
             history,
+            lastMessageAt,
+            birthday: birthday ? { month: birthday.month, day: birthday.day } : null,
+            // null: the notes couldn't be loaded
+            notes: notes && notes.map(note => ({
+                id: note.id,
+                text: note.text,
+                author: userRef(guild, note.authorId),
+                createdAt: note.createdAt,
+                canDelete: note.authorId === req.session.userId || req.panelRole === 'senior'
+            })),
             moderation: {
                 mutedUntil,
                 warnings: warnings.map(warn => ({
@@ -126,6 +162,68 @@ router.get('/:userId', async (req, res, next) => {
                 can
             }
         });
+    } catch (error) {
+        next(error);
+    }
+});
+
+const NOTE_STATUSES = { note_not_found: 404, not_note_author: 403 };
+
+// POST /members/:userId/notes { text }
+router.post('/:userId/notes', async (req, res, next) => {
+    try {
+        if (!SNOWFLAKE_RE.test(req.params.userId)) return res.status(400).json({ error: 'invalid_user_id' });
+        const result = await MemberNoteService.add(req.guild.id, req.params.userId, req.body?.text, actorOf(req));
+        if (!result.ok) return sendResult(res, result, NOTE_STATUSES);
+        const { note } = result;
+        res.json({ ok: true, note: { id: note.id, text: note.text, author: userRef(req.guild, note.authorId), createdAt: note.createdAt, canDelete: true } });
+    } catch (error) {
+        next(error);
+    }
+});
+
+// DELETE /members/:userId/notes/:noteId — the author or an administrator
+router.delete('/:userId/notes/:noteId', async (req, res, next) => {
+    try {
+        const result = await MemberNoteService.remove(req.guild.id, req.params.userId, req.params.noteId, actorOf(req), req.panelRole === 'senior');
+        sendResult(res, result, NOTE_STATUSES);
+    } catch (error) {
+        next(error);
+    }
+});
+
+// PUT /members/:userId/nickname { nickname } — empty resets it to the account name
+router.put('/:userId/nickname', async (req, res, next) => {
+    try {
+        const guild = req.guild;
+        const viewer = guild.members.cache.get(req.session.userId) || await guild.members.fetch(req.session.userId).catch(() => null);
+        if (!viewer?.permissions.has(PermissionFlagsBits.ManageNicknames)) return res.status(403).json({ error: 'forbidden' });
+        if (!SNOWFLAKE_RE.test(req.params.userId)) return res.status(400).json({ error: 'invalid_user_id' });
+        if (req.body?.nickname != null && typeof req.body.nickname !== 'string') return res.status(400).json({ error: 'invalid_nickname' });
+        const nickname = (req.body?.nickname || '').trim();
+        if (nickname.length > MAX_NICK) return res.status(400).json({ error: 'nickname_too_long' });
+
+        const member = await guild.members.fetch(req.params.userId).catch(() => null);
+        if (!member) return res.status(404).json({ error: 'member_not_found' });
+        if (member.id === guild.ownerId) return res.status(403).json({ error: 'target_owner' });
+        if (viewer.id !== guild.ownerId && member.id !== viewer.id && member.roles.highest.position >= viewer.roles.highest.position) {
+            return res.status(403).json({ error: 'target_higher' });
+        }
+        if (!member.manageable) return res.status(403).json({ error: 'bot_cannot' });
+
+        const before = member.nickname || null;
+        const actor = actorOf(req);
+        await member.setNickname(nickname || null, `Панель: ${actor.tag}`);
+        await AuditLogService.log({
+            guildId: guild.id,
+            action: 'member.nickname',
+            actorId: actor.id,
+            actorTag: actor.tag,
+            targetIds: [member.id],
+            source: 'panel',
+            details: { before, after: nickname || null }
+        });
+        res.json({ ok: true, nickname: nickname || null, displayName: member.displayName });
     } catch (error) {
         next(error);
     }

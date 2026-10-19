@@ -217,6 +217,17 @@ class ActivityService {
         return [...byDate].map(([date, messages]) => ({ date, messages })).sort((a, b) => a.date.localeCompare(b.date));
     }
 
+    /** When the member last wrote (kept 35 days), or null */
+    async lastMessageAt(userId) {
+        await this.initialize();
+        const { resources } = await this.container.items.query({
+            query: 'SELECT TOP 1 c.lastMessageTime FROM c WHERE c.userId = @userId ORDER BY c.date DESC',
+            parameters: [{ name: '@userId', value: userId }]
+        }, { partitionKey: userId }).fetchAll();
+        const at = resources[0]?.lastMessageTime;
+        return at ? new Date(at).toISOString() : null;
+    }
+
     _getCutoffDateString(periodOrDays) {
         const now = new Date();
 

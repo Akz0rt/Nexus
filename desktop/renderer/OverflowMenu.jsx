@@ -1,12 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { DotsIcon } from './icons.jsx';
+import Icon, { DotsIcon } from './icons.jsx';
 
 /**
  * «⋯» with the actions that don't fit on the row. Ordinary items first, then a line,
  * then the ones that reject or destroy (`end: true`; `danger: true` paints them red).
- * items: [{ label, onSelect, end?, danger?, disabled? }]
+ * items: [{ label, onSelect, end?, danger?, disabled?, title? }]
+ * text: a text button with ▾ («Мут ▾») instead of «⋯».
  */
-export default function OverflowMenu({ items, label, align = 'right' }) {
+export default function OverflowMenu({ items, label, align = 'right', text, buttonClass = 'btn' }) {
     const [open, setOpen] = useState(false);
     const rootRef = useRef(null);
     const buttonRef = useRef(null);
@@ -37,20 +38,27 @@ export default function OverflowMenu({ items, label, align = 'right' }) {
     const choose = item => { setOpen(false); buttonRef.current?.focus(); item.onSelect(); };
     const entry = item => (
         <button key={item.label} type="button" role="menuitem" disabled={item.disabled}
-            className={`menu-entry ${item.danger ? 'is-danger' : ''}`} onClick={() => choose(item)}>
+            title={item.title} className={`menu-entry ${item.danger ? 'is-danger' : ''}`} onClick={() => choose(item)}>
             {item.label}
         </button>
     );
 
     if (shown.length === 0) return null;
     return (
-        <div className="overflow" ref={rootRef}>
-            <button ref={buttonRef} type="button" className="icon-button" aria-haspopup="menu" aria-expanded={open}
-                aria-label={label || `Ещё: ${shown.map(item => item.label).join(', ')}`} onClick={() => setOpen(o => !o)}>
-                <DotsIcon />
-            </button>
+        <div className="overflow" ref={rootRef} onKeyDown={open ? onKeyDown : undefined}>
+            {text ? (
+                <button ref={buttonRef} type="button" className={`${buttonClass} menu-trigger`} aria-haspopup="menu" aria-expanded={open}
+                    aria-label={label} onClick={() => setOpen(o => !o)}>
+                    {text}<Icon name="chevron" size={14} strokeWidth={2} />
+                </button>
+            ) : (
+                <button ref={buttonRef} type="button" className="icon-button" aria-haspopup="menu" aria-expanded={open}
+                    aria-label={label || `Ещё: ${shown.map(item => item.label).join(', ')}`} onClick={() => setOpen(o => !o)}>
+                    <DotsIcon />
+                </button>
+            )}
             {open && (
-                <div ref={listRef} role="menu" className={`menu-pop align-${align}`} onKeyDown={onKeyDown}>
+                <div ref={listRef} role="menu" className={`menu-pop align-${align}`}>
                     {main.map(entry)}
                     {main.length > 0 && end.length > 0 && <div className="menu-sep" role="separator" />}
                     {end.map(entry)}

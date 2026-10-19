@@ -94,7 +94,43 @@ export function AdjustDialog({ guildId, userId, name, onClose, onDone, toast }) 
 }
 
 /** Level, balance and recent operations in the member card. */
-export function EconomyBlock({ guildId, userId, name, revision, toast }) {
+/** The card's «Обзор»: level, place, coins and the progress to the next level in numbers. */
+export function EconomySummary({ guildId, userId, revision, onMore }) {
+    const [data, setData] = useState(null);
+    useEffect(() => {
+        let cancelled = false;
+        apiGet(`/guilds/${guildId}/economy/members/${userId}`)
+            .then(result => { if (!cancelled) setData(result); })
+            .catch(() => { if (!cancelled) setData(null); });
+        return () => { cancelled = true; };
+    }, [guildId, userId, revision]);
+    if (!data) return null;
+    const account = data.account;
+    return (
+        <section className="drawer-section">
+            <div className="drawer-section-head">
+                <h3>Экономика</h3>
+                <button type="button" className="link-button" onClick={onMore}>Подробно →</button>
+            </div>
+            {!account
+                ? <p className="muted small">Опыта и монет пока нет.</p>
+                : (
+                    <div className="economy-summary">
+                        <div className="economy-summary-top">
+                            <strong>Уровень {account.level}{account.prestige > 0 && <span className="prestige"> ★{account.prestige}</span>}</strong>
+                            <span className="muted small">{account.levelRank}-е место · {number(account.money)} монет</span>
+                        </div>
+                        <XpBar exp={account.exp} cost={account.cost} />
+                        <span className="muted small numeric">
+                            {number(account.exp)} / {number(account.cost)} опыта {account.level >= 50 ? 'до престижа' : `до ${account.level + 1}-го`}
+                        </span>
+                    </div>
+                )}
+        </section>
+    );
+}
+
+export function EconomyBlock({ guildId, userId, name, revision, toast, heading = true }) {
     const [data, setData] = useState(null);
     const [adjusting, setAdjusting] = useState(false);
     const [reload, setReload] = useState(0);
@@ -109,7 +145,7 @@ export function EconomyBlock({ guildId, userId, name, revision, toast }) {
     const account = data.account;
     return (
         <>
-            <h3>Экономика</h3>
+            {heading && <h3>Экономика</h3>}
             {!account && <p className="muted small">Опыта и монет пока нет.</p>}
             {account && (
                 <>

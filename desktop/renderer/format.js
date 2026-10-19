@@ -57,6 +57,9 @@ export const ACTION_LABELS = {
     'birthday.deleted': 'День рождения удалён',
     'birthday.congratulated': 'Поздравлен вручную',
     'birthday.skipped': 'Поздравление пропущено',
+    'member.nickname': 'Ник изменён',
+    'member.note_added': 'Добавлена заметка',
+    'member.note_deleted': 'Удалена заметка',
     'economy.given': 'Выданы монеты',
     'economy.taken': 'Забраны монеты',
     'economy.settings': 'Настройки экономики изменены',
@@ -177,6 +180,9 @@ export function describeAction(entry) {
     }
     if (entry.action === 'roles.added' && entry.details?.durationMs) {
         return `${label} · ${entry.details.roleName} · на ${formatDurationMs(entry.details.durationMs)}`;
+    }
+    if (entry.action === 'member.nickname') {
+        return `${label} · ${entry.details?.before || 'без ника'} → ${entry.details?.after || 'без ника'}`;
     }
     if ((entry.action === 'economy.given' || entry.action === 'economy.taken') && entry.details?.amount) {
         return `${label} · ${Number(entry.details.amount).toLocaleString('ru-RU')} · ${entry.details.reason}`;
