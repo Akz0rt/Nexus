@@ -6,19 +6,19 @@ import { useModerationOptions } from './PunishDialog.jsx';
 const cache = new Map();
 const listeners = new Set();
 
-/** { items, canEdit } of a server, or null while loading */
+/**
+ * { items, canEdit } of a server, or null while loading. The last list shows at once,
+ * and every mount asks again: an administrator may have changed a template meanwhile.
+ */
 export function useTemplates(guildId) {
     const [data, setData] = useState(() => cache.get(guildId) || null);
     useEffect(() => {
         const update = () => setData(cache.get(guildId) || null);
         listeners.add(update);
-        if (!cache.has(guildId)) {
-            apiGet(`/guilds/${guildId}/moderation/templates`)
-                .then(result => { cache.set(guildId, result); listeners.forEach(fn => fn()); })
-                .catch(() => {});
-        } else {
-            update();
-        }
+        update();
+        apiGet(`/guilds/${guildId}/moderation/templates`)
+            .then(result => { cache.set(guildId, result); listeners.forEach(fn => fn()); })
+            .catch(() => {});
         return () => listeners.delete(update);
     }, [guildId]);
     return data;

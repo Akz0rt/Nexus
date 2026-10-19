@@ -58,7 +58,7 @@ function sanitize(guild, body, current) {
     }
 
     if ('reasons' in body || 'escalation' in body) {
-        const moderation = { reasons: current.moderation.reasons, escalation: current.moderation.escalation };
+        const moderation = { ...current.moderation };
         if ('reasons' in body) {
             if (!Array.isArray(body.reasons)) return fail('reasons', 'invalid_reasons');
             const reasons = [...new Set(body.reasons.map(r => String(r || '').trim().slice(0, 100)).filter(Boolean))];

@@ -295,6 +295,8 @@ router.post('/:userId/punish', validUserId, async (req, res, next) => {
             if (!template) return res.status(404).json({ error: 'template_not_found' });
             steps = cleanSteps(template.steps);
             reason = String(body.reason || template.reason || template.name);
+            // An administrator may have changed it since the list was loaded: never apply steps nobody saw
+            if (body.expect && body.expect !== describeSteps(steps)) return res.status(409).json({ error: 'template_changed' });
         } else {
             steps = cleanSteps(body.steps);
             reason = String(body.reason || '');
@@ -307,6 +309,7 @@ router.post('/:userId/punish', validUserId, async (req, res, next) => {
             report = await ReportService.get(guild.id, String(body.reportId));
             const viewer = guild.members.cache.get(req.session.userId);
             if (!report || !canSeeChannel(guild, viewer, report.channelId)) return res.status(404).json({ error: 'report_not_found' });
+            if (report.targetId !== req.params.userId) return res.status(400).json({ error: 'report_other_member' });
         }
 
         const result = await ModerationService.punish(guild, req.params.userId, steps, reason, actor, 'panel');

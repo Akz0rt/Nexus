@@ -306,10 +306,14 @@ class ModerationService {
         for (const step of steps) {
             let result;
             if (step.kind === 'warn') result = await this.warn(guild, userId, reason, actor, source);
-            else if (step.kind === 'mute') result = await this.mute(guild, userId, step.duration, reason, actor, source);
+            else if (step.kind === 'mute') {
+                const member = await this.fetchMember(guild, userId).catch(() => null);
+                const longer = (member?.communicationDisabledUntilTimestamp || 0) > Date.now() + (MUTE_DURATIONS[step.duration]?.ms || 0);
+                result = longer ? { ok: true, kept: true } : await this.mute(guild, userId, step.duration, reason, actor, source);
+            }
             else if (step.kind === 'kick') result = await this.kick(guild, userId, reason, actor, source);
             else result = await this.ban(guild, userId, { reason, duration: step.duration, deleteMessageDays: step.deleteDays }, actor, source);
-            done.push({ kind: step.kind, ok: Boolean(result.ok), code: result.ok ? undefined : result.code });
+            done.push({ kind: step.kind, ok: Boolean(result.ok), code: result.ok ? undefined : result.code, kept: result.kept || undefined });
             if (!result.ok) return { ok: done.length > 1, code: result.code, steps: done };
         }
         return { ok: true, steps: done };

@@ -50,6 +50,7 @@ export default function App() {
     const [lockdown, setLockdown] = useState(null);
     const [journalPreset, setJournalPreset] = useState(null); // filters to open the journal with
     const [eventRevision, setEventRevision] = useState(0); // bumps when an event or its sign-ups change
+    const [moderationRevision, setModerationRevision] = useState(0); // bumps on moderation / report / settings entries
     const [openReports, setOpenReports] = useState(0);
     const [moderationTab, setModerationTab] = useState(null); // { tab } to open the Moderation screen on
     const [settingsSection, setSettingsSection] = useState(null); // { section } to open the Settings screen on
@@ -133,6 +134,7 @@ export default function App() {
                 }
                 // Message edits and deletes are frequent and change nothing on the other screens
                 if (!data.action?.startsWith('message.')) setRevision(r => r + 1);
+                if (/^(moderation|report|settings)\./.test(data.action || '')) setModerationRevision(r => r + 1);
             }
             if (event === 'voice') setVoiceRevision(r => r + 1);
             if (event === 'job') updateJob(data);
@@ -293,7 +295,7 @@ export default function App() {
                         <RolesView guildId={guildId} revision={revision} job={roleJob} onJob={updateJob} onOpenMember={setDrawerUserId} toast={toast} />
                     )}
                     {guildId && view === 'moderation' && (
-                        <ModerationView guildId={guildId} revision={revision} openReports={openReports} requestedTab={moderationTab} myId={me?.id}
+                        <ModerationView guildId={guildId} revision={moderationRevision} openReports={openReports} requestedTab={moderationTab} myId={me?.id}
                             onOpenMember={setDrawerUserId} toast={toast} />
                     )}
                     {guildId && view === 'journal' && (

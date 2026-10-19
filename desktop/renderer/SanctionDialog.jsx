@@ -29,13 +29,15 @@ export default function SanctionDialog({ guildId, target, reportId, onClose, onD
         if (own && !reason.trim()) { setError('Укажите причину.'); return; }
         setBusy(true);
         setError(null);
-        const body = own ? { steps, reason: reason.trim() } : { templateId: template.id, reason: reason.trim() || undefined };
+        // `expect`: what the moderator saw — the bot refuses if the template has changed since
+        const body = own ? { steps, reason: reason.trim() } : { templateId: template.id, expect: template.summary, reason: reason.trim() || undefined };
         if (reportId) body.reportId = reportId;
         const result = await apiPost(`/guilds/${guildId}/moderation/${target.id}/punish`, body);
         setBusy(false);
         if (!result.ok) { setError(describeError(result)); return; }
         const data = result.data;
         let text = `${name}: ${data.summary}`;
+        if (data.steps?.some(step => step.kept)) text += ' · мут уже был дольше — оставили его';
         if (data.failed) text += ` · дальше не вышло: ${describeError({ error: data.failed })}`;
         if (data.reportClosed) text += ' · жалоба закрыта';
         toast(text, data.failed ? { tone: 'error', ttl: 8000 } : {});

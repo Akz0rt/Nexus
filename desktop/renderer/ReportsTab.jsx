@@ -17,7 +17,7 @@ function plural(n, one, few, many) {
     return many;
 }
 
-/** «у него 1 варн и мут сегодня» / «нарушений раньше не было» (last 30 days) */
+/** «на счету: 1 варн и мут сегодня» / «нарушений раньше не было» (last 30 days) */
 export function recordText(record) {
     if (!record) return null;
     const parts = [];
@@ -30,7 +30,7 @@ export function recordText(record) {
     if (record.bans) parts.push(`${record.bans} ${plural(record.bans, 'бан', 'бана', 'банов')}`);
     if (parts.length === 0) return 'нарушений раньше не было';
     const list = parts.length === 1 ? parts[0] : `${parts.slice(0, -1).join(', ')} и ${parts.at(-1)}`;
-    return `у него ${list}`;
+    return `на счету: ${list}`;
 }
 
 /** Close a report («Решено без наказания» / «Отклонить») with an optional note, or answer the reporter. */

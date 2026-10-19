@@ -121,6 +121,18 @@ guild.memberCount = guild.members.cache.size;
         assert.strictEqual((await call('POST', `/moderation/${GRISHA}/punish`, { steps: [{ kind: 'warn' }] })).body.error, 'reason_required');
         assert.strictEqual((await call('POST', `/moderation/${GRISHA}/punish`, { templateId: 'nope' })).status, 404);
 
+        // Saving reasons in Settings → Модерация keeps the custom templates
+        assert.strictEqual((await call('PATCH', '/settings', { reasons: ['Флуд', 'Спам'] }, 'admin')).status, 200);
+        assert.ok((await call('GET', '/moderation/templates')).body.items.some(t => t.name === 'Спам'), 'templates survive a reasons save');
+        // A report about someone else is not closed by this punishment
+        assert.strictEqual((await call('POST', `/moderation/${MOD}/punish`, { templateId: 'flood', reportId: 'r1' })).body.error, 'report_other_member');
+        // The template changed after the moderator loaded it: nothing is applied
+        calls = [];
+        const stale = await call('POST', `/moderation/${GRISHA}/punish`, { templateId: 'flood', expect: 'мут 1 ч + варн' });
+        assert.strictEqual(stale.body.error, 'template_changed');
+        assert.deepStrictEqual(calls, []);
+        assert.strictEqual((await call('POST', `/moderation/${GRISHA}/punish`, { templateId: 'flood', expect: 'мут 10 мин + варн' })).status, 200);
+
         // A report card knows the target's record; the tabs know their counts
         const reports = await call('GET', '/reports?status=open');
         assert.deepStrictEqual(reports.body.items[0].record, { activeWarns: 1, mutes: 1, lastMuteAt: reports.body.items[0].record.lastMuteAt, kicks: 0, bans: 0 });
