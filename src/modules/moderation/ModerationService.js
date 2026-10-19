@@ -293,6 +293,28 @@ class ModerationService {
 
     // --- Kick --------------------------------------------------------------------
 
+    /**
+     * Several punishments at once (a template from «Наказать…»): warn, mute, then kick or
+     * ban, each through its own method (log, DM, escalation as usual). Stops at the
+     * first refusal; what already happened stays.
+     * @param {object[]} steps cleaned with cleanSteps()
+     * @returns {{ ok: boolean, code?: string, steps: Array<{ kind, ok, code? }> }}
+     */
+    async punish(guild, userId, steps, reason, actor, source) {
+        if (!cleanReason(reason)) return { ok: false, code: 'reason_required', steps: [] };
+        const done = [];
+        for (const step of steps) {
+            let result;
+            if (step.kind === 'warn') result = await this.warn(guild, userId, reason, actor, source);
+            else if (step.kind === 'mute') result = await this.mute(guild, userId, step.duration, reason, actor, source);
+            else if (step.kind === 'kick') result = await this.kick(guild, userId, reason, actor, source);
+            else result = await this.ban(guild, userId, { reason, duration: step.duration, deleteMessageDays: step.deleteDays }, actor, source);
+            done.push({ kind: step.kind, ok: Boolean(result.ok), code: result.ok ? undefined : result.code });
+            if (!result.ok) return { ok: done.length > 1, code: result.code, steps: done };
+        }
+        return { ok: true, steps: done };
+    }
+
     async kick(guild, userId, reason, actor, source) {
         reason = cleanReason(reason);
         if (!reason) return { ok: false, code: 'reason_required' };

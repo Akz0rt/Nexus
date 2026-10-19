@@ -293,7 +293,7 @@ export default function App() {
                         <RolesView guildId={guildId} revision={revision} job={roleJob} onJob={updateJob} onOpenMember={setDrawerUserId} toast={toast} />
                     )}
                     {guildId && view === 'moderation' && (
-                        <ModerationView guildId={guildId} revision={revision} openReports={openReports} requestedTab={moderationTab}
+                        <ModerationView guildId={guildId} revision={revision} openReports={openReports} requestedTab={moderationTab} myId={me?.id}
                             onOpenMember={setDrawerUserId} toast={toast} />
                     )}
                     {guildId && view === 'journal' && (

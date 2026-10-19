@@ -5,8 +5,13 @@ const ModerationService = require('../../../modules/moderation/ModerationService
 const WarningService = require('../../../modules/moderation/WarningService');
 const TempBanService = require('../../../modules/moderation/TempBanService');
 const {
-    MUTE_DURATIONS, BAN_DURATIONS, BAN_DELETE_DAYS, WARN_TTL_DAYS
+    MUTE_DURATIONS, BAN_DURATIONS, BAN_DELETE_DAYS, WARN_TTL_DAYS, MAX_TEMPLATES, cleanSteps, describeSteps
 } = require('../../../modules/moderation/templates');
+const ReportService = require('../../../modules/reports/ReportService');
+const { canSeeChannel } = require('../visibility');
+
+const BANS_COUNT_TTL_MS = 5 * 60 * 1000;
+const bansCount = new Map(); // guildId -> { at, n }: counting bans pages through all of them
 const { describeMember, userRef } = require('../serialize');
 
 const router = express.Router({ mergeParams: true });
@@ -207,6 +212,118 @@ const ACTIONS = {
     }, actor, 'panel'),
     unban: (req, actor) => ModerationService.unban(req.guild, req.params.userId, actor, 'panel')
 };
+
+// GET /moderation/summary — counts for the tabs
+router.get('/summary', async (req, res, next) => {
+    try {
+        const guild = req.guild;
+        const now = Date.now();
+        let bans = bansCount.get(guild.id);
+        if (!bans || now - bans.at > BANS_COUNT_TTL_MS) {
+            let n = 0;
+            let after;
+            try {
+                for (let page = 0; page < 10; page++) {
+                    const chunk = await guild.bans.fetch({ limit: 1000, after, cache: false });
+                    n += chunk.size;
+                    if (chunk.size < 1000) break;
+                    after = chunk.lastKey();
+                }
+            } catch {
+                n = null; // no «Банить участников»
+            }
+            bans = { at: now, n };
+            bansCount.set(guild.id, bans);
+        }
+        const [warns, tempBans] = await Promise.all([WarningService.listActive(guild.id), TempBanService.list(guild.id)]);
+        const mutes = guild.members.cache.filter(member => (member.communicationDisabledUntilTimestamp || 0) > now).size;
+        res.json({ active: mutes + tempBans.length, bans: bans.n, warnings: warns.length });
+    } catch (error) {
+        next(error);
+    }
+});
+
+// GET /moderation/templates — «Наказать…» templates (everyone); PUT replaces them (administrators)
+router.get('/templates', async (req, res, next) => {
+    try {
+        const settings = await GuildSettingsService.get(req.guild.id);
+        res.json({ items: settings.moderation.templates.map(t => ({ ...t, summary: describeSteps(t.steps) })), canEdit: req.panelRole === 'senior' });
+    } catch (error) {
+        next(error);
+    }
+});
+
+router.put('/templates', async (req, res, next) => {
+    try {
+        if (req.panelRole !== 'senior') return res.status(403).json({ error: 'forbidden' });
+        const list = req.body?.items;
+        if (!Array.isArray(list) || list.length > MAX_TEMPLATES) return res.status(400).json({ error: 'invalid_templates' });
+        const templates = [];
+        for (const item of list) {
+            const name = String(item?.name || '').trim().slice(0, 40);
+            const reason = String(item?.reason || name).trim().slice(0, 200);
+            const steps = cleanSteps(item?.steps);
+            if (!name || !steps) return res.status(400).json({ error: 'invalid_templates' });
+            const id = /^[a-z0-9-]{1,40}$/.test(String(item.id || '')) ? String(item.id) : `t${Date.now().toString(36)}${templates.length}`;
+            templates.push({ id, name, reason, steps });
+        }
+        const current = await GuildSettingsService.get(req.guild.id);
+        await GuildSettingsService.update(req.guild.id, { moderation: { ...current.moderation, templates } });
+        const actor = actorOf(req);
+        await AuditLogService.log({
+            guildId: req.guild.id, action: 'settings.updated', actorId: actor.id, actorTag: actor.tag,
+            source: 'panel', details: { fields: ['templates'] }
+        });
+        res.json({ ok: true, items: templates.map(t => ({ ...t, summary: describeSteps(t.steps) })) });
+    } catch (error) {
+        next(error);
+    }
+});
+
+// POST /moderation/:userId/punish — { templateId } or { steps, reason }, optional reportId:
+// the steps run in order; a punishment from a report closes it as resolved
+router.post('/:userId/punish', validUserId, async (req, res, next) => {
+    try {
+        const guild = req.guild;
+        const actor = actorOf(req);
+        const body = req.body || {};
+        let steps;
+        let reason;
+        if (body.templateId) {
+            const settings = await GuildSettingsService.get(guild.id);
+            const template = settings.moderation.templates.find(t => t.id === String(body.templateId));
+            if (!template) return res.status(404).json({ error: 'template_not_found' });
+            steps = cleanSteps(template.steps);
+            reason = String(body.reason || template.reason || template.name);
+        } else {
+            steps = cleanSteps(body.steps);
+            reason = String(body.reason || '');
+        }
+        if (!steps) return res.status(400).json({ error: 'invalid_steps' });
+
+        // The report must be one this moderator may see, and still open
+        let report = null;
+        if (body.reportId) {
+            report = await ReportService.get(guild.id, String(body.reportId));
+            const viewer = guild.members.cache.get(req.session.userId);
+            if (!report || !canSeeChannel(guild, viewer, report.channelId)) return res.status(404).json({ error: 'report_not_found' });
+        }
+
+        const result = await ModerationService.punish(guild, req.params.userId, steps, reason, actor, 'panel');
+        const done = result.steps.filter(step => step.ok).map(step => steps.find(s => s.kind === step.kind));
+        let closed = false;
+        if (report && done.length > 0) {
+            const closing = await ReportService.close(guild.id, report.id, 'resolved', describeSteps(done), actor, 'panel');
+            closed = closing.ok;
+        }
+        if (!result.ok) {
+            return res.status(RESULT_STATUS[result.code] || 400).json({ error: result.code, steps: result.steps });
+        }
+        res.json({ ok: true, steps: result.steps, summary: describeSteps(done), reportClosed: closed, failed: result.code || null });
+    } catch (error) {
+        next(error);
+    }
+});
 
 router.post('/:userId/:action', validUserId, async (req, res, next) => {
     const run = Object.hasOwn(ACTIONS, req.params.action) ? ACTIONS[req.params.action] : null;

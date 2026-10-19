@@ -4,6 +4,7 @@ import { GENDER_LABELS, SOURCE_LABELS, accountAge, describeAction, describeBulk,
 import Avatar, { MemberLink } from './Avatar.jsx';
 import { Chip } from './Chips.jsx';
 import PunishDialog from './PunishDialog.jsx';
+import SanctionDialog from './SanctionDialog.jsx';
 import ChannelPicker from './ChannelPicker.jsx';
 import { PresetApplyDialog, RoleDialog } from './RoleDialogs.jsx';
 import { EconomyBlock } from './EconomyView.jsx';
@@ -154,6 +155,7 @@ export default function MemberDrawer({ guildId, userId, revision, onClose, onOpe
                                     </ul>
                                 )}
                             <div className="punish-row">
+                                <button className="btn btn-primary" disabled={!moderation.can.warn && !moderation.can.ban} onClick={() => setDialog('sanction')}>Наказать…</button>
                                 <button className="btn" disabled={!moderation.can.warn} onClick={() => setDialog('warn')}>Варн</button>
                                 {moderation.mutedUntil
                                     ? <button className="btn" disabled={!moderation.can.mute} onClick={unmute}>Снять мут</button>
@@ -223,7 +225,11 @@ export default function MemberDrawer({ guildId, userId, revision, onClose, onOpe
             {dialog === 'preset' && member && (
                 <PresetApplyDialog guildId={guildId} member={member} onClose={() => setDialog(null)} toast={toast} />
             )}
-            {dialog && !['move', 'role', 'preset'].includes(dialog) && member && (
+            {dialog === 'sanction' && member && (
+                <SanctionDialog guildId={guildId} target={{ id: member.id, displayName: member.displayName }}
+                    onClose={() => setDialog(null)} toast={toast} />
+            )}
+            {dialog && !['move', 'role', 'preset', 'sanction'].includes(dialog) && member && (
                 <PunishDialog guildId={guildId} kind={dialog} target={{ id: member.id, displayName: member.displayName }}
                     onClose={() => setDialog(null)} toast={toast} />
             )}

@@ -1,5 +1,9 @@
 const express = require('express');
 const ReportService = require('../../../modules/reports/ReportService');
+const AuditLogService = require('../../../services/AuditLogService');
+const WarningService = require('../../../modules/moderation/WarningService');
+
+const RECORD_DAYS = 30;
 const { actorOf, sendResult } = require('../result');
 const { userRef } = require('../serialize');
 const { canSeeChannel } = require('../visibility');
@@ -14,8 +18,35 @@ const STATUS = {
     dm_closed: 409
 };
 
-function describeReport(guild, report) {
+/**
+ * The target's record for each report: active warns and punishments of the last 30 days
+ * («у него 1 варн и мут сегодня» / «нарушений раньше не было»).
+ */
+async function recordsOf(guild, targetIds) {
+    const since = new Date(Date.now() - RECORD_DAYS * 24 * 60 * 60 * 1000).toISOString();
+    const [warns, entries] = await Promise.all([
+        WarningService.listActive(guild.id).catch(() => []),
+        Promise.all([...new Set(targetIds)].map(async targetId => [targetId,
+            (await AuditLogService.query({ guildId: guild.id, targetId, action: 'moderation.*', since }, { limit: 50 }).catch(() => ({ items: [] }))).items]))
+    ]);
+    const records = new Map();
+    for (const [targetId, items] of entries) {
+        const count = action => items.filter(e => e.action === action);
+        const mutes = count('moderation.muted');
+        records.set(targetId, {
+            activeWarns: warns.filter(w => w.userId === targetId).length,
+            mutes: mutes.length,
+            lastMuteAt: mutes[0]?.createdAt || null,
+            kicks: count('moderation.kicked').length,
+            bans: count('moderation.banned').length
+        });
+    }
+    return records;
+}
+
+function describeReport(guild, report, record = null) {
     return {
+        record,
         id: report.id,
         status: report.status,
         target: userRef(guild, report.targetId),
@@ -66,9 +97,11 @@ router.get('/', async (req, res, next) => {
         const viewer = guild.members.cache.get(req.session.userId);
         const group = req.query.status === 'closed' ? 'closed' : 'open';
         const reports = await ReportService.list(guild.id, group);
+        const visible = reports.filter(r => canSeeChannel(guild, viewer, r.channelId));
+        const records = group === 'open' ? await recordsOf(guild, visible.map(r => r.targetId)) : new Map();
         res.json({
             status: group,
-            items: reports.filter(r => canSeeChannel(guild, viewer, r.channelId)).map(r => describeReport(guild, r))
+            items: visible.map(r => describeReport(guild, r, records.get(r.targetId) || null))
         });
     } catch (error) {
         next(error);

@@ -5,6 +5,7 @@ import { SOURCE_LABELS, formatDateTime, formatDurationMs, timeLeft } from './for
 import Avatar, { MemberLink } from './Avatar.jsx';
 import PunishDialog, { useModerationOptions } from './PunishDialog.jsx';
 import ReportsTab from './ReportsTab.jsx';
+import { ActionBadge } from './Chips.jsx';
 
 const TABS = [
     { id: 'active', label: 'Активные наказания' },
@@ -244,8 +245,9 @@ function WarningsTab({ data, guildId, onOpenMember, onChanged, toast }) {
 
 const ENDPOINTS = { active: 'active', bans: 'bans', warnings: 'warnings' };
 
-export default function ModerationView({ guildId, revision, openReports, requestedTab, onOpenMember, toast }) {
+export default function ModerationView({ guildId, revision, openReports, requestedTab, myId, onOpenMember, toast }) {
     const [tab, setTab] = useState(readTab);
+    const [summary, setSummary] = useState(null); // counts on the tabs
     const [data, setData] = useState(null);
     const [error, setError] = useState(null);
     const [reload, setReload] = useState(0);
@@ -267,27 +269,36 @@ export default function ModerationView({ guildId, revision, openReports, request
         return () => { cancelled = true; };
     }, [guildId, tab, revision, reload]);
 
+    useEffect(() => {
+        let cancelled = false;
+        apiGet(`/guilds/${guildId}/moderation/summary`)
+            .then(result => { if (!cancelled) setSummary(result); })
+            .catch(() => {});
+        return () => { cancelled = true; };
+    }, [guildId, revision, reload]);
+
     const onChanged = () => setReload(n => n + 1);
     const ready = data?.tab === tab;
+    const count = id => (id === 'reports' || summary?.[id] === null || summary?.[id] === undefined ? '' : ` · ${summary[id]}`);
     const props = { data, guildId, onOpenMember, onChanged, toast };
 
     return (
-        <section className="view">
+        <section className="view view-wide">
             <div className="view-head">
                 <h1>Модерация</h1>
                 <div className="tabs" role="tablist">
                     {TABS.map(item => (
                         <button key={item.id} role="tab" aria-selected={tab === item.id}
                             className={`tab ${tab === item.id ? 'is-active' : ''}`} onClick={() => setTab(item.id)}>
-                            {item.label}
-                            {item.id === 'reports' && openReports > 0 && <span className="tab-count">{openReports}</span>}
+                            {item.label}{count(item.id)}
+                            {item.id === 'reports' && <ActionBadge count={openReports} title={`Новых жалоб: ${openReports}`} />}
                         </button>
                     ))}
                 </div>
             </div>
             {tab !== 'reports' && error && <ErrorState what={TABS.find(t => t.id === tab)?.label.toLowerCase() || 'список'} error={error} onRetry={() => setReload(n => n + 1)} />}
             {tab !== 'reports' && !ready && !error && <p className="muted">Загружаем…</p>}
-            {tab === 'reports' && <ReportsTab guildId={guildId} revision={revision} onOpenMember={onOpenMember} toast={toast} />}
+            {tab === 'reports' && <ReportsTab guildId={guildId} revision={revision} myId={myId} onOpenMember={onOpenMember} toast={toast} />}
             {ready && tab === 'active' && <ActiveTab {...props} />}
             {ready && tab === 'bans' && <BansTab {...props} onBanById={() => setBanById(true)} />}
             {ready && tab === 'warnings' && <WarningsTab {...props} />}

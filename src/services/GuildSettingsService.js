@@ -1,6 +1,6 @@
 const { CosmosClient } = require('@azure/cosmos');
 const config = require('../config');
-const { DEFAULT_REASONS, DEFAULT_ESCALATION } = require('../modules/moderation/templates');
+const { DEFAULT_REASONS, DEFAULT_ESCALATION, DEFAULT_PUNISH_TEMPLATES } = require('../modules/moderation/templates');
 
 const GUILD_SETTINGS_CONTAINER = 'guild_settings';
 const CACHE_TTL_MS = 60 * 1000;
@@ -93,7 +93,8 @@ class GuildSettingsService {
         const moderation = doc?.moderation || {};
         result.moderation = {
             reasons: Array.isArray(moderation.reasons) && moderation.reasons.length ? moderation.reasons : DEFAULT_REASONS,
-            escalation: Array.isArray(moderation.escalation) ? moderation.escalation : DEFAULT_ESCALATION
+            escalation: Array.isArray(moderation.escalation) ? moderation.escalation : DEFAULT_ESCALATION,
+            templates: Array.isArray(moderation.templates) ? moderation.templates : DEFAULT_PUNISH_TEMPLATES
         };
 
         // Lockdown: start channels that get slowmode, and the current state (to undo it exactly)

@@ -43,6 +43,61 @@ function escalationFor(activeCount, rules = DEFAULT_ESCALATION) {
     return rules.find(rule => rule.warns === activeCount) || null;
 }
 
+/**
+ * Punishment templates («Флуд → мут 10 мин + варн»): what «Наказать…» offers first.
+ * A step is { kind: 'warn' } | { kind: 'mute', duration } | { kind: 'kick' }
+ *   | { kind: 'ban', duration, deleteDays }. Edited by administrators, per server.
+ */
+const DEFAULT_PUNISH_TEMPLATES = [
+    { id: 'flood', name: 'Флуд', reason: 'Флуд', steps: [{ kind: 'mute', duration: '10m' }, { kind: 'warn' }] },
+    { id: 'insults', name: 'Оскорбления', reason: 'Оскорбления', steps: [{ kind: 'mute', duration: '1h' }, { kind: 'warn' }] },
+    { id: 'ads', name: 'Реклама', reason: 'Реклама', steps: [{ kind: 'ban', duration: '7d', deleteDays: 1 }] },
+    { id: 'scam', name: 'Скам-ссылки', reason: 'Скам', steps: [{ kind: 'ban', duration: 'forever', deleteDays: 7 }] }
+];
+const MAX_TEMPLATES = 12;
+const STEP_KINDS = ['warn', 'mute', 'kick', 'ban'];
+
+/**
+ * Check steps from the app: known kinds and presets, each kind once, kick and ban
+ * not together. Returned in the order they run: warn, mute, kick, ban.
+ * @returns {object[]|null} null when invalid
+ */
+function cleanSteps(steps) {
+    if (!Array.isArray(steps) || steps.length === 0 || steps.length > STEP_KINDS.length) return null;
+    const out = [];
+    for (const step of steps) {
+        const kind = step?.kind;
+        if (!STEP_KINDS.includes(kind) || out.some(s => s.kind === kind)) return null;
+        if (kind === 'mute') {
+            if (!Object.hasOwn(MUTE_DURATIONS, step.duration)) return null;
+            out.push({ kind, duration: step.duration });
+        } else if (kind === 'ban') {
+            const deleteDays = Number(step.deleteDays ?? 0);
+            if (!Object.hasOwn(BAN_DURATIONS, step.duration) || !BAN_DELETE_DAYS.includes(deleteDays)) return null;
+            out.push({ kind, duration: step.duration, deleteDays });
+        } else {
+            out.push({ kind });
+        }
+    }
+    if (out.some(s => s.kind === 'kick') && out.some(s => s.kind === 'ban')) return null;
+    return out.sort((a, b) => STEP_KINDS.indexOf(a.kind) - STEP_KINDS.indexOf(b.kind));
+}
+
+/** «мут 10 мин + варн», «бан навсегда, удалить за 7 дн.» — for notes and the panel */
+function describeSteps(steps) {
+    const SHORT_MUTE = { '10m': '10 мин', '1h': '1 ч', '6h': '6 ч', '1d': '1 день', '7d': '7 дней' };
+    const order = { mute: 0, ban: 1, kick: 2, warn: 3 }; // what people read first
+    return [...steps].sort((a, b) => order[a.kind] - order[b.kind]).map(step => {
+        if (step.kind === 'mute') return `мут ${SHORT_MUTE[step.duration] || step.duration}`;
+        if (step.kind === 'ban') {
+            const span = step.duration === 'forever' ? 'навсегда' : BAN_DURATIONS[step.duration]?.label.replace('дней', 'дн.') || step.duration;
+            const wipe = step.deleteDays ? `, удалить за ${step.deleteDays === 1 ? '24 ч' : `${step.deleteDays} дн.`}` : '';
+            return `бан ${span}${wipe}`;
+        }
+        return step.kind === 'kick' ? 'кик' : 'варн';
+    }).join(' + ');
+}
+
 /** "1 час", "2 дня", "45 минут" — for timeouts of any length. */
 function formatDuration(ms) {
     const plural = (n, one, few, many) => {
@@ -71,6 +126,10 @@ module.exports = {
     BAN_DELETE_DAYS,
     WARN_TTL_DAYS,
     DEFAULT_ESCALATION,
+    DEFAULT_PUNISH_TEMPLATES,
+    MAX_TEMPLATES,
+    cleanSteps,
+    describeSteps,
     escalationFor,
     formatDuration
 };
