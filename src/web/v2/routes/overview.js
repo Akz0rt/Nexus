@@ -10,7 +10,7 @@ const { describeMember, flagContext, mergeQueue, userRef } = require('../seriali
 const { canSeeChannel, canSeeEntry } = require('../visibility');
 const { describeBoard } = require('./voice');
 const { describeBirthdays } = require('./birthdays');
-const { inviteOf } = require('./queue');
+const { inviteOf, inQueue } = require('./queue');
 const { describeReport } = require('./reports');
 
 const router = express.Router({ mergeParams: true });
@@ -57,7 +57,7 @@ router.get('/', async (req, res, next) => {
 
         const context = settings ? await flagContext(guild, new Map(pending.map(card => [card.userId, card.kickCount || 0]))) : null;
         const queue = settings
-            ? mergeQueue(guild.members.cache.filter(m => m.roles.cache.has(settings.unverifiedRoleId)).map(m => describeMember(m, context)), pending)
+            ? mergeQueue(guild.members.cache.filter(m => inQueue(m, settings)).map(m => describeMember(m, context)), pending)
             : null;
         const cards = new Map(pending.map(card => [card.userId, card]));
         const { voice, inVoice } = voiceBlock(guild, viewer);

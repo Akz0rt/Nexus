@@ -29,7 +29,7 @@ function sanitize(guild, body, current) {
     const fields = [];
     const isRole = id => guild.roles.cache.has(id) && id !== guild.id;
 
-    for (const key of ['unverifiedRoleId', 'maleRoleId', 'femaleRoleId']) {
+    for (const key of ['unverifiedRoleId', 'maleRoleId', 'femaleRoleId', 'boosterRoleId']) {
         if (!(key in body)) continue;
         const id = String(body[key] || '');
         if (id && !isRole(id)) return fail(key, 'role_not_found');
@@ -117,6 +117,7 @@ function describeSettings(settings) {
         unverifiedRoleId: settings.unverifiedRoleId || '',
         maleRoleId: settings.maleRoleId || '',
         femaleRoleId: settings.femaleRoleId || '',
+        boosterRoleId: settings.boosterRoleId || '',
         verifyQueueChannelId: settings.verifyQueueChannelId || '',
         verificationEnabled: Boolean(settings.modules.verification),
         assignUnverifiedOnJoin: Boolean(settings.assignUnverifiedOnJoin),

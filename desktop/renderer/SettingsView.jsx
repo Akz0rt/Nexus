@@ -102,7 +102,7 @@ function useSave(guildId, onSaved, toast) {
 }
 
 function VerificationSection({ guildId, values, options, onSaved, toast }) {
-    const keys = ['unverifiedRoleId', 'maleRoleId', 'femaleRoleId', 'verifyQueueChannelId', 'verificationEnabled', 'assignUnverifiedOnJoin', 'youngAccountDays'];
+    const keys = ['unverifiedRoleId', 'maleRoleId', 'femaleRoleId', 'boosterRoleId', 'verifyQueueChannelId', 'verificationEnabled', 'assignUnverifiedOnJoin', 'youngAccountDays'];
     const { draft, set, dirty, reset } = useDraft(values, keys);
     const { busy, error, save } = useSave(guildId, onSaved, toast);
     const env = key => values.fromEnv.includes(key) && draft[key] === values[key];
@@ -117,6 +117,14 @@ function VerificationSection({ guildId, values, options, onSaved, toast }) {
                 <RoleSelect label="Роль «Парень»" value={draft.maleRoleId} roles={options.roles} fromEnv={env('maleRoleId')} onChange={v => set('maleRoleId', v)} />
                 <RoleSelect label="Роль «Девушка»" value={draft.femaleRoleId} roles={options.roles} fromEnv={env('femaleRoleId')} onChange={v => set('femaleRoleId', v)} />
                 <ChannelSelect label="Канал очереди (карточки новичков)" value={draft.verifyQueueChannelId} channels={options.textChannels} fromEnv={env('verifyQueueChannelId')} onChange={v => set('verifyQueueChannelId', v)} />
+                <label className="field">
+                    Роль буст-аккаунтов
+                    <select value={draft.boosterRoleId} onChange={e => set('boosterRoleId', e.target.value)}>
+                        <option value="">— бот создаст «Бустер-аккаунт» сам —</option>
+                        {options.roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+                    </select>
+                    <span className="muted small">Метка без прав: аккаунт сохраняет @АНверефи и ничего не видит, а по сроку бот его кикает.</span>
+                </label>
             </div>
             <label className="check">
                 <input type="checkbox" checked={draft.assignUnverifiedOnJoin} onChange={e => set('assignUnverifiedOnJoin', e.target.checked)} />

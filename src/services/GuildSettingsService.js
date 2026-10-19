@@ -85,6 +85,9 @@ class GuildSettingsService {
         const envAssign = useEnv ? parseBool(config.assignUnverifiedOnJoin) : undefined;
         result.assignUnverifiedOnJoin = doc?.assignUnverifiedOnJoin ?? envAssign ?? true;
 
+        // Booster accounts: their marker role (made by the bot on the first booster pass)
+        result.boosterRoleId = doc?.boosterRoleId || null;
+
         // Queue flags: an account younger than this is «новый аккаунт»
         const youngDays = doc?.verification?.youngAccountDays;
         result.verification = { youngAccountDays: Number.isInteger(youngDays) ? youngDays : DEFAULT_YOUNG_ACCOUNT_DAYS };

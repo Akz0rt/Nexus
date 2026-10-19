@@ -10,6 +10,7 @@ const modules = [
     require('./activity'),
     require('./invites'),
     require('./verification'),
+    require('./boosters'),
     require('./moderation'),
     require('./voice'),
     require('./roles'),

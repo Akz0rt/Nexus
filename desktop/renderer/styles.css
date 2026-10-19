@@ -45,6 +45,7 @@
     --banner-danger-bg: #3a1618;
     --neutral-chip: #26303d;
     --accent-text: #ff9d57;
+    --booster: #f47fff;
     color-scheme: dark;
 }
 
@@ -88,6 +89,7 @@
     --banner-danger-bg: #fde8e8;
     --neutral-chip: #e6edf4;
     --accent-text: #b4500a;
+    --booster: #a3239a;
     color-scheme: light;
 }
 
@@ -132,6 +134,7 @@
         --banner-danger-bg: #fde8e8;
         --neutral-chip: #e6edf4;
         --accent-text: #b4500a;
+        --booster: #a3239a;
         color-scheme: light;
     }
 }
@@ -1399,3 +1402,18 @@ body:has(.action-bar) .toasts, body:has(.selection-bar.is-floating) .toasts { bo
     .task-tray { width: 320px; }
 }
 .tab .action-badge { margin-left: 6px; vertical-align: middle; }
+
+/* ---------- booster accounts ---------- */
+
+.boosters-table { width: 100%; border-collapse: collapse; background: var(--surface); border-radius: 10px; box-shadow: inset 0 0 0 1px var(--line), 0 0 0 1px var(--outline); }
+.boosters-table th { text-align: left; font-size: 12px; font-weight: 500; color: var(--muted); padding: 10px 12px; border-bottom: 1px solid var(--line); }
+.boosters-table td { padding: 8px 12px; border-top: 1px solid var(--line); height: 58px; vertical-align: middle; }
+.boosters-table tbody tr:first-child td { border-top: 0; }
+.booster-on { color: var(--booster); }
+.booster-term { display: grid; }
+.booster-term .is-soon { color: var(--amber); }
+.booster-note { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.booster-actions { text-align: right; white-space: nowrap; }
+.booster-actions > * { vertical-align: middle; }
+.booster-actions .overflow { margin-left: 6px; }
+.drawer-booster { margin: -8px 0 0; padding: 8px 10px; border-radius: 8px; background: color-mix(in srgb, var(--booster) 12%, transparent); font-size: 13px; }

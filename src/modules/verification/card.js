@@ -17,7 +17,9 @@ const STATUS_COLORS = {
     approved: '#57F287',
     kicked: '#ED4245',
     left: '#99AAB5',
-    closed: '#99AAB5'
+    closed: '#99AAB5',
+    booster: '#F47FFF',
+    booster_ended: '#99AAB5'
 };
 
 // customId format: verify:<action>:<userId>
@@ -64,6 +66,10 @@ function statusLine(card) {
             return `🚪 Вышел с сервера · ${when}`;
         case 'closed':
             return `🔓 Роль снята вне бота · ${when}`;
+        case 'booster':
+            return `💎 Буст-аккаунт · ${who} · до ${card.boosterUntil ? discordTime(card.boosterUntil, 'D') : '—'} — потом бот его кикнет`;
+        case 'booster_ended':
+            return `💎 Буст-аккаунт: срок закончен · ${when}`;
         default:
             return null;
     }

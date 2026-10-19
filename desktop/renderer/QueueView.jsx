@@ -11,11 +11,13 @@ import { EmptyState, ErrorState, Skeleton } from './States.jsx';
 import Dialog from './Dialog.jsx';
 import PunishDialog from './PunishDialog.jsx';
 import useSelection, { marqueeStyle } from './useSelection.js';
+import BoostersTab, { BoosterDialog } from './BoostersTab.jsx';
 
 const TABS = [
     { id: 'waiting', label: 'Ждут' },
     { id: 'handled', label: 'Пропущены сегодня' },
-    { id: 'rejected', label: 'Отклонены' }
+    { id: 'rejected', label: 'Отклонены' },
+    { id: 'boosters', label: 'Бустеры' }
 ];
 
 const SORTS = {
@@ -77,13 +79,14 @@ export function KickDialog({ names, busy, onClose, onKick }) {
     );
 }
 
-function Row({ item, detailed, selected, focused, busy, stamp, isNew, viewers, extraRoles, onClickRow, onToggle, onApprove, onKick, onBan, onExtras, onClearExtras, onOpenMember }) {
+function Row({ item, detailed, selected, focused, busy, stamp, isNew, viewers, extraRoles, onClickRow, onToggle, onApprove, onKick, onBan, onBooster, onExtras, onClearExtras, onOpenMember }) {
     const { member } = item;
     const waitedMs = Date.now() - Date.parse(member.joinedAt || 0);
     const invite = inviteLabel(item.invite);
     const menu = [
         onExtras && { label: extraRoles.length ? 'Изменить доп. роли…' : 'Доп. роли…', onSelect: onExtras },
         { label: 'Открыть карточку', onSelect: () => onOpenMember(member.id) },
+        { label: 'Бустер…', onSelect: onBooster },
         { label: 'Кикнуть…', onSelect: onKick, end: true },
         { label: 'Забанить…', onSelect: onBan, end: true, danger: true }
     ];
@@ -125,7 +128,7 @@ function Row({ item, detailed, selected, focused, busy, stamp, isNew, viewers, e
                         <>
                             <button type="button" className="btn btn-decide" disabled={busy} onClick={() => onApprove('male')}>Парень <kbd>M</kbd></button>
                             <button type="button" className="btn btn-decide" disabled={busy} onClick={() => onApprove('female')}>Девушка <kbd>F</kbd></button>
-                            <OverflowMenu items={menu} label={`Ещё для ${member.displayName}: доп. роли, карточка, кик, бан`} />
+                            <OverflowMenu items={menu} label={`Ещё для ${member.displayName}: доп. роли, карточка, бустер, кик, бан`} />
                         </>
                     )}
                 </td>
@@ -190,6 +193,7 @@ export default function QueueView({ guildId, waiting, seen, revision, presence =
     const [kicking, setKicking] = useState(null);     // [items] waiting for a kick reason
     const [approving, setApproving] = useState(null); // { items, gender } — 3+ people: asked first
     const [banning, setBanning] = useState(null);     // member to ban
+    const [boosting, setBoosting] = useState(null);   // [items] to pass as booster accounts
     const [groupBusy, setGroupBusy] = useState(false);
     const [openMenu, setOpenMenu] = useState(null); // 'invite' | 'joined' — the filter menu that is open
     const { roles: assignable } = useAssignable(guildId);
@@ -200,7 +204,7 @@ export default function QueueView({ guildId, waiting, seen, revision, presence =
 
     // «Пропущены / Отклонены сегодня»
     useEffect(() => {
-        if (tab === 'waiting') return undefined;
+        if (tab === 'waiting' || tab === 'boosters') return undefined;
         let cancelled = false;
         setHandled(null);
         apiGet(`/guilds/${guildId}/queue?tab=${tab}`)
@@ -229,7 +233,24 @@ export default function QueueView({ guildId, waiting, seen, revision, presence =
     }, [all, leaving, sort, filters, seen, joined]);
 
     const ids = items.filter(item => !leaving[item.member.id]).map(item => item.member.id);
-    const dialogOpen = Boolean(extrasFor || kicking || approving || banning);
+    const dialogOpen = Boolean(extrasFor || kicking || approving || banning || boosting);
+
+    // Booster accounts on a term: out of the queue now, kicked by the bot when it ends
+    const passBoosters = async ({ until, note }) => {
+        const group = boosting;
+        setGroupBusy(true);
+        const result = await apiPost(`/guilds/${guildId}/queue/boosters`, { userIds: group.map(item => item.member.id), until, note });
+        setGroupBusy(false);
+        if (!result.ok) { toast(describeError(result), { tone: 'error' }); return; }
+        setBoosting(null);
+        selection.clear();
+        onChanged();
+        const { done, failed } = result.data;
+        const date = new Date(result.data.until).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' });
+        const names = group.filter(item => done.includes(item.member.id)).map(item => item.member.displayName);
+        toast(`${done.length === 1 ? `${names[0]} — буст-аккаунт` : `Буст-аккаунтов: ${done.length}`} до ${date}${failed.length ? ` · не вышло: ${failed.length}` : ''}`,
+            failed.length ? { tone: 'error' } : {});
+    };
     const selection = useSelection(ids, { paused: dialogOpen || tab !== 'waiting' });
     const chosenItems = selection.chosen.map(id => items.find(item => item.member.id === id)).filter(Boolean);
 
@@ -452,6 +473,7 @@ export default function QueueView({ guildId, waiting, seen, revision, presence =
                     <SelectionBar names={chosenItems.map(item => item.member.displayName)} onClear={selection.clear}>
                         <button type="button" className="btn" disabled={groupBusy} onClick={() => approve(chosenItems, 'male')}>Парень</button>
                         <button type="button" className="btn" disabled={groupBusy} onClick={() => approve(chosenItems, 'female')}>Девушка</button>
+                        <button type="button" className="btn" disabled={groupBusy} onClick={() => setBoosting(chosenItems)}>Бустеры…</button>
                         <button type="button" className="btn btn-danger" disabled={groupBusy} onClick={() => setKicking(chosenItems)}>Кикнуть {chosenItems.length}</button>
                     </SelectionBar>
 
@@ -503,6 +525,7 @@ export default function QueueView({ guildId, waiting, seen, revision, presence =
                                                 onApprove={gender => decide(item, 'approve', { gender })}
                                                 onKick={() => setKicking([item])}
                                                 onBan={() => setBanning(item.member)}
+                                                onBooster={() => setBoosting([item])}
                                                 onExtras={assignable?.length ? () => setExtrasFor(item.member) : null}
                                                 onClearExtras={() => dropExtras(id)}
                                                 onOpenMember={onOpenMember}
@@ -538,10 +561,20 @@ export default function QueueView({ guildId, waiting, seen, revision, presence =
                         <PunishDialog guildId={guildId} kind="ban" target={banning}
                             onClose={() => setBanning(null)} onDone={onChanged} toast={toast} />
                     )}
+                    {boosting && (
+                        <BoosterDialog title={boosting.length === 1 ? `${boosting[0].member.displayName} — буст-аккаунт` : `Буст-аккаунты: ${boosting.length}`}
+                            names={boosting.length > 1 ? boosting.map(item => item.member.displayName) : []}
+                            submitLabel={boosting.length === 1 ? 'Отметить бустером' : `Отметить ${boosting.length}`} busy={groupBusy}
+                            onClose={() => setBoosting(null)} onSubmit={passBoosters} />
+                    )}
                 </>
             )}
 
-            {tab !== 'waiting' && (
+            {tab === 'boosters' && (
+                <BoostersTab guildId={guildId} revision={revision} onOpenMember={onOpenMember} onChanged={onChanged} toast={toast} />
+            )}
+
+            {(tab === 'handled' || tab === 'rejected') && (
                 <>
                     {!handled && <Skeleton rows={4} height={52} />}
                     {handled?.error && <ErrorState what="список" error={handled.error} onRetry={() => setHandledRetry(n => n + 1)} />}

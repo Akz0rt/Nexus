@@ -14,6 +14,8 @@ const PanelSessionService = require('../src/services/PanelSessionService');
 const GuildSettingsService = require('../src/services/GuildSettingsService');
 const AuditLogService = require('../src/services/AuditLogService');
 const QueueCardService = require('../src/modules/verification/QueueCardService');
+const BoosterPassService = require('../src/modules/boosters/BoosterPassService');
+BoosterPassService.list = async () => [];
 const InviteTracker = require('../src/modules/invites/InviteTracker');
 const { createApp } = require('../src/server');
 const { makeGuild, makeMember } = require('./fake-voice-guild');
@@ -76,7 +78,7 @@ async function waitForFrame(reader, test, timeoutMs = 3000) {
     try {
         const queue = await call('GET', '/queue?tab=waiting');
         assert.strictEqual(queue.status, 200, JSON.stringify(queue.body));
-        assert.deepStrictEqual(queue.body.counts, { handled: 2, rejected: 1 });
+        assert.deepStrictEqual(queue.body.counts, { handled: 2, rejected: 1, boosters: 0 });
         assert.strictEqual(queue.body.youngAccountDays, 7);
         assert.strictEqual(typeof queue.body.invitesTracked, 'boolean');
         const byId = Object.fromEntries(queue.body.items.map(item => [item.member.id, item]));

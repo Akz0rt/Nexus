@@ -57,6 +57,15 @@ export const ACTION_LABELS = {
     'birthday.deleted': 'День рождения удалён',
     'birthday.congratulated': 'Поздравлен вручную',
     'birthday.skipped': 'Поздравление пропущено',
+    'booster.passed': 'Буст-аккаунт',
+    'booster.extended': 'Срок буст-аккаунта продлён',
+    'booster.released': 'Буст-аккаунт возвращён в очередь',
+    'booster.kicked': 'Буст-аккаунт кикнут',
+    'booster.expired': 'Срок буст-аккаунта истёк — кикнут',
+    'booster.expiring': 'Завтра истекает срок буст-аккаунтов',
+    'booster.unboosted': 'Буст-аккаунт перестал бустить',
+    'booster.left': 'Буст-аккаунт ушёл до срока',
+    'booster.role_created': 'Создана роль «Бустер-аккаунт»',
     'member.nickname': 'Ник изменён',
     'member.note_added': 'Добавлена заметка',
     'member.note_deleted': 'Удалена заметка',
@@ -180,6 +189,14 @@ export function describeAction(entry) {
     }
     if (entry.action === 'roles.added' && entry.details?.durationMs) {
         return `${label} · ${entry.details.roleName} · на ${formatDurationMs(entry.details.durationMs)}`;
+    }
+    if (entry.action.startsWith('booster.')) {
+        const date = entry.details?.until ? new Date(entry.details.until).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' }) : null;
+        if (entry.action === 'booster.expired' && entry.details?.failed) return 'Срок буст-аккаунта истёк, но бот не смог кикнуть — проверьте его права';
+        if (entry.action === 'booster.expiring') return `${label} · ${entry.details?.count || 1} шт.`;
+        if (entry.action === 'booster.passed') return `${label} до ${date}${entry.details?.count > 1 ? ` · ${entry.details.count} шт.` : ''}`;
+        if (entry.action === 'booster.extended') return `${label} до ${date}`;
+        return date && entry.action !== 'booster.role_created' ? `${label} · срок был до ${date}` : label;
     }
     if (entry.action === 'member.nickname') {
         return `${label} · ${entry.details?.before || 'без ника'} → ${entry.details?.after || 'без ника'}`;

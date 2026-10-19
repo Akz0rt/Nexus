@@ -18,7 +18,9 @@ const CARD_STATUS = {
     approved: 'Пропущен',
     kicked: 'Кикнут из очереди',
     left: 'Вышел, не дождавшись',
-    closed: 'Роль снята вне бота'
+    closed: 'Роль снята вне бота',
+    booster: 'Буст-аккаунт',
+    booster_ended: 'Буст-аккаунт, срок закончен'
 };
 
 const ROLE_LOCKS = {
@@ -355,6 +357,13 @@ export default function MemberDrawer({ guildId, userId, revision, onClose, onOpe
                                     <strong>{data.birthday ? `${data.birthday.day} ${MONTHS[data.birthday.month - 1]}` : 'не указан'}</strong>
                                 </div>
                             </div>
+                            {data.booster && (
+                                <p className="drawer-booster">
+                                    Буст-аккаунт до {new Date(data.booster.until).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: '2-digit' })}
+                                    {' · '}{data.booster.boostingSince ? `бустит с ${new Date(data.booster.boostingSince).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })}` : 'не бустит'}
+                                    {data.booster.note && <span className="muted"> · {data.booster.note}</span>}
+                                </p>
+                            )}
                             {(member.flags.length > 0 || data.card) && (
                                 <div className="drawer-flags">
                                     {member.flags.map(flag => <Chip key={flag.code} tone={flag.tone}>{flag.label}</Chip>)}

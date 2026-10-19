@@ -6,6 +6,7 @@ const ActivityService = require('../../../services/ActivityService');
 const CosmosDBService = require('../../../services/CosmosDBService');
 const VoiceService = require('../../../modules/voice/VoiceService');
 const MemberNoteService = require('../../../modules/members/MemberNoteService');
+const BoosterPassService = require('../../../modules/boosters/BoosterPassService');
 const QueueCardService = require('../../../modules/verification/QueueCardService');
 const WarningService = require('../../../modules/moderation/WarningService');
 const TempRoleService = require('../../../modules/roles/TempRoleService');
@@ -107,14 +108,15 @@ router.get('/:userId', async (req, res, next) => {
 
         // Messages are collected for the main server only
         const activityHere = !config.guildId || config.guildId === guild.id;
-        const [history, card, warnings, notes, lastMessageAt, birthday] = await Promise.all([
+        const [history, card, warnings, notes, lastMessageAt, birthday, boosterPass] = await Promise.all([
             AuditLogService.query({ guildId: guild.id, targetId: userId }, { limit: 50 })
                 .then(r => r.items.filter(entry => canSeeEntry(guild, viewer, entry))),
             QueueCardService.get(guild.id, userId),
             WarningService.listActive(guild.id, userId),
             quiet(MemberNoteService.list(guild.id, userId)),
             activityHere ? quiet(ActivityService.lastMessageAt(userId)) : null,
-            quiet(CosmosDBService.getBirthday(userId))
+            quiet(CosmosDBService.getBirthday(userId)),
+            BoosterPassService.has(guild.id, userId) ? quiet(BoosterPassService.get(guild.id, userId)) : null
         ]);
 
         const mutedUntil = (member.communicationDisabledUntilTimestamp || 0) > Date.now()
@@ -141,6 +143,9 @@ router.get('/:userId', async (req, res, next) => {
             card: serializeCard(card),
             history,
             lastMessageAt,
+            booster: boosterPass
+                ? { until: boosterPass.until, note: boosterPass.note || null, boostingSince: member.premiumSince ? member.premiumSince.toISOString() : null }
+                : null,
             birthday: birthday ? { month: birthday.month, day: birthday.day } : null,
             // null: the notes couldn't be loaded
             notes: notes && notes.map(note => ({
