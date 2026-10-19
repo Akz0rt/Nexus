@@ -5,6 +5,7 @@ const AuditLogService = require('../../services/AuditLogService');
 const GuildSettingsService = require('../../services/GuildSettingsService');
 const VerificationService = require('../verification/VerificationService');
 const QueueCardService = require('../verification/QueueCardService');
+const { roleProblem } = require('../../services/RoleService');
 
 const BOOSTER_PASSES_CONTAINER = 'booster_passes';
 const HOUR_MS = 60 * 60 * 1000;
@@ -54,7 +55,8 @@ class BoosterPassService {
     async loadIndex() {
         await this.initialize();
         const { resources } = await this.container.items.query('SELECT c.guildId, c.userId FROM c').fetchAll();
-        this.index = new Set(resources.map(doc => this.key(doc.guildId, doc.userId)));
+        for (const doc of resources) this.index.add(this.key(doc.guildId, doc.userId));
+        this.indexLoaded = true;
         return this.index.size;
     }
 
@@ -162,19 +164,36 @@ class BoosterPassService {
         if (!ensured.ok) return ensured;
         const { role } = ensured;
         if (!role.editable) return { ok: false, code: 'bot_cannot_role' };
+        const actorMember = await guild.members.fetch(actor.id).catch(() => null);
+        const problem = actorMember ? roleProblem(guild, actorMember, role) : 'forbidden';
+        if (problem) return { ok: false, code: problem };
 
         const done = [];
         const failed = [];
+        const doc = userId => ({ guildId: guild.id, userId, roleId: role.id, until: term, note: cleanNote, createdBy: actor.id, createdAt: new Date().toISOString(), warnedAt: null, kickFailedAt: null });
         for (const userId of ids) {
-            const result = await VerificationService.withQueuedMember(guild, userId, settings, async (card, member) => {
-                await member.roles.add(role, `Буст-аккаунт до ${term.slice(0, 10)} · ${actor.tag || actor.id}`);
-                await this.save({ guildId: guild.id, userId, until: term, note: cleanNote, createdBy: actor.id, createdAt: new Date().toISOString(), warnedAt: null });
-                const updated = await QueueCardService.upsert({
-                    ...card, status: 'booster', boosterUntil: term, handledBy: actor.id, handledAt: new Date().toISOString()
-                });
-                await VerificationService.safeRender(guild, updated, member);
-                return { ok: true };
-            }).catch(error => ({ ok: false, code: error.code === MISSING_PERMISSIONS ? 'bot_cannot_role' : 'failed' }));
+            let result;
+            const holder = guild.members.cache.get(userId);
+            if (holder?.roles.cache.has(role.id) && !this.has(guild.id, userId)) {
+                // The marker given by hand, no term yet: only the term is missing
+                result = await this.save(doc(userId)).then(() => ({ ok: true }), () => ({ ok: false, code: 'failed' }));
+            } else {
+                result = await VerificationService.withQueuedMember(guild, userId, settings, async (card, member) => {
+                    // The pass first: if the role can't be added it is taken back, so no member is left marked without a term
+                    await this.save(doc(userId));
+                    try {
+                        await member.roles.add(role, `Буст-аккаунт до ${term.slice(0, 10)} · ${actor.tag || actor.id}`);
+                    } catch (error) {
+                        await this.remove(guild.id, userId).catch(() => {});
+                        throw error;
+                    }
+                    const updated = await QueueCardService.upsert({
+                        ...card, status: 'booster', boosterUntil: term, handledBy: actor.id, handledAt: new Date().toISOString()
+                    });
+                    await VerificationService.safeRender(guild, updated, member);
+                    return { ok: true };
+                }, { booster: true }).catch(error => ({ ok: false, code: error.code === MISSING_PERMISSIONS ? 'bot_cannot_role' : 'failed' }));
+            }
             if (result.ok) done.push(userId); else failed.push({ userId, code: result.code });
         }
         if (done.length) await this.log(guild.id, 'booster.passed', actor, done, { until: term, count: done.length, ...(cleanNote ? { note: cleanNote } : {}) }, source);
@@ -188,7 +207,7 @@ class BoosterPassService {
         if (!term) return { ok: false, code: 'invalid_term' };
         const pass = await this.get(guild.id, userId);
         if (!pass) return { ok: false, code: 'pass_not_found' };
-        const saved = await this.save({ ...pass, until: term, warnedAt: null });
+        const saved = await this.save({ ...pass, until: term, warnedAt: null, kickFailedAt: null });
         const card = await QueueCardService.get(guild.id, userId);
         if (card?.status === 'booster') {
             const updated = await QueueCardService.upsert({ ...card, boosterUntil: term });
@@ -203,20 +222,26 @@ class BoosterPassService {
         const settings = await VerificationService.getQueueSettings(guild.id);
         if (!settings) return { ok: false, code: 'not_configured' };
         if (!(await VerificationService.assertPermission(guild, actor.id, PermissionFlagsBits.ManageRoles))) return { ok: false, code: 'forbidden' };
-        const pass = await this.get(guild.id, userId);
-        const member = await guild.members.fetch(userId).catch(() => null);
-        if (!pass && !member?.roles.cache.has(settings.boosterRoleId)) return { ok: false, code: 'pass_not_found' };
-        if (member && settings.boosterRoleId && member.roles.cache.has(settings.boosterRoleId)) {
-            await member.roles.remove(settings.boosterRoleId, `Буст-аккаунт возвращён в очередь · ${actor.tag || actor.id}`);
+        const lock = VerificationService.lockKey(guild.id, userId);
+        if (VerificationService.locks.has(lock)) return { ok: false, code: 'in_progress' };
+        VerificationService.locks.add(lock);
+        try {
+            const pass = await this.get(guild.id, userId);
+            const member = await guild.members.fetch(userId).catch(() => null);
+            const markers = [...new Set([pass?.roleId, settings.boosterRoleId].filter(Boolean))].filter(id => member?.roles.cache.has(id));
+            if (!pass && markers.length === 0) return { ok: false, code: 'pass_not_found' };
+            if (markers.length) await member.roles.remove(markers, `Буст-аккаунт возвращён в очередь · ${actor.tag || actor.id}`);
+            await this.remove(guild.id, userId);
+            const card = await QueueCardService.get(guild.id, userId);
+            if (card?.status === 'booster' && member?.roles.cache.has(settings.unverifiedRoleId)) {
+                const reopened = await QueueCardService.upsert({ ...card, status: 'pending', boosterUntil: null, handledBy: null, handledAt: null });
+                await VerificationService.safeRender(guild, reopened, member);
+            }
+            await this.log(guild.id, 'booster.released', actor, [userId]);
+            return { ok: true };
+        } finally {
+            VerificationService.locks.delete(lock);
         }
-        await this.remove(guild.id, userId);
-        const card = await QueueCardService.get(guild.id, userId);
-        if (card?.status === 'booster' && member) {
-            const reopened = await QueueCardService.upsert({ ...card, status: 'pending', boosterUntil: null, handledBy: null, handledAt: null });
-            await VerificationService.safeRender(guild, reopened, member);
-        }
-        await this.log(guild.id, 'booster.released', actor, [userId]);
-        return { ok: true };
     }
 
     /** Close the card and forget the pass once the account is gone */
@@ -258,10 +283,12 @@ class BoosterPassService {
     async processDue(client, now = Date.now()) {
         let kicked = 0;
         const warn = new Map(); // guildId -> passes
-        for (const pass of await this.listDue(now)) {
-            const guild = client.guilds.cache.get(pass.guildId);
+        for (const due of await this.listDue(now)) {
+            const guild = client.guilds.cache.get(due.guildId);
             if (!guild) continue;
             try {
+                const pass = await this.get(due.guildId, due.userId);
+                if (!pass || Date.parse(pass.until) > now + WARN_BEFORE_MS) continue;
                 if (Date.parse(pass.until) > now) {
                     if (!pass.warnedAt) warn.set(guild.id, [...(warn.get(guild.id) || []), pass]);
                     continue;
@@ -279,7 +306,7 @@ class BoosterPassService {
                         if (error.code !== MISSING_PERMISSIONS) throw error; // Discord down: next round
                         // Above the bot or no Kick Members: say so once instead of retrying forever
                         if (!pass.kickFailedAt) {
-                            await this.save({ ...pass, kickFailedAt: new Date(now).toISOString() });
+                            await this.save({ ...(await this.get(guild.id, pass.userId) || pass), kickFailedAt: new Date(now).toISOString() });
                             await this.log(guild.id, 'booster.expired', null, [pass.userId], { until: pass.until, failed: true }, 'auto');
                         }
                         continue;
@@ -289,12 +316,15 @@ class BoosterPassService {
                 await this.finish(guild, pass.userId, null);
                 await this.log(guild.id, 'booster.expired', null, [pass.userId], { until: pass.until, wasBoosting: Boolean(member?.premiumSince), left: !member }, 'auto');
             } catch (error) {
-                console.error(`Boosters: processing ${pass.userId} failed:`, error.message || error);
+                console.error(`Boosters: processing ${due.userId} failed:`, error.message || error);
             }
         }
         for (const [guildId, passes] of warn) {
             await this.log(guildId, 'booster.expiring', null, passes.map(p => p.userId), { count: passes.length, until: passes[0].until }, 'auto');
-            for (const pass of passes) await this.save({ ...pass, warnedAt: new Date(now).toISOString() });
+            for (const pass of passes) {
+                const fresh = await this.get(guildId, pass.userId);
+                if (fresh) await this.save({ ...fresh, warnedAt: new Date(now).toISOString() });
+            }
         }
         return kicked;
     }

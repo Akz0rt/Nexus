@@ -93,7 +93,7 @@ function member(id, { position = 1, perms = () => false } = {}) {
         }
     };
     m.roles.add = async role => { m.roles.cache.set(role.id || role, role); };
-    m.roles.remove = async role => { m.roles.cache.delete(role.id || role); };
+    m.roles.remove = async roles => { for (const role of [roles].flat()) m.roles.cache.delete(role.id || role); };
     guild.members.cache.set(id, m);
     return m;
 }
@@ -130,6 +130,10 @@ const settings = () => ({ unverifiedRoleId: UNVERIFIED, boosterRoleId: settingsD
     assert.strictEqual(cards.get(B).status, 'pending');
     await BoosterPassService.pass(guild, [B], { until }, mod);
     assert.strictEqual(created.length, 1);
+
+    // The queue's own approve/kick never touch a booster account
+    const refused = await VerificationService.withQueuedMember(guild, A, settings(), async () => ({ ok: true }));
+    assert.strictEqual(refused.code, 'booster_account');
 
     // Extend
     const later = new Date(Date.now() + 60 * DAY).toISOString();

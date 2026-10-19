@@ -166,7 +166,12 @@ export default function BoostersTab({ guildId, revision, onOpenMember, onChanged
                         const ok = extending.until
                             ? await run(`${extending.member.id}/extend`, { until }, 'Срок продлён')
                             : await apiPost(`/guilds/${guildId}/queue/boosters`, { userIds: [extending.member.id], until })
-                                .then(result => { toast(result.ok ? 'Срок задан' : describeError(result), result.ok ? {} : { tone: 'error' }); setRetry(n => n + 1); return result.ok; });
+                                .then(result => {
+                                    const ok = result.ok && result.data.done.length > 0;
+                                    toast(ok ? 'Срок задан' : describeError(result.ok ? { error: result.data.failed[0]?.code } : result), ok ? {} : { tone: 'error' });
+                                    setRetry(n => n + 1);
+                                    return ok;
+                                });
                         if (ok) setExtending(null);
                     }} />
             )}

@@ -242,10 +242,12 @@ export default function QueueView({ guildId, waiting, seen, revision, presence =
         const result = await apiPost(`/guilds/${guildId}/queue/boosters`, { userIds: group.map(item => item.member.id), until, note });
         setGroupBusy(false);
         if (!result.ok) { toast(describeError(result), { tone: 'error' }); return; }
+        const { done, failed } = result.data;
+        onChanged();
+        // Nobody was marked: keep the dialog open with the reason
+        if (done.length === 0) { toast(describeError({ error: failed[0]?.code }), { tone: 'error' }); return; }
         setBoosting(null);
         selection.clear();
-        onChanged();
-        const { done, failed } = result.data;
         const date = new Date(result.data.until).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' });
         const names = group.filter(item => done.includes(item.member.id)).map(item => item.member.displayName);
         toast(`${done.length === 1 ? `${names[0]} — буст-аккаунт` : `Буст-аккаунтов: ${done.length}`} до ${date}${failed.length ? ` · не вышло: ${failed.length}` : ''}`,

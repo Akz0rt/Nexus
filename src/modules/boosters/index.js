@@ -21,17 +21,26 @@ module.exports = {
     },
 
     async onReady(client) {
-        const count = await BoosterPassService.loadIndex();
-        if (count) console.log(`Boosters: ${count} booster account(s) on a term`);
+        let running = false;
         const check = async () => {
+            if (running) return; // a slow round is still kicking
+            running = true;
             try {
+                // A failed load at startup is retried next round; the kicks below don't need it
+                if (!BoosterPassService.indexLoaded) {
+                    await BoosterPassService.loadIndex()
+                        .then(count => { if (count) console.log(`Boosters: ${count} booster account(s) on a term`); })
+                        .catch(error => console.error('Boosters: loading the index failed:', error.message || error));
+                }
                 const kicked = await BoosterPassService.processDue(client);
                 if (kicked) console.log(`Boosters: kicked ${kicked} booster account(s) whose term ended`);
             } catch (error) {
                 console.error('Boosters: term check failed:', error.message || error);
+            } finally {
+                running = false;
             }
         };
-        await check();
         cron.schedule('*/5 * * * *', check);
+        await check();
     }
 };

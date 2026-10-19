@@ -28,12 +28,17 @@ const RESULT_STATUS = {
     invalid_targets: 400,
     pass_not_found: 404,
     bot_cannot_role: 409,
-    bot_cannot: 409
+    bot_cannot: 409,
+    booster_account: 409,
+    role_higher: 403,
+    role_managed: 409
 };
 
 /** In the queue: holds @unverified and isn't a booster account (those keep @unverified to see nothing) */
 function inQueue(member, settings) {
-    return member.roles.cache.has(settings.unverifiedRoleId) && !(settings.boosterRoleId && member.roles.cache.has(settings.boosterRoleId));
+    if (!member.roles.cache.has(settings.unverifiedRoleId)) return false;
+    // A term recorded counts too: the marker role may have been changed in Settings since
+    return !(settings.boosterRoleId && member.roles.cache.has(settings.boosterRoleId)) && !BoosterPassService.has(member.guild?.id, member.id);
 }
 
 /** Booster accounts on a term, plus holders of the marker role without one (given by hand) */

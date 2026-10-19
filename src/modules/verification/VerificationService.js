@@ -207,7 +207,7 @@ class VerificationService {
      * was down have none, so a fresh one (without a Discord message) is made up.
      * Returns fn's result or an { ok: false } object.
      */
-    async withQueuedMember(guild, userId, settings, fn) {
+    async withQueuedMember(guild, userId, settings, fn, { booster = false } = {}) {
         const key = this.lockKey(guild.id, userId);
         // A concurrent click waits for the first one, then sees its outcome
         // ("already approved by X") — or proceeds if the first one failed.
@@ -225,6 +225,10 @@ class VerificationService {
                 return { ok: false, code: 'member_left' };
             }
             if (!member.roles.cache.has(settings.unverifiedRoleId)) return this.alreadyHandled(card);
+            // A booster account keeps @unverified but is out of the queue: only the booster pass itself goes on
+            if (!booster && (card?.status === 'booster' || (settings.boosterRoleId && member.roles.cache.has(settings.boosterRoleId)))) {
+                return { ok: false, code: 'booster_account', card };
+            }
 
             const queuedCard = card?.status === 'pending' ? card : {
                 guildId: guild.id,

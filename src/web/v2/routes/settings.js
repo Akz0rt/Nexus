@@ -29,6 +29,11 @@ function sanitize(guild, body, current) {
     const fields = [];
     const isRole = id => guild.roles.cache.has(id) && id !== guild.id;
 
+    if ('boosterRoleId' in body && body.boosterRoleId) {
+        const role = guild.roles.cache.get(String(body.boosterRoleId));
+        const queueRoles = ['unverifiedRoleId', 'maleRoleId', 'femaleRoleId'].map(key => (key in body ? body[key] : current[key]));
+        if (role && (role.managed || role.permissions.bitfield !== 0n || queueRoles.includes(role.id))) return fail('boosterRoleId', 'booster_role_unsafe');
+    }
     for (const key of ['unverifiedRoleId', 'maleRoleId', 'femaleRoleId', 'boosterRoleId']) {
         if (!(key in body)) continue;
         const id = String(body[key] || '');
