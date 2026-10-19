@@ -111,7 +111,7 @@ export function GatherDialog({ guildId, channel, categories, onClose, onDone }) 
     const submit = async () => {
         if (picked.size === 0) { setError('Отметьте каналы, откуда собирать.'); return; }
         setBusy(true);
-        const result = await apiPost(`/guilds/${guildId}/voice/gather`, { channelId: channel.id, fromChannelIds: [...picked] });
+        const result = await apiPost(`/guilds/${guildId}/voice/gather`, { channelId: channel.id, fromChannelIds: [...picked], background: true });
         setBusy(false);
         if (!result.ok) { setError(describeError(result)); return; }
         onDone(result.data);

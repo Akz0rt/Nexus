@@ -18,37 +18,11 @@ const TABS = [
 const roleColor = color => (!color || color === '#000000' ? 'var(--muted)' : color);
 
 /** Progress of the running (or just finished) mass change. */
-export function JobBar({ job, onRetry, onClose }) {
-    if (!job) return null;
-    const verb = job.add ? 'Выдаём' : 'Снимаем';
-    const percent = job.total ? Math.round((job.processed / job.total) * 100) : 0;
-    if (job.status === 'running') {
-        return (
-            <div className="job-bar" role="status">
-                <span>{verb} «{job.roleName}»: <span className="numeric">{job.processed} / {job.total}</span>
-                    {job.failedCount > 0 && <span className="error"> · не удалось {job.failedCount}</span>}</span>
-                <div className="progress" aria-hidden="true"><div style={{ width: `${percent}%` }} /></div>
-            </div>
-        );
-    }
-    const done = job.doneCount ?? job.processed - job.failedCount;
-    return (
-        <div className={`job-bar ${job.failedCount ? 'is-failed' : 'is-done'}`} role="status">
-            <span>
-                Готово: {job.add ? 'выдано' : 'снято'} «{job.roleName}» — <span className="numeric">{done} из {job.total}</span>
-                {job.failedCount > 0 && <span className="error"> · не удалось {job.failedCount}</span>}
-            </span>
-            {job.failedCount > 0 && onRetry && <button className="btn" onClick={onRetry}>Повторить для неудачных</button>}
-            <button className="btn btn-quiet" onClick={onClose} aria-label="Скрыть">✕</button>
-        </div>
-    );
-}
-
 function ConfirmRemove({ count, role, onClose, onConfirm, busy }) {
     return (
         <Dialog title={`Снять «${role.name}» у ${count} чел.?`} onClose={onClose} onSubmit={onConfirm}
             submitLabel="Снять" submitTone="danger" busy={busy}>
-            <p className="muted">Роль снимется у каждого по очереди; прогресс будет виден сверху. Отменить это одной кнопкой нельзя.</p>
+            <p className="muted">Роль снимется у каждого по очереди; прогресс — справа внизу, там же «Отменить всё».</p>
         </Dialog>
     );
 }
@@ -319,8 +293,6 @@ export default function RolesView({ guildId, revision, job, onJob, onOpenMember,
         return true;
     }, [guildId, onJob, toast]);
 
-    const retry = () => startJob({ roleId: job.roleId, add: job.add, filter: { type: 'users', userIds: job.failedIds || [] } });
-
     return (
         <section className="view view-wide">
             <div className="view-head">
@@ -333,7 +305,6 @@ export default function RolesView({ guildId, revision, job, onJob, onOpenMember,
                     ))}
                 </div>
             </div>
-            <JobBar job={job} onRetry={job?.failedIds?.length ? retry : null} onClose={() => onJob(null)} />
             {error && <ErrorState what="роли" error={error} onRetry={() => setReloadRoles(n => n + 1)} />}
             {tab === 'roles' && roles && (
                 <RolesTab guildId={guildId} roles={roles} revision={revision} onOpenMember={onOpenMember} onStartJob={startJob} toast={toast} />

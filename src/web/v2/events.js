@@ -118,6 +118,8 @@ class SseHub {
             user => this.canSee(entry.guildId, user?.id, entry)));
         bus.on('voice', change => this.broadcast(change.guildId, 'voice', change));
         bus.on('job', job => this.broadcast(job.guildId, 'job', job));
+        // A background task is the business of whoever started it
+        bus.on('task', task => this.broadcast(task.guildId, 'task', task, user => user?.id === task.actorId));
         bus.on('event', change => this.broadcast(change.guildId, 'event', change));
         return this;
     }

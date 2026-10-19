@@ -76,6 +76,16 @@ async function mapLimit(items, limit, fn) {
 }
 
 /** Fisher–Yates on a copy; random is injectable for tests. */
+/** Wrap a per-member step so a background task hears about each result. */
+function report(hooks, fn) {
+    if (!hooks?.onItem) return fn;
+    return async item => {
+        const result = await fn(item);
+        hooks.onItem(result);
+        return result;
+    };
+}
+
 function shuffle(items, random = Math.random) {
     const copy = [...items];
     for (let i = copy.length - 1; i > 0; i--) {
@@ -171,8 +181,9 @@ class VoiceService {
      * Move each target to its own channel.
      * @param {Array<{ userId: string, channelId: string }>} targets
      * @param {'move'|'undo'|'split'|'gather'} kind
+     * @param {{ onStart?, onItem?, isCancelled? }} [hooks] progress for a background task (TaskService)
      */
-    async moveEach(guild, targets, actor, source, { kind = 'move', details = {} } = {}) {
+    async moveEach(guild, targets, actor, source, { kind = 'move', details = {}, hooks = {} } = {}) {
         if (!Array.isArray(targets) || targets.length === 0 || targets.length > MAX_TARGETS) {
             return { ok: false, code: 'invalid_targets' };
         }
@@ -194,7 +205,9 @@ class VoiceService {
 
         const unique = [...new Map(targets.map(target => [String(target.userId), String(target.channelId)])).entries()];
         const reason = discordReason('Перемещение', actor);
-        const results = await mapLimit(unique, CONCURRENCY, async ([userId, channelId]) => {
+        hooks.onStart?.(unique.length);
+        const results = await mapLimit(unique, CONCURRENCY, report(hooks, async ([userId, channelId]) => {
+            if (hooks.isCancelled?.()) return { userId, code: 'cancelled' };
             const member = await this.fetchMember(guild, userId).catch(() => null);
             if (!member) return { userId, name: null, code: 'member_not_found' };
             const from = member.voice?.channelId || null;
@@ -206,9 +219,9 @@ class VoiceService {
             } catch (error) {
                 return { userId, name: member.displayName, code: errorCode(error) };
             }
-        });
+        }));
 
-        const failed = results.filter(r => r.code).map(({ userId, name, code }) => ({ userId, name, code }));
+        const failed = results.filter(r => r.code && r.code !== 'cancelled').map(({ userId, name, code }) => ({ userId, name, code }));
         const moves = results.filter(r => !r.code && !r.skipped).map(({ userId, from, to }) => ({ userId, from, to }));
         const done = results.filter(r => !r.code).map(r => r.userId);
 
@@ -253,7 +266,7 @@ class VoiceService {
     }
 
     /** Everyone from `fromChannelIds` into `intoChannelId` ("Собрать сюда", "Собрать обратно"). */
-    async gather(guild, intoChannelId, fromChannelIds, actor, source) {
+    async gather(guild, intoChannelId, fromChannelIds, actor, source, { hooks } = {}) {
         const ids = [];
         for (const channelId of new Set(fromChannelIds || [])) {
             if (channelId === intoChannelId) continue;
@@ -262,7 +275,7 @@ class VoiceService {
             ids.push(...members.map(member => member.id));
         }
         if (ids.length === 0) return { ok: false, code: 'nobody' };
-        return this.move(guild, ids, intoChannelId, actor, source, { kind: 'gather' });
+        return this.move(guild, ids, intoChannelId, actor, source, { kind: 'gather', hooks });
     }
 
     /**
@@ -303,7 +316,7 @@ class VoiceService {
     // --- Mute / deafen / disconnect ----------------------------------------------
 
     /** @param {'mute'|'unmute'|'deafen'|'undeafen'|'disconnect'} action */
-    async apply(guild, action, userIds, actor, source, { details = {} } = {}) {
+    async apply(guild, action, userIds, actor, source, { details = {}, hooks = {} } = {}) {
         const spec = Object.hasOwn(MEMBER_ACTIONS, action) ? MEMBER_ACTIONS[action] : null;
         if (!spec) return { ok: false, code: 'invalid_action' };
         const ids = cleanIds(userIds);
@@ -313,7 +326,9 @@ class VoiceService {
         if (!this.botHas(guild, spec.permission)) return { ok: false, code: 'bot_missing_permission' };
 
         const reason = discordReason(action === 'disconnect' ? 'Отключение от голоса' : 'Голосовое действие', actor);
-        const results = await mapLimit(ids, CONCURRENCY, async userId => {
+        hooks.onStart?.(ids.length);
+        const results = await mapLimit(ids, CONCURRENCY, report(hooks, async userId => {
+            if (hooks.isCancelled?.()) return { userId, code: 'cancelled' };
             const member = await this.fetchMember(guild, userId).catch(() => null);
             if (!member) return { userId, name: null, code: 'member_not_found' };
             const problem = voiceTargetProblem(guild, actorMember, member);
@@ -325,9 +340,9 @@ class VoiceService {
             } catch (error) {
                 return { userId, name: member.displayName, code: errorCode(error) };
             }
-        });
+        }));
 
-        const failed = results.filter(r => r.code);
+        const failed = results.filter(r => r.code && r.code !== 'cancelled');
         const done = results.filter(r => !r.code).map(r => r.userId);
         if (done.length > 0) {
             await AuditLogService.log({
@@ -347,14 +362,15 @@ class VoiceService {
      * Mute (or unmute) everyone in a channel except exceptIds (the host) and bots.
      * Members ranked at or above the actor are left alone and reported as failed.
      */
-    async muteChannel(guild, channelId, on, actor, source, { exceptIds = [] } = {}) {
+    async muteChannel(guild, channelId, on, actor, source, { exceptIds = [], hooks } = {}) {
         const channel = guild.channels.cache.get(channelId);
         const members = this.membersIn(guild, channelId, { exceptIds });
         if (!members) return { ok: false, code: 'channel_not_found' };
         const targets = members.filter(member => Boolean(member.voice.serverMute) !== on);
         if (targets.length === 0) return { ok: false, code: 'nobody' };
         return this.apply(guild, on ? 'mute' : 'unmute', targets.map(member => member.id), actor, source, {
-            details: { channelId, channelName: channel.name, wholeChannel: true }
+            details: { channelId, channelName: channel.name, wholeChannel: true },
+            hooks
         });
     }
 
@@ -403,7 +419,7 @@ class VoiceService {
      * Bring a squad into a channel: members in voice are moved, members on the
      * server but not in voice get a DM with a link to the channel.
      */
-    async gatherSquad(guild, squadId, channelId, actor, source) {
+    async gatherSquad(guild, squadId, channelId, actor, source, { hooks } = {}) {
         const squad = await SquadService.get(guild.id, String(squadId));
         if (!squad) return { ok: false, code: 'squad_not_found' };
         const channel = guild.channels.cache.get(String(channelId));
@@ -422,7 +438,8 @@ class VoiceService {
         if (inVoice.length > 0) {
             result = await this.moveEach(guild, inVoice.map(userId => ({ userId, channelId: channel.id })), actor, source, {
                 kind: 'gather',
-                details: { squadId: squad.id, squadName: squad.name }
+                details: { squadId: squad.id, squadName: squad.name },
+                hooks
             });
             if (!result.ok) return result;
         } else {

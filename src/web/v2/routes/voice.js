@@ -6,6 +6,11 @@ const { isVoice } = require('../../../modules/voice/VoiceService');
 const { panelRoleFromPermissions } = require('../access');
 const { actorOf, sendResult } = require('../result');
 const { userRef } = require('../serialize');
+const TaskService = require('../../../services/TaskService');
+const tasks = require('../voiceTasks');
+
+// { background: true } in a body: run as a background task (progress over SSE), answer { ok, task } at once
+const background = req => req.body?.background === true;
 
 const router = express.Router({ mergeParams: true });
 
@@ -140,14 +145,20 @@ router.post('/move', handle((req, actor) => {
         const details = kind === 'split' && SNOWFLAKE_RE.test(String(body.sourceChannelId))
             ? { sourceChannelId: String(body.sourceChannelId) }
             : {};
+        if (background(req)) {
+            const title = kind === 'split' ? 'Разбивка на команды' : kind === 'undo' ? 'Возврат на места' : 'Перенос';
+            return TaskService.start(tasks.movesSpec(req.guild, moves, actor, { kind, title, details }));
+        }
         return VoiceService.moveEach(req.guild, moves, actor, 'panel', { kind, details });
     }
+    if (background(req)) return TaskService.start(tasks.moveSpec(req.guild, idList(body.userIds), String(body.channelId || ''), actor));
     return VoiceService.move(req.guild, idList(body.userIds), String(body.channelId || ''), actor, 'panel');
 }));
 
 // POST /voice/gather — { channelId, fromChannelIds }: everyone from those channels into channelId
-router.post('/gather', handle((req, actor) =>
-    VoiceService.gather(req.guild, String(req.body?.channelId || ''), idList(req.body?.fromChannelIds) || [], actor, 'panel')));
+router.post('/gather', handle((req, actor) => (background(req)
+    ? TaskService.start(tasks.gatherSpec(req.guild, String(req.body?.channelId || ''), idList(req.body?.fromChannelIds) || [], actor))
+    : VoiceService.gather(req.guild, String(req.body?.channelId || ''), idList(req.body?.fromChannelIds) || [], actor, 'panel'))));
 
 // --- Squads ----------------------------------------------------------------------
 
@@ -177,16 +188,18 @@ router.put('/squads/:squadId', handle((req, actor) =>
 router.delete('/squads/:squadId', handle((req, actor) =>
     VoiceService.deleteSquad(req.guild, req.params.squadId, actor, 'panel')));
 
-router.post('/squads/:squadId/gather', handle((req, actor) =>
-    VoiceService.gatherSquad(req.guild, req.params.squadId, String(req.body?.channelId || ''), actor, 'panel')));
+router.post('/squads/:squadId/gather', handle((req, actor) => (background(req)
+    ? TaskService.start(tasks.squadGatherSpec(req.guild, req.params.squadId, String(req.body?.channelId || ''), actor))
+    : VoiceService.gatherSquad(req.guild, req.params.squadId, String(req.body?.channelId || ''), actor, 'panel'))));
 
 // --- Channels --------------------------------------------------------------------
 
 // POST /voice/channels/:channelId/mute-all — { on, exceptIds }
-router.post('/channels/:channelId/mute-all', validChannel, handle((req, actor) =>
-    VoiceService.muteChannel(req.guild, req.params.channelId, req.body?.on !== false, actor, 'panel', {
+router.post('/channels/:channelId/mute-all', validChannel, handle((req, actor) => (background(req)
+    ? TaskService.start(tasks.muteChannelSpec(req.guild, req.params.channelId, req.body?.on !== false, idList(req.body?.exceptIds) || [], actor))
+    : VoiceService.muteChannel(req.guild, req.params.channelId, req.body?.on !== false, actor, 'panel', {
         exceptIds: idList(req.body?.exceptIds) || []
-    })));
+    }))));
 
 // POST /voice/channels/:channelId/lock — { locked }
 router.post('/channels/:channelId/lock', validChannel, handle((req, actor) =>
@@ -200,8 +213,9 @@ router.patch('/channels/:channelId', validChannel, handle((req, actor) =>
     }, actor, 'panel')));
 
 // POST /voice/{mute|unmute|deafen|undeafen|disconnect} — { userIds }
-router.post('/:action', handle((req, actor) =>
-    VoiceService.apply(req.guild, req.params.action, idList(req.body?.userIds), actor, 'panel')));
+router.post('/:action', handle((req, actor) => (background(req) && Object.hasOwn(tasks.ACTIONS, req.params.action)
+    ? TaskService.start(tasks.actionSpec(req.guild, req.params.action, idList(req.body?.userIds), actor))
+    : VoiceService.apply(req.guild, req.params.action, idList(req.body?.userIds), actor, 'panel'))));
 
 module.exports = router;
 module.exports.describeBoard = describeBoard;

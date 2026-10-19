@@ -97,11 +97,21 @@ class RoleJobService {
         return { ok: true, job: this.publicJob(job) };
     }
 
+    /** Stop the running job of a guild (only the person who started it). */
+    cancel(guildId, actorId) {
+        const job = this.current(guildId);
+        if (!job || job.status !== 'running') return { ok: false, code: 'nothing_running' };
+        if (job.actorId !== actorId) return { ok: false, code: 'forbidden' };
+        job.cancelRequested = true;
+        return { ok: true, job: this.publicJob(job) };
+    }
+
     async run(guild, job, userIds, role, actor, source, expiry) {
         const reason = RoleService.roleReason(job.add, actor, expiry.durationMs);
         let lastEmit = Date.now();
-        const results = await RoleService.mapLimit(userIds, userId =>
-            RoleService.changeMemberRole(guild, userId, role, job.add, { reason, actor, expiresAt: expiry.expiresAt }),
+        const all = await RoleService.mapLimit(userIds, userId => (job.cancelRequested
+            ? { userId, code: 'cancelled' }
+            : RoleService.changeMemberRole(guild, userId, role, job.add, { reason, actor, expiresAt: expiry.expiresAt })),
         done => {
             job.processed = done.length;
             job.failedCount = done.filter(r => r.code).length;
@@ -111,13 +121,16 @@ class RoleJobService {
             }
         });
 
+        // Stopped from the app: members not reached yet are simply left out
+        const results = all.filter(r => r.code !== 'cancelled');
         const summary = await RoleService.finishBulk(guild, results, role, job.add, actor, source, { ...expiry, total: job.total });
         job.processed = results.length;
         job.failedCount = summary.failed.length;
         job.failed = summary.failed.slice(0, FAILURES_SHOWN);
         job.failedIds = summary.failed.map(f => f.userId);
         job.doneCount = summary.done.length;
-        job.status = 'done';
+        job.doneIds = summary.done; // «Отменить всё» runs the opposite change for exactly these
+        job.status = job.cancelRequested ? 'cancelled' : 'done';
         job.finishedAt = new Date().toISOString();
         this.emit(job);
     }

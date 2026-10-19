@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { apiGet, apiPost, describeError } from './api.js';
+import { apiGet, apiPost } from './api.js';
 import Sidebar from './Sidebar.jsx';
 import Header from './Header.jsx';
 import QueueView from './QueueView.jsx';
@@ -19,6 +19,8 @@ import { playChime } from './sound.js';
 import { useSeen } from './seen.js';
 import MemberDrawer from './MemberDrawer.jsx';
 import Toasts from './Toasts.jsx';
+import TaskTray from './TaskTray.jsx';
+import useTasks from './useTasks.js';
 
 const THEME_KEY = 'panel.theme';
 const VIEWING_REPEAT_MS = 4 * 60 * 1000;
@@ -111,6 +113,9 @@ export default function App() {
                 : `Не удалось загрузить данные: ${error.message}`));
     }, [auth?.loggedIn]);
 
+    const tasks = useTasks({ guildId, roleJob, onRoleJob: updateJob, myId: me?.id, toast });
+    const onTask = tasks.onTask;
+
     // Live events of the selected server
     useEffect(() => {
         setLiveEvents([]);
@@ -131,36 +136,12 @@ export default function App() {
             }
             if (event === 'voice') setVoiceRevision(r => r + 1);
             if (event === 'job') updateJob(data);
+            if (event === 'task') onTask(data);
             if (event === 'event') setEventRevision(r => r + 1);
         });
         const offState = window.panel.onStreamState(({ guildId: id, state }) => { if (id === guildId) setStreamState(state); });
         return () => { offEvent(); offState(); };
-    }, [guildId, updateJob]);
-
-    // My own mass role change finished: say how it went, even on another screen
-    const announcedJob = useRef(null);
-    useEffect(() => {
-        if (!roleJob || roleJob.status !== 'done' || roleJob.actorId !== me?.id || announcedJob.current === roleJob.id) return;
-        announcedJob.current = roleJob.id;
-        const done = roleJob.doneCount ?? roleJob.processed - roleJob.failedCount;
-        const text = `${roleJob.add ? 'Выдано' : 'Снято'} «${roleJob.roleName}»: ${done} из ${roleJob.total}`
-            + (roleJob.failedCount ? ` · не удалось ${roleJob.failedCount}` : '');
-        const retryIds = roleJob.failedIds || [];
-        toast(text, roleJob.failedCount ? {
-            tone: 'error',
-            ttl: 10000,
-            action: retryIds.length ? {
-                label: 'Повторить для неудачных',
-                onClick: async () => {
-                    const result = await apiPost(`/guilds/${roleJob.guildId}/roles/jobs`, {
-                        roleId: roleJob.roleId, add: roleJob.add, filter: { type: 'users', userIds: retryIds }
-                    });
-                    if (result.ok) updateJob(result.data.job);
-                    else toast(describeError(result), { tone: 'error' });
-                }
-            } : undefined
-        } : {});
-    }, [roleJob, me?.id, toast, updateJob]);
+    }, [guildId, updateJob, onTask]);
 
     // Waiting queue: drives the sidebar counter and the "Ждут" tab
     const [reloadWaiting, setReloadWaiting] = useState(0);
@@ -348,6 +329,7 @@ export default function App() {
                     toast={toast}
                 />
             )}
+            <TaskTray items={tasks.items} onRevert={tasks.revert} onRetry={tasks.retry} onClose={item => tasks.hide(item.key)} />
             <Toasts toasts={toasts} onDismiss={dismissToast} />
         </div>
     );

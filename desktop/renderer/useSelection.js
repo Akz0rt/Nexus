@@ -5,9 +5,11 @@ import { useEffect, useRef, useState } from 'react';
  * dragged with the mouse, Ctrl+A, Esc. Rows carry `data-select="<id>"`; the list's
  * container gets `listRef` and `onMouseDown={startMarquee}`.
  * @param {string[]} ids rows in the order shown
- * @param {{ paused?: boolean }} options paused — a dialog is open, keys belong to it
+ * @param {{ paused?: boolean, selectAll?: (selected: Set) => string[] }} options
+ *   paused — a dialog is open, keys belong to it; selectAll — what Ctrl+A picks (default: every row)
+ *   Rows that can be dragged (draggable="true") start a drag, not a rubber band.
  */
-export default function useSelection(ids, { paused = false } = {}) {
+export default function useSelection(ids, { paused = false, selectAll = null } = {}) {
     const [selected, setSelected] = useState(() => new Set());
     const [anchor, setAnchor] = useState(null);
     const [marquee, setMarquee] = useState(null);
@@ -48,15 +50,15 @@ export default function useSelection(ids, { paused = false } = {}) {
             if (event.key === 'Escape' && selected.size) setSelected(new Set());
             if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'a') {
                 event.preventDefault();
-                setSelected(new Set(ids));
+                setSelected(new Set(selectAll ? selectAll(selected) : ids));
             }
         };
         window.addEventListener('keydown', onKey);
         return () => window.removeEventListener('keydown', onKey);
-    }, [paused, ids.join(','), selected.size]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [paused, ids.join(','), selected, selectAll]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const startMarquee = event => {
-        if (event.button !== 0 || event.target.closest('button, input, a, select, [role="menu"]')) return;
+        if (event.button !== 0 || event.target.closest('button, input, a, select, label, [role="menu"], [draggable="true"]')) return;
         const onRow = Boolean(event.target.closest('[data-select]'));
         event.preventDefault();
         const base = event.shiftKey || event.ctrlKey ? new Set(selected) : new Set();
@@ -87,7 +89,7 @@ export default function useSelection(ids, { paused = false } = {}) {
         window.addEventListener('mouseup', onUp);
     };
 
-    return { selected, chosen, setSelected, click, toggle, clear, startMarquee, marquee, listRef };
+    return { selected, chosen, setSelected, anchor, click, toggle, clear, startMarquee, marquee, listRef };
 }
 
 /** The rubber band itself; render it once while `marquee` is set. */

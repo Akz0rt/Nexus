@@ -176,6 +176,8 @@ router.get('/jobs/current', (req, res) => {
 router.post('/jobs/preview', handle((req, actor) => RoleJobService.preview(req.guild, jobRequest(req.body), actor)));
 
 router.post('/jobs', handle((req, actor) => RoleJobService.start(req.guild, jobRequest(req.body), actor, 'panel')));
+// POST /roles/jobs/cancel — stop the running job (only whoever started it)
+router.post('/jobs/cancel', handle((req, actor) => RoleJobService.cancel(req.guild.id, actor.id)));
 
 // --- Self-service role menus («роли по интересам») -----------------------------------
 

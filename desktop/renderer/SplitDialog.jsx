@@ -47,7 +47,7 @@ export default function SplitDialog({ guildId, channel, categories, myId, onDone
         const moves = [...teams.entries()].flatMap(([channelId, members]) => members.map(member => ({ userId: member.id, channelId })));
         if (moves.length === 0) { setError('Некого рассылать.'); return; }
         setBusy(true);
-        const result = await apiPost(`/guilds/${guildId}/voice/move`, { moves, kind: 'split', sourceChannelId: channel.id });
+        const result = await apiPost(`/guilds/${guildId}/voice/move`, { moves, kind: 'split', sourceChannelId: channel.id, background: true });
         setBusy(false);
         if (!result.ok) { setError(describeError(result)); return; }
         onDone(result.data, { sourceChannelId: channel.id, targetChannelIds: targets });

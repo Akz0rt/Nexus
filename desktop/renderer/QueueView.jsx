@@ -5,6 +5,7 @@ import Avatar, { MemberLink } from './Avatar.jsx';
 import { ExtraRolesDialog, useAssignable } from './RoleDialogs.jsx';
 import { Chip, FilterChip, StatusPill } from './Chips.jsx';
 import OverflowMenu from './OverflowMenu.jsx';
+import FilterMenu from './FilterMenu.jsx';
 import SelectionBar from './SelectionBar.jsx';
 import { EmptyState, ErrorState, Skeleton } from './States.jsx';
 import Dialog from './Dialog.jsx';
@@ -58,31 +59,6 @@ function inviteLabel(invite) {
     if (invite.vanity) return { key: 'vanity', text: 'vanity', title: 'Личная ссылка сервера' };
     if (invite.inviter) return { key: invite.inviter.id, text: `@${invite.inviter.displayName || invite.inviter.id}`, title: invite.code ? `discord.gg/${invite.code}` : undefined };
     return { key: 'unknown', text: invite.code || '—', title: invite.code ? `discord.gg/${invite.code}` : undefined };
-}
-
-/** A filter chip that opens a short list (Инвайт ▾, Когда зашли ▾); Esc and a click outside close it. */
-function FilterMenu({ label, active, open, onToggle, onClose, children }) {
-    const rootRef = React.useRef(null);
-    useEffect(() => {
-        if (!open) return undefined;
-        rootRef.current?.querySelector('[role^="menuitem"]')?.focus();
-        const onDown = event => { if (!rootRef.current?.contains(event.target)) onClose(); };
-        document.addEventListener('mousedown', onDown);
-        return () => document.removeEventListener('mousedown', onDown);
-    }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
-    const onKeyDown = event => {
-        const entries = [...rootRef.current.querySelectorAll('[role^="menuitem"]')];
-        const index = entries.indexOf(document.activeElement);
-        if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); onClose(); rootRef.current.querySelector('.filter-chip')?.focus(); }
-        if (event.key === 'ArrowDown') { event.preventDefault(); entries[(index + 1) % entries.length]?.focus(); }
-        if (event.key === 'ArrowUp') { event.preventDefault(); entries[(index - 1 + entries.length) % entries.length]?.focus(); }
-    };
-    return (
-        <div className="overflow" ref={rootRef}>
-            <button type="button" className="filter-chip" aria-pressed={active} aria-haspopup="menu" aria-expanded={open} onClick={onToggle}>{label} ▾</button>
-            {open && <div role="menu" className="menu-pop align-left" onKeyDown={onKeyDown}>{children}</div>}
-        </div>
-    );
 }
 
 function KickDialog({ names, busy, onClose, onKick }) {
