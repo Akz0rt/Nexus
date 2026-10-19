@@ -149,8 +149,41 @@ async function failingChannel() {
     channel.send = realSend;
 }
 
+// Duration (display only) and a role pinged once, when a new card is published
+async function durationAndRole() {
+    const ROLE = '800000000000000001';
+    const QUIET = '800000000000000002';
+    guild.roles.cache.set(ROLE, { id: ROLE, name: 'Мафия', mentionable: true, managed: false, position: 2 });
+    guild.roles.cache.set(QUIET, { id: QUIET, name: 'Тихая', mentionable: false, managed: false, position: 1 });
+    guild.members.me.permissions = { has: () => false }; // no Mention Everyone
+    const bad = (body, code) => assert.strictEqual(EventService.validate(guild, { title: 'X', startsAt: inMinutes(60), channelId: TEXT, ...body }).code, code);
+    bad({ durationMinutes: 45 }, 'invalid_duration');
+    bad({ mentionRoleId: QUIET }, 'role_not_mentionable');
+    bad({ mentionRoleId: guild.id }, 'role_not_found');
+
+    sent.length = 0;
+    const { event } = await EventService.create(guild, { title: 'Мафия', startsAt: inMinutes(60), channelId: TEXT, durationMinutes: 120, mentionRoleId: ROLE, repeatWeekly: true }, mod, 'panel');
+    assert.strictEqual(Date.parse(event.endsAt) - Date.parse(event.startsAt), 2 * 3600000);
+    assert.strictEqual(sent[0].content, `<@&${ROLE}>`);
+    assert.deepStrictEqual(sent[0].allowedMentions, { roles: [ROLE] });
+    assert.ok(sent[0].embeds[0].data.fields[0].value.includes(`–<t:${Math.floor(Date.parse(event.endsAt) / 1000)}:t>`), 'card shows 21:00–23:00');
+
+    // An edit doesn't ping again; the reminder pings only those going
+    await EventService.update(guild, event.id, { title: 'Мафия!', startsAt: event.startsAt, channelId: TEXT, durationMinutes: 120, mentionRoleId: ROLE, repeatWeekly: true }, mod, 'panel');
+    assert.strictEqual(sent.length, 1, 'edited in place, no new ping');
+    await EventService.setGoing(guild.id, event.id, A, true);
+    await EventService.processDue(client, Date.parse(event.startsAt) - 10 * 60000);
+    assert.deepStrictEqual(sent.at(-1).allowedMentions, { users: [A] });
+    // Next week's card is a new event: it announces the role again
+    await EventService.processDue(client, Date.parse(event.startsAt) + 1000);
+    const next = [...docs.values()].find(e => e.seriesId === event.id && e.id !== event.id);
+    assert.strictEqual(Date.parse(next.endsAt) - Date.parse(next.startsAt), 2 * 3600000);
+    assert.deepStrictEqual(sent.at(-1).allowedMentions, { roles: [ROLE] });
+}
+
 (async () => {
     await validation();
+    await durationAndRole();
     const id = await signUps();
     await reminderAndStart(id);
     await weekly();

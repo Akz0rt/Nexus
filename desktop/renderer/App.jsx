@@ -44,7 +44,9 @@ export default function App() {
     const [liveEvents, setLiveEvents] = useState([]);
     const [waiting, setWaiting] = useState(null); // waiting queue, shared by sidebar counter and queue view
     const [toasts, setToasts] = useState([]);
-    const [update, setUpdate] = useState(null);
+    const [updateState, setUpdateState] = useState({ status: 'idle' });
+    const manualCheck = useRef(false); // «Проверить обновления» was pressed: say how it ended
+    const update = updateState.status === 'ready' ? updateState : null;
     const [theme, setTheme] = useState(readTheme);
     const [roleJob, setRoleJob] = useState(null); // running or last mass role change
     const [lockdown, setLockdown] = useState(null);
@@ -53,6 +55,7 @@ export default function App() {
     const [moderationRevision, setModerationRevision] = useState(0); // bumps on moderation / report / settings entries
     const [openReports, setOpenReports] = useState(0);
     const [moderationTab, setModerationTab] = useState(null); // { tab } to open the Moderation screen on
+    const [queueTab, setQueueTab] = useState(null); // the same for «Пропуск»
     const [settingsSection, setSettingsSection] = useState(null); // { section } to open the Settings screen on
     const [lockdownConfirm, setLockdownConfirm] = useState(false); // the «close/open the server?» dialog
     const toastSeq = useRef(0);
@@ -65,6 +68,25 @@ export default function App() {
         return id;
     }, []);
     const dismissToast = useCallback(id => setToasts(list => list.filter(t => t.id !== id)), []);
+
+    const checkUpdates = useCallback(async () => {
+        manualCheck.current = true;
+        const state = await window.panel.checkForUpdates();
+        if (state.status === 'dev') { manualCheck.current = false; toast('Обновления приходят только в установленную версию приложения'); }
+        if (state.status === 'ready') { manualCheck.current = false; toast(`Версия ${state.version} уже загружена — перезапустите приложение`); }
+        if (state.status === 'downloading') { manualCheck.current = false; toast(`Версия ${state.version} уже загружается`); }
+    }, [toast]);
+    // How a check started by hand ended
+    useEffect(() => {
+        if (!manualCheck.current) return;
+        const { status, version, error } = updateState;
+        if (status === 'latest') toast('Установлена последняя версия');
+        else if (status === 'downloading') toast(`Нашлась версия ${version} — загружаем`);
+        else if (status === 'ready') toast(`Версия ${version} загружена`);
+        else if (status === 'error') toast(`Не удалось проверить обновления${error ? `: ${error.split('\n')[0].slice(0, 120)}` : ''}`, { tone: 'error' });
+        else return;
+        manualCheck.current = false;
+    }, [updateState, toast]);
 
     // A closed "done" bar stays closed; a late snapshot never rolls a finished job back
     const updateJob = useCallback(next => {
@@ -95,8 +117,9 @@ export default function App() {
                     setView(next);
                 }
             }),
-            window.panel.onUpdateReady(info => setUpdate(info))
+            window.panel.onUpdateState(state => setUpdateState(state))
         ];
+        window.panel.getUpdateState().then(setUpdateState).catch(() => {});
         return () => offs.forEach(off => off());
     }, []);
 
@@ -230,7 +253,8 @@ export default function App() {
                 canSettings={senior}
                 presence={presence}
                 version={auth.version}
-                update={update}
+                updateState={updateState}
+                onCheckUpdates={checkUpdates}
             />
             <div className="workspace">
                 <Header
@@ -250,6 +274,7 @@ export default function App() {
                     events={liveEvents}
                     onOpenSettings={openSettings}
                     onOpenJournal={() => openJournal({})}
+                    onCheckUpdates={checkUpdates}
                     toast={toast}
                 />
                 {lockdown?.active && (
@@ -272,7 +297,13 @@ export default function App() {
                     )}
                     {guildId && view === 'overview' && (
                         <OverviewView guildId={guildId} revision={revision} voiceRevision={voiceRevision} waiting={waiting} seen={seen}
-                            onView={setView} onOpenMember={setDrawerUserId} onChanged={() => setReloadWaiting(n => n + 1)} toast={toast} />
+                            onView={setView} onOpenMember={setDrawerUserId} onChanged={() => setReloadWaiting(n => n + 1)} toast={toast}
+                            openReports={openReports} lockdown={lockdown}
+                            onOpenTab={(next, tab) => {
+                                if (next === 'moderation') setModerationTab({ tab, at: Date.now() });
+                                if (next === 'queue') setQueueTab({ tab, at: Date.now() });
+                                setView(next);
+                            }} />
                     )}
                     {guildId && view === 'queue' && (
                         <QueueView
@@ -280,6 +311,7 @@ export default function App() {
                             waiting={waiting}
                             seen={seen}
                             revision={revision}
+                            requestedTab={queueTab}
                             presence={presence}
                             myId={me?.id}
                             onChanged={() => setReloadWaiting(n => n + 1)}

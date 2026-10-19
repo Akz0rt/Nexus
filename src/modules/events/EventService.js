@@ -15,6 +15,20 @@ const MAX_MENTIONS = 60; // keeps the reminder under Discord's 2000-character li
 const MAX_AHEAD_MS = 365 * 24 * 60 * MINUTE_MS;
 const TEXT_TYPES = new Set([ChannelType.GuildText, ChannelType.GuildAnnouncement]);
 const VOICE_TYPES = new Set([ChannelType.GuildVoice, ChannelType.GuildStageVoice]);
+// How long an event lasts (display only: sign-up still closes at the start)
+const DURATIONS = [30, 60, 90, 120, 180];
+
+/** When it ends: start + duration; an event without one ends when it starts */
+function endsAtOf(startsAt, durationMinutes) {
+    return new Date(Date.parse(startsAt) + (durationMinutes || 0) * MINUTE_MS).toISOString();
+}
+
+/** A role the bot may ping for an event, or why not */
+function mentionProblem(guild, role) {
+    if (!role || role.id === guild.id) return 'role_not_found';
+    if (role.mentionable) return null;
+    return guild.members.me?.permissions.has(PermissionFlagsBits.MentionEveryone) ? null : 'role_not_mentionable';
+}
 
 /**
  * Events with sign-up: a card with «Иду» / «Не иду» in a text channel, a ping to
@@ -56,15 +70,20 @@ class EventService {
         return event;
     }
 
-    /** @param {'upcoming'|'past'} group */
-    async list(guildId, group = 'upcoming') {
+    /**
+     * Upcoming: open for sign-up, or started and still going (until its end).
+     * Past: ended or cancelled.
+     * @param {'upcoming'|'past'} group
+     */
+    async list(guildId, group = 'upcoming', now = Date.now()) {
         await this.initialize();
         const upcoming = group !== 'past';
+        const going = "(c.status = 'done' AND IS_DEFINED(c.endsAt) AND c.endsAt > @now)";
         const { resources } = await this.container.items.query({
             query: upcoming
-                ? "SELECT * FROM c WHERE c.guildId = @guildId AND c.status = 'scheduled' ORDER BY c.startsAt ASC"
-                : "SELECT * FROM c WHERE c.guildId = @guildId AND c.status != 'scheduled' ORDER BY c.startsAt DESC",
-            parameters: [{ name: '@guildId', value: guildId }]
+                ? `SELECT * FROM c WHERE c.guildId = @guildId AND (c.status = 'scheduled' OR ${going}) ORDER BY c.startsAt ASC`
+                : `SELECT * FROM c WHERE c.guildId = @guildId AND c.status != 'scheduled' AND NOT ${going} ORDER BY c.startsAt DESC`,
+            parameters: [{ name: '@guildId', value: guildId }, { name: '@now', value: new Date(now).toISOString() }]
         }, { partitionKey: guildId, maxItemCount: 100 }).fetchNext();
         return resources || [];
     }
@@ -122,15 +141,37 @@ class EventService {
             if (!voice || !VOICE_TYPES.has(voice.type)) return fail('voiceChannelId', 'channel_not_found');
             voiceChannelId = voice.id;
         }
+        const durationMinutes = body.durationMinutes ? Number(body.durationMinutes) : null;
+        if (durationMinutes !== null && !DURATIONS.includes(durationMinutes)) return fail('durationMinutes', 'invalid_duration');
+        let mentionRoleId = null;
+        if (body.mentionRoleId) {
+            const problem = mentionProblem(guild, guild.roles.cache.get(String(body.mentionRoleId)));
+            if (problem) return fail('mentionRoleId', problem);
+            mentionRoleId = String(body.mentionRoleId);
+        }
+        const starts = new Date(startsAt).toISOString();
         return {
             ok: true,
-            fields: { title, description, startsAt: new Date(startsAt).toISOString(), channelId: channel.id, voiceChannelId, repeatWeekly: Boolean(body.repeatWeekly) }
+            fields: {
+                title, description, startsAt: starts, durationMinutes, endsAt: endsAtOf(starts, durationMinutes),
+                channelId: channel.id, voiceChannelId, mentionRoleId, repeatWeekly: Boolean(body.repeatWeekly)
+            }
         };
     }
 
-    async publish(guild, event) {
+    /**
+     * Post the card. `announce`: a new event (created or next week's) pings its role once;
+     * a card posted again after a deletion or a channel change does not.
+     */
+    async publish(guild, event, { announce = false } = {}) {
         const channel = guild.channels.cache.get(event.channelId);
-        const message = await channel.send(buildEventMessage(event));
+        const payload = buildEventMessage(event);
+        const role = announce && event.mentionRoleId ? guild.roles.cache.get(event.mentionRoleId) : null;
+        if (role && !mentionProblem(guild, role)) {
+            payload.content = `<@&${role.id}>`;
+            payload.allowedMentions = { roles: [role.id] };
+        }
+        const message = await channel.send(payload);
         event.messageId = message.id;
         return event;
     }
@@ -166,7 +207,7 @@ class EventService {
             createdBy: actor.id,
             createdAt: new Date().toISOString()
         };
-        await this.publish(guild, event);
+        await this.publish(guild, event, { announce: true });
         await this.save(event);
         await this.log(event, 'event.created', actor, source);
         this.emit(event);
@@ -273,6 +314,7 @@ class EventService {
             ...event,
             id: crypto.randomUUID(),
             startsAt: new Date(startsAt).toISOString(),
+            endsAt: endsAtOf(new Date(startsAt).toISOString(), event.durationMinutes),
             messageId: null,
             going: [],
             status: 'scheduled',
@@ -281,7 +323,7 @@ class EventService {
         };
         delete next._rid; delete next._self; delete next._etag; delete next._attachments; delete next._ts;
         try {
-            if (guild.channels.cache.get(next.channelId)) await this.publish(guild, next);
+            if (guild.channels.cache.get(next.channelId)) await this.publish(guild, next, { announce: true });
         } catch (error) {
             // Saved without a card: editing it in the app posts the card again
             console.error(`Events: publishing next week's ${event.id} failed:`, error.message || error);
@@ -324,3 +366,5 @@ class EventService {
 
 module.exports = new EventService();
 module.exports.REMIND_BEFORE_MS = REMIND_BEFORE_MS;
+module.exports.DURATIONS = DURATIONS;
+module.exports.mentionProblem = mentionProblem;

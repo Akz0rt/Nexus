@@ -179,7 +179,7 @@ function Search({ guildId, onOpenMember }) {
     );
 }
 
-function AccountMenu({ me, theme, onTheme }) {
+function AccountMenu({ me, theme, onTheme, onCheckUpdates }) {
     const [open, setOpen] = useState(false);
     const [settings, setSettings] = useState(null);
 
@@ -218,6 +218,7 @@ function AccountMenu({ me, theme, onTheme }) {
                             <option value="light">Светлая</option>
                         </select>
                     </label>
+                    <button className="btn btn-quiet" onClick={() => { setOpen(false); onCheckUpdates(); }}>Проверить обновления</button>
                     <button className="btn btn-quiet" onClick={() => window.panel.logout()}>Выйти из аккаунта</button>
                 </div>
             )}
@@ -226,7 +227,7 @@ function AccountMenu({ me, theme, onTheme }) {
 }
 
 export default function Header({ guilds, guild, onGuild, me, streamState, onOpenMember, theme, onTheme, lockdown, canLockdown, onLockdown,
-    lockdownConfirm, onLockdownConfirm, events, onOpenSettings, onOpenJournal, toast }) {
+    lockdownConfirm, onLockdownConfirm, events, onOpenSettings, onOpenJournal, onCheckUpdates, toast }) {
     return (
         <header className="topbar">
             <GuildSwitch guilds={guilds} guild={guild} onGuild={onGuild} />
@@ -238,7 +239,7 @@ export default function Header({ guilds, guild, onGuild, me, streamState, onOpen
             )}
             <BotStatus streamState={streamState} guildId={guild?.id} canDiagnose={canLockdown} onOpenSettings={onOpenSettings} />
             <Notifications guildId={guild?.id} events={events} onOpenMember={onOpenMember} onOpenJournal={onOpenJournal} />
-            <AccountMenu me={me} theme={theme} onTheme={onTheme} />
+            <AccountMenu me={me} theme={theme} onTheme={onTheme} onCheckUpdates={onCheckUpdates} />
         </header>
     );
 }

@@ -17,6 +17,8 @@ const ActivitySyncService = require('../src/services/ActivitySyncService');
 const EventService = require('../src/modules/events/EventService');
 const RoleMenuService = require('../src/modules/rolemenus/RoleMenuService');
 const ReportService = require('../src/modules/reports/ReportService');
+const VoiceService = require('../src/modules/voice/VoiceService');
+const TaskService = require('../src/services/TaskService');
 const { createApp } = require('../src/server');
 const { makeGuild, makeMember } = require('./fake-voice-guild');
 
@@ -55,6 +57,27 @@ guild.memberCount = guild.members.cache.size;
         const meetups = await get('/meetups');
         assert.strictEqual(meetups.status, 200);
         assert.deepStrictEqual(meetups.body.items, []);
+        assert.deepStrictEqual(meetups.body.durations, [30, 60, 90, 120, 180]);
+
+        // «Собрать в канал» with { background: true } runs as a task; without a voice channel it is refused
+        const VOICE = '600000000000000001';
+        guild.channels.cache.set(VOICE, { id: VOICE, name: 'Мафия', type: 2 });
+        const event = { id: 'e1', guildId: guild.id, title: 'Мафия', startsAt: new Date().toISOString(), going: [MOD], voiceChannelId: VOICE, squadId: 's1' };
+        EventService.get = async () => event;
+        VoiceService.saveSquad = async () => ({ ok: true, squad: { id: 's1' } });
+        const started = [];
+        TaskService.start = spec => { started.push(spec); return { ok: true, task: { id: 't1', title: spec.title } }; };
+        const post = async (path, body) => {
+            const res = await fetch(base + path, { method: 'POST', headers: { Authorization: 'Bearer tok', 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+            return { status: res.status, body: await res.json() };
+        };
+        const gather = await post('/meetups/e1/gather', { background: true });
+        assert.strictEqual(gather.status, 200, JSON.stringify(gather.body));
+        assert.strictEqual(gather.body.task.id, 't1');
+        assert.strictEqual(started[0].title, 'Сбор состава в «Мафия»');
+        event.voiceChannelId = null;
+        assert.strictEqual((await post('/meetups/e1/gather', { background: true })).body.error, 'channel_not_found');
+        assert.strictEqual(started.length, 1);
         const birthdays = await get('/birthdays');
         assert.strictEqual(birthdays.status, 200);
         assert.deepStrictEqual(birthdays.body.items.map(i => [i.user.id, i.month, i.day]), [[MOD, 1, 2]]);

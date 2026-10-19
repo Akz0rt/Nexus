@@ -133,3 +133,4 @@ router.post('/:userId/kick', async (req, res, next) => {
 });
 
 module.exports = router;
+module.exports.inviteOf = inviteOf;

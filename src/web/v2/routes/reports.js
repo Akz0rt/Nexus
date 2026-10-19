@@ -123,3 +123,4 @@ router.post('/:reportId/reply', visibleReport, handle((req, actor) =>
     ReportService.reply(req.guild, req.params.reportId, req.body?.text, actor, 'panel')));
 
 module.exports = router;
+module.exports.describeReport = describeReport;

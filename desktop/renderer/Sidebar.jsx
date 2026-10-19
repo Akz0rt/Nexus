@@ -26,7 +26,18 @@ const GROUPS = [
     ] }
 ];
 
-export default function Sidebar({ view, onView, waitingCount, newCount, openReports, canRoles, canSettings, presence, version, update }) {
+// The version line: what the updater is doing; a click checks again (or restarts into a ready one)
+const UPDATE_LINE = {
+    idle: () => 'проверить обновления',
+    checking: () => 'проверяем…',
+    downloading: s => `скачиваем ${s.version} — ${s.percent || 0}%`,
+    ready: s => <span className="version-update">{s.version} готова — перезапустить</span>,
+    latest: () => 'последняя версия',
+    error: () => 'не удалось проверить',
+    dev: () => 'обновления — только в установленной версии'
+};
+
+export default function Sidebar({ view, onView, waitingCount, newCount, openReports, canRoles, canSettings, presence, version, updateState, onCheckUpdates }) {
     const allowed = item => (item.needs !== 'roles' || canRoles) && (item.needs !== 'settings' || canSettings);
     // The hexagon only where someone waits for an action
     const badge = id => {
@@ -76,9 +87,10 @@ export default function Sidebar({ view, onView, waitingCount, newCount, openRepo
                     </div>
                 )}
                 {version && (
-                    <span className="version">
-                        v{version} · {update ? <span className="version-update">доступно обновление</span> : 'обновлено'}
-                    </span>
+                    <button type="button" className={`version version-${updateState?.status || 'idle'}`} onClick={() => (updateState?.status === 'ready' ? window.panel.installUpdate() : onCheckUpdates())}
+                        title={updateState?.status === 'error' ? `Не удалось проверить: ${updateState.error || ''}` : updateState?.status === 'ready' ? 'Перезапустить и обновить' : 'Проверить обновления'}>
+                        v{version} · {UPDATE_LINE[updateState?.status || 'idle'](updateState || {})}
+                    </button>
                 )}
             </section>
         </aside>

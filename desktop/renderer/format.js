@@ -252,3 +252,22 @@ export function formatSince(iso) {
     if (minutes < 60) return `${minutes} мин`;
     return `${Math.floor(minutes / 60)} ч ${String(minutes % 60).padStart(2, '0')} мин`;
 }
+
+/** plural(3, 'жалоба', 'жалобы', 'жалоб') → «жалобы» */
+export function plural(n, one, few, many) {
+    const mod10 = n % 10;
+    const mod100 = n % 100;
+    if (mod10 === 1 && mod100 !== 11) return one;
+    if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return few;
+    return many;
+}
+
+/** "через 42 мин", "через 3 ч", "через 2 дн."; "" when it has passed */
+export function untilText(iso, now = Date.now()) {
+    const minutes = Math.round((Date.parse(iso) - now) / 60000);
+    if (minutes < 0) return '';
+    if (minutes < 60) return `через ${minutes} мин`;
+    const hours = Math.round(minutes / 60);
+    if (hours < 48) return `через ${hours} ч`;
+    return `через ${Math.round(hours / 24)} дн.`;
+}

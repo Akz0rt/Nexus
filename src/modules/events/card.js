@@ -15,7 +15,7 @@ function buildEventMessage(event) {
     const embed = new EmbedBuilder()
         .setColor(COLORS[event.status] || COLORS.scheduled)
         .setTitle(event.status === 'cancelled' ? `~~${event.title}~~` : event.title)
-        .addFields({ name: 'Когда', value: `${stamp(event.startsAt, 'F')} · ${stamp(event.startsAt, 'R')}` });
+        .addFields({ name: 'Когда', value: `${stamp(event.startsAt, 'F')}${event.durationMinutes ? `–${stamp(event.endsAt, 't')}` : ''} · ${stamp(event.startsAt, 'R')}` });
     if (event.description) embed.setDescription(event.description);
     if (event.voiceChannelId) embed.addFields({ name: 'Где', value: `<#${event.voiceChannelId}>`, inline: true });
     if (event.repeatWeekly) embed.addFields({ name: 'Повтор', value: 'каждую неделю', inline: true });

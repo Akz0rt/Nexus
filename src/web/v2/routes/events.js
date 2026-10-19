@@ -2,6 +2,8 @@ const express = require('express');
 const { ChannelType } = require('discord.js');
 const EventService = require('../../../modules/events/EventService');
 const VoiceService = require('../../../modules/voice/VoiceService');
+const TaskService = require('../../../services/TaskService');
+const tasks = require('../voiceTasks');
 const { actorOf, sendResult } = require('../result');
 const { userRef } = require('../serialize');
 
@@ -12,6 +14,9 @@ const STATUS = {
     invalid_time: 400,
     invalid_name: 400,
     invalid_targets: 400,
+    invalid_duration: 400,
+    role_not_found: 404,
+    role_not_mentionable: 409,
     channel_not_found: 404,
     event_not_found: 404,
     squad_not_found: 404,
@@ -29,6 +34,11 @@ function describeEvent(guild, event) {
         title: event.title,
         description: event.description,
         startsAt: event.startsAt,
+        durationMinutes: event.durationMinutes || null,
+        endsAt: event.endsAt || event.startsAt,
+        mentionRole: event.mentionRoleId
+            ? { id: event.mentionRoleId, name: guild.roles.cache.get(event.mentionRoleId)?.name || null }
+            : null,
         channel: { id: event.channelId, name: guild.channels.cache.get(event.channelId)?.name || null },
         voiceChannel: event.voiceChannelId
             ? { id: event.voiceChannelId, name: guild.channels.cache.get(event.voiceChannelId)?.name || null }
@@ -68,7 +78,12 @@ router.get('/', async (req, res, next) => {
                 category: c.parent?.name || null,
                 voice: c.type === ChannelType.GuildVoice || c.type === ChannelType.GuildStageVoice
             }));
-        res.json({ group, items: events.map(e => describeEvent(guild, e)), channels });
+        // Roles the form offers to ping: ones the bot may mention, highest first
+        const roles = [...guild.roles.cache.values()]
+            .filter(role => !role.managed && !EventService.mentionProblem(guild, role))
+            .sort((a, b) => b.position - a.position)
+            .map(role => ({ id: role.id, name: role.name, color: role.hexColor }));
+        res.json({ group, items: events.map(e => describeEvent(guild, e)), channels, roles, durations: EventService.DURATIONS });
     } catch (error) {
         next(error);
     }
@@ -116,8 +131,12 @@ router.post('/:eventId/gather', async (req, res, next) => {
         const made = await squadFromEvent(req.guild, req.params.eventId, actor);
         if (!made.ok) return sendResult(res, made, STATUS);
         const channelId = String(req.body?.channelId || made.event.voiceChannelId || '');
-        const result = await VoiceService.gatherSquad(req.guild, made.squad.id, channelId, actor, 'panel');
-        sendResult(res, result, STATUS);
+        if (!req.guild.channels.cache.has(channelId)) return sendResult(res, { ok: false, code: 'channel_not_found' }, STATUS);
+        // { background: true }: a task in the TaskTray with progress and «Повторить для неудачных»
+        const result = req.body?.background === true
+            ? TaskService.start(tasks.squadGatherSpec(req.guild, made.squad.id, channelId, actor))
+            : await VoiceService.gatherSquad(req.guild, made.squad.id, channelId, actor, 'panel');
+        sendResult(res, await result, STATUS);
     } catch (error) {
         next(error);
     }

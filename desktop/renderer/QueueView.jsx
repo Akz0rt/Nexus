@@ -54,14 +54,14 @@ const STAMP_MS = 900;
 const UNDO_TOAST_MS = 10000;
 
 /** «@Lev», «vanity» or «—» and the key the invite filter groups by */
-function inviteLabel(invite) {
+export function inviteLabel(invite) {
     if (!invite) return { key: 'unknown', text: '—', title: 'Неизвестно: бот не видел, по какой ссылке зашёл' };
     if (invite.vanity) return { key: 'vanity', text: 'vanity', title: 'Личная ссылка сервера' };
     if (invite.inviter) return { key: invite.inviter.id, text: `@${invite.inviter.displayName || invite.inviter.id}`, title: invite.code ? `discord.gg/${invite.code}` : undefined };
     return { key: 'unknown', text: invite.code || '—', title: invite.code ? `discord.gg/${invite.code}` : undefined };
 }
 
-function KickDialog({ names, busy, onClose, onKick }) {
+export function KickDialog({ names, busy, onClose, onKick }) {
     const [reason, setReason] = useState('');
     const many = names.length > 1;
     return (
@@ -172,8 +172,9 @@ function HandledRow({ item, onOpenMember }) {
     );
 }
 
-export default function QueueView({ guildId, waiting, seen, revision, presence = [], myId, onChanged, onOpenMember, toast }) {
+export default function QueueView({ guildId, waiting, seen, revision, presence = [], myId, requestedTab, onChanged, onOpenMember, toast }) {
     const [tab, setTab] = useState('waiting');
+    useEffect(() => { if (requestedTab?.tab) setTab(requestedTab.tab); }, [requestedTab]);
     const [sort, setSort] = useState('oldest');
     const [filters, setFilters] = useState({ flagged: false, young: false, unseen: false, invite: null });
     const [joined, setJoined] = useState(() => readStored(JOINED_KEY, Object.keys(JOINED), 'all'));

@@ -17,10 +17,13 @@ contextBridge.exposeInMainWorld('panel', {
     updateSettings: patch => ipcRenderer.invoke('settings:update', patch),
     saveCsv: (fileName, content) => ipcRenderer.invoke('file:saveCsv', { fileName, content }),
     installUpdate: () => ipcRenderer.invoke('update:install'),
+    checkForUpdates: () => ipcRenderer.invoke('update:check'),
+    getUpdateState: () => ipcRenderer.invoke('update:state'),
     onAuthChanged: callback => listen('auth:changed', callback),
     onAuthError: callback => listen('auth:error', callback),
     onEvent: callback => listen('events:message', callback),
     onStreamState: callback => listen('events:state', callback),
     onNavigate: callback => listen('app:navigate', callback),
-    onUpdateReady: callback => listen('update:ready', callback)
+    onUpdateReady: callback => listen('update:ready', callback),
+    onUpdateState: callback => listen('update:state', callback)
 });

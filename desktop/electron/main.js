@@ -22,6 +22,8 @@ let token = null;
 let pendingVerifier = null; // PKCE verifier of the login in progress
 let stream = null;
 let updater = null;
+// What the version line in the sidebar shows: idle | checking | downloading | ready | latest | error | dev
+let updateState = { status: 'idle' };
 
 const api = new ApiClient(config.apiUrl, () => token, () => setToken(null));
 
@@ -190,16 +192,50 @@ ipcMain.handle('update:install', () => {
     updater?.quitAndInstall();
 });
 
+ipcMain.handle('update:state', () => updateState);
+ipcMain.handle('update:check', () => checkForUpdates());
+
 // --- Auto-update from GitHub Releases (installed builds only) ---------------------
+
+function setUpdateState(next) {
+    updateState = next;
+    send('update:state', updateState);
+}
+
+/** «Проверить обновления»: by hand from the account menu, the tray or the version line */
+function checkForUpdates() {
+    if (!app.isPackaged) {
+        setUpdateState({ status: 'dev' });
+        return updateState;
+    }
+    // Already downloading or downloaded: nothing to ask GitHub
+    if (updater && !['downloading', 'ready', 'checking'].includes(updateState.status)) {
+        setUpdateState({ status: 'checking' });
+        updater.checkForUpdates().catch(error => setUpdateState({ status: 'error', error: error?.message || String(error) }));
+    }
+    return updateState;
+}
 
 function startAutoUpdate() {
     if (!app.isPackaged) return;
     ({ autoUpdater: updater } = require('electron-updater'));
     updater.autoDownload = true;
     updater.autoInstallOnAppQuit = true;
-    updater.on('update-downloaded', info => send('update:ready', { version: info.version }));
-    updater.on('error', error => console.error('Auto-update error:', error?.message || error));
-    const check = () => updater.checkForUpdates().catch(() => {});
+    updater.on('checking-for-update', () => {
+        if (updateState.status !== 'ready') setUpdateState({ status: 'checking' });
+    });
+    updater.on('update-available', info => setUpdateState({ status: 'downloading', version: info.version, percent: 0 }));
+    updater.on('download-progress', progress => setUpdateState({ ...updateState, status: 'downloading', percent: Math.round(progress.percent || 0) }));
+    updater.on('update-not-available', () => setUpdateState({ status: 'latest', checkedAt: new Date().toISOString() }));
+    updater.on('update-downloaded', info => {
+        setUpdateState({ status: 'ready', version: info.version });
+        send('update:ready', { version: info.version });
+    });
+    updater.on('error', error => {
+        console.error('Auto-update error:', error?.message || error);
+        if (updateState.status !== 'ready') setUpdateState({ status: 'error', error: error?.message || String(error) });
+    });
+    const check = () => { if (updateState.status !== 'ready') updater.checkForUpdates().catch(() => {}); };
     check();
     setInterval(check, UPDATE_CHECK_MS).unref?.();
 }
@@ -211,6 +247,7 @@ function createTray() {
     tray.setToolTip('Nexus');
     tray.setContextMenu(Menu.buildFromTemplate([
         { label: 'Открыть панель', click: showWindow },
+        { label: 'Проверить обновления', click: () => { showWindow(); checkForUpdates(); } },
         { type: 'separator' },
         { label: 'Выйти', click: () => { quitting = true; app.quit(); } }
     ]));
