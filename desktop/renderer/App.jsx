@@ -329,7 +329,7 @@ export default function App() {
                     toast={toast}
                 />
             )}
-            <TaskTray items={tasks.items} onRevert={tasks.revert} onRetry={tasks.retry} onClose={item => tasks.hide(item.key)} />
+            <TaskTray items={tasks.items} onRevert={tasks.revert} onRetry={tasks.retry} onStop={tasks.stop} onClose={item => tasks.hide(item.key)} />
             <Toasts toasts={toasts} onDismiss={dismissToast} />
         </div>
     );

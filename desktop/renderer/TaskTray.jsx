@@ -13,7 +13,7 @@ export function firstFailure(item) {
  * a progress bar, the first failure, «Отменить всё» and «Повторить для неудачных».
  * items: [{ key, title, total, processed, failedCount, failed, status, note, canRevert, canRetry }]
  */
-export default function TaskTray({ items, onRevert, onRetry, onClose }) {
+export default function TaskTray({ items, onRevert, onRetry, onStop, onClose }) {
     if (items.length === 0) return null;
     return (
         <div className="task-tray" aria-label="Фоновые задачи">
@@ -31,13 +31,14 @@ export default function TaskTray({ items, onRevert, onRetry, onClose }) {
                         <div className="task-progress" aria-hidden="true">
                             <div className={item.failedCount ? 'has-failures' : ''} style={{ width: `${percent}%` }} />
                         </div>
-                        {(failure || item.note || item.status === 'cancelled' || item.canRevert || item.canRetry) && (
+                        {(failure || item.note || item.status === 'cancelled' || item.canRevert || item.canRetry || item.canStop) && (
                             <div className="task-foot">
                                 <span className="task-note">
                                     {failure && <span className="task-error">{failure}{item.failedCount > 1 ? ` · ещё ${item.failedCount - 1}` : ''}</span>}
                                     {!failure && item.status === 'cancelled' && <span className="muted">Остановлено</span>}
                                     {!failure && item.note && <span className="muted">{item.note}</span>}
                                 </span>
+                                {item.canStop && <button type="button" className="link-button" onClick={() => onStop(item)}>Остановить</button>}
                                 {item.canRevert && <button type="button" className="link-button" onClick={() => onRevert(item)}>Отменить всё</button>}
                                 {item.canRetry && !running && <button type="button" className="link-button" onClick={() => onRetry(item)}>Повторить для неудачных</button>}
                             </div>

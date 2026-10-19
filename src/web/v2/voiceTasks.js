@@ -61,7 +61,11 @@ function squadGatherSpec(guild, squadId, channelId, actor) {
         exec: hooks => VoiceService.gatherSquad(guild, squadId, channelId, actor, 'panel', { hooks }),
         note: result => (result.invited?.length ? `в ЛС позвали ${result.invited.length} — их не было в голосе` : null),
         revert: (task, who) => moveBack(guild, task, who),
-        retry: (ids, who) => moveSpec(guild, ids, channelId, who)
+        // Closed DMs (not in voice, invite failed) are nothing to retry with a move
+        retry: (ids, who, task) => {
+            const movable = ids.filter(id => !task.failed.some(f => f.userId === id && f.code === 'dm_closed'));
+            return movable.length ? moveSpec(guild, movable, channelId, who) : null;
+        }
     };
 }
 

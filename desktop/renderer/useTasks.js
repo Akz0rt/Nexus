@@ -4,9 +4,10 @@ import { firstFailure } from './TaskTray.jsx';
 
 const COLLAPSE_MS = 5000;   // a finished task folds into a toast after this
 const TOAST_MS = 10000;
+const FRESH_MS = 30 * 1000; // a task that finished longer ago (seen at start-up, on another screen) is history
 
-/** A mass role job (its own service) in the tray's shape. */
-function roleItem(job) {
+/** A mass role job (its own service) in the tray's shape; someone else's is shown read-only. */
+function roleItem(job, mine) {
     return {
         key: `job:${job.id}`,
         source: 'role',
@@ -17,14 +18,18 @@ function roleItem(job) {
         failedCount: job.failedCount,
         failed: job.failed || [],
         status: job.status,
-        note: null,
-        canRevert: job.status === 'running' || (job.doneIds?.length > 0 && !job.reverted),
-        canRetry: job.status !== 'running' && (job.failedIds?.length > 0) && !job.retried
+        note: mine ? null : 'запустил другой модератор',
+        finishedAt: job.finishedAt,
+        mine,
+        canStop: false,
+        canRevert: mine && (job.status === 'running' || (job.doneIds?.length > 0 && !job.reverted)),
+        canRetry: mine && job.status !== 'running' && (job.failedIds?.length > 0) && !job.retried
     };
 }
 
 function taskItem(task) {
-    return { ...task, key: `task:${task.id}`, source: 'task' };
+    // A running task that can't be undone (a disconnect) can at least be stopped
+    return { ...task, key: `task:${task.id}`, source: 'task', mine: true, canStop: task.status === 'running' && !task.canRevert };
 }
 
 /** «Перенос в «Мафия»: 5 из 6 · Bob — не в голосе» */
@@ -45,11 +50,14 @@ export default function useTasks({ guildId, roleJob, onRoleJob, myId, toast }) {
     const [hidden, setHidden] = useState(() => new Set());
     const timers = useRef(new Map());
     const gone = useRef(new Set()); // keys already out of the tray (no late toast for them)
+    const seenRunning = useRef(new Set()); // keys this app watched while they ran
     const revertJobWhenDone = useRef(null); // role job stopped by «Отменить всё»: undo once it settles
 
     useEffect(() => {
         setTasks(new Map());
         setHidden(new Set());
+        timers.current.forEach(clearTimeout);
+        timers.current.clear();
         if (!guildId) return undefined;
         let cancelled = false;
         apiGet(`/guilds/${guildId}/tasks`)
@@ -84,7 +92,8 @@ export default function useTasks({ guildId, roleJob, onRoleJob, myId, toast }) {
         if (job.status === 'running') {
             revertJobWhenDone.current = job.id;
             const result = await apiPost(`/guilds/${guildId}/roles/jobs/cancel`);
-            if (!result.ok) toast(describeError(result), { tone: 'error' });
+            // Finished just now: the 'job' frame with the final list is on its way, the effect below undoes it
+            if (!result.ok && result.error !== 'nothing_running') toast(describeError(result), { tone: 'error' });
             return;
         }
         onRoleJob({ ...job, reverted: true });
@@ -113,10 +122,20 @@ export default function useTasks({ guildId, roleJob, onRoleJob, myId, toast }) {
         }
     }, [roleJob, onRoleJob, startRoleJob]);
 
-    const items = [
-        ...(roleJob && roleJob.actorId === myId ? [roleItem(roleJob)] : []),
+    const stop = useCallback(async item => {
+        const result = await apiPost(`/guilds/${guildId}/tasks/${item.id}/cancel`);
+        if (!result.ok) toast(describeError(result), { tone: 'error' });
+    }, [guildId, toast]);
+
+    const all = [
+        ...(roleJob ? [roleItem(roleJob, roleJob.actorId === myId)] : []),
         ...[...tasks.values()].filter(task => task.actorId === myId).map(taskItem)
-    ].filter(item => !hidden.has(item.key));
+    ];
+    for (const item of all) if (item.status === 'running') seenRunning.current.add(item.key);
+    // Finished ones show only if watched here while running or just finished — never replayed later
+    const items = all.filter(item => !hidden.has(item.key) && (item.status === 'running'
+        || seenRunning.current.has(item.key)
+        || (item.finishedAt && Date.now() - Date.parse(item.finishedAt) < FRESH_MS)));
 
     // Finished: fold into a toast after a moment, keeping «Отменить всё» / «Повторить» on it
     useEffect(() => {
@@ -125,6 +144,7 @@ export default function useTasks({ guildId, roleJob, onRoleJob, myId, toast }) {
             timers.current.set(item.key, setTimeout(() => {
                 if (gone.current.has(item.key)) return; // closed or acted on already
                 hide(item.key);
+                if (!item.mine) return; // someone else's job: its card just goes
                 const actions = [];
                 if (item.canRevert) actions.push({ label: 'Отменить всё', onClick: () => revert(item) });
                 if (item.canRetry) actions.push({ label: 'Повторить для неудачных', onClick: () => retry(item) });
@@ -135,5 +155,5 @@ export default function useTasks({ guildId, roleJob, onRoleJob, myId, toast }) {
 
     useEffect(() => () => timers.current.forEach(clearTimeout), []);
 
-    return { items, onTask, revert, retry, hide };
+    return { items, onTask, revert, retry, stop, hide };
 }

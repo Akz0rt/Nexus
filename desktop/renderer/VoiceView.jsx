@@ -314,7 +314,7 @@ export default function VoiceView({ guildId, myId, revision, voiceRevision, onOp
                 <span><MicOff className="is-server" label="Выключен сервером" /> выключен сервером</span>
                 <span><SoundOff className="is-server" label="Заглушён сервером" /> заглушён сервером</span>
                 <span><span className="live">LIVE</span> стримит</span>
-                <span className="voice-hint">Клик — выбрать · рамка — группа · Shift — добавить · перетащите на канал</span>
+                <span className="voice-hint">Клик — выбрать · Ctrl — добавить · Shift — подряд · рамка — группа · перетащите на канал</span>
             </div>
 
             {splitSource && (

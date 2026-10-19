@@ -177,7 +177,7 @@ class TaskService {
         const task = found.task;
         if (task.status === 'running') return { ok: false, code: 'task_running' };
         const ids = task.failed.map(f => f.userId).filter(Boolean);
-        const spec = task.spec.retry && ids.length ? task.spec.retry(ids, actor) : null;
+        const spec = task.spec.retry && ids.length ? task.spec.retry(ids, actor, task) : null;
         if (!spec) return { ok: false, code: 'nothing_to_retry' };
         task.retried = true;
         this.emit(task, true);
