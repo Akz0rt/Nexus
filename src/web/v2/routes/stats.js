@@ -23,6 +23,21 @@ const CATEGORIES = {
     'roles.preset_applied': 'roles'
 };
 
+/**
+ * Queue decisions per day of the period (the server's time zone), oldest first,
+ * days without decisions included: [{ date: 'YYYY-MM-DD', approved, kicked }]
+ */
+function dailyDecisions(cards, days, timeZone = config.timezone, now = Date.now()) {
+    const dayOf = at => new Date(at).toLocaleDateString('sv-SE', { timeZone });
+    const series = new Map();
+    for (let i = days - 1; i >= 0; i--) series.set(dayOf(now - i * DAY_MS), { approved: 0, kicked: 0 });
+    for (const card of cards) {
+        const day = series.get(dayOf(card.handledAt));
+        if (day && (card.status === 'approved' || card.status === 'kicked')) day[card.status]++;
+    }
+    return [...series].map(([date, counts]) => ({ date, ...counts }));
+}
+
 function categoryOf(action) {
     if (CATEGORIES[action]) return CATEGORIES[action];
     if (action.startsWith('voice.') && !action.startsWith('voice.squad_')) return 'voice';
@@ -88,6 +103,7 @@ router.get('/', async (req, res, next) => {
             period,
             since,
             ...stats,
+            daily: dailyDecisions(cards, PERIODS[period] || 1),
             moderators: stats.moderators.map(m => ({ ...m, user: userRef(req.guild, m.actorId) }))
         });
     } catch (error) {
@@ -97,3 +113,4 @@ router.get('/', async (req, res, next) => {
 
 module.exports = router;
 module.exports.buildStats = buildStats;
+module.exports.dailyDecisions = dailyDecisions;

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { apiDelete, apiGet, apiPost, describeError } from './api.js';
-import { ErrorState } from './States.jsx';
+import { EmptyState, ErrorState } from './States.jsx';
 import { ROLE_PROBLEMS, describeBulk, formatDateTime, timeLeft } from './format.js';
 import Avatar, { MemberLink } from './Avatar.jsx';
 import useSelection, { marqueeStyle } from './useSelection.js';
@@ -122,12 +122,23 @@ function Owners({ guildId, role, revision, dialogOpen, onOpenMember, onStartJob,
     );
 }
 
+const LAST_ROLE_KEY = 'panel.roles.last';
+
+function readLastRole(guildId) {
+    try { return localStorage.getItem(`${LAST_ROLE_KEY}.${guildId}`); } catch { return null; }
+}
+
 function RolesTab({ guildId, roles, revision, onOpenMember, onStartJob, toast }) {
-    const [roleId, setRoleId] = useState(null);
+    // Opens straight on a role: the last one picked on this computer, or the first in the list
+    const [roleId, setRoleId] = useState(() => readLastRole(guildId));
     const [query, setQuery] = useState('');
     const [dialog, setDialog] = useState(null);
-    const role = roles.find(r => r.id === roleId) || null;
     const shown = roles.filter(r => r.name.toLowerCase().includes(query.trim().toLowerCase()));
+    const role = roles.find(r => r.id === roleId) || shown[0] || null;
+    const pick = id => {
+        setRoleId(id);
+        try { localStorage.setItem(`${LAST_ROLE_KEY}.${guildId}`, id); } catch { /* per-machine convenience only */ }
+    };
 
     return (
         <>
@@ -140,7 +151,7 @@ function RolesTab({ guildId, roles, revision, onOpenMember, onStartJob, toast })
                 <ul className="role-list" aria-label="Роли сервера">
                     {shown.map(r => (
                         <li key={r.id}>
-                            <button className={`role-row ${r.id === roleId ? 'is-active' : ''}`} aria-pressed={r.id === roleId} onClick={() => setRoleId(r.id)}>
+                            <button className={`role-row ${r.id === role?.id ? 'is-active' : ''}`} aria-pressed={r.id === role?.id} onClick={() => pick(r.id)}>
                                 <span className="role-dot" style={{ '--role': roleColor(r.color) }} />
                                 <span className="role-row-name">{r.name}</span>
                                 {r.problem && <span className="role-note">{ROLE_PROBLEMS[r.problem] || r.problem}</span>}
@@ -152,7 +163,7 @@ function RolesTab({ guildId, roles, revision, onOpenMember, onStartJob, toast })
                 {role
                     ? <Owners guildId={guildId} role={role} revision={revision} dialogOpen={Boolean(dialog)} onOpenMember={onOpenMember}
                         onStartJob={onStartJob} onGrant={r => setDialog({ roleId: r.id, add: true, filter: { type: 'role' } })} />
-                    : <div className="empty"><h2>Выберите роль</h2><p>Покажем, у кого она есть, и дадим снять её у выделенных или у всех сразу.</p></div>}
+                    : <EmptyState icon="roles" title={query ? 'Таких ролей нет' : 'На сервере нет ролей'} />}
             </div>
             {dialog && <MassRoleDialog guildId={guildId} initial={dialog} allRoles={roles} onClose={() => setDialog(null)} toast={toast} />}
         </>

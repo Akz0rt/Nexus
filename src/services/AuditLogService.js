@@ -120,6 +120,27 @@ class AuditLogService {
         return doc;
     }
 
+    /** One entry, or null */
+    async get(guildId, entryId) {
+        await this.initialize();
+        try {
+            const { resource } = await this.container.item(entryId, guildId).read();
+            return resource || null;
+        } catch (error) {
+            if (error.code === 404) return null;
+            throw error;
+        }
+    }
+
+    /** Mark an entry as undone from the journal (who and when), so the button doesn't come back */
+    async markUndone(entry, actor) {
+        await this.initialize();
+        const updated = { ...entry, undoneBy: actor.id, undoneByTag: actor.tag || null, undoneAt: new Date().toISOString() };
+        for (const field of ['_rid', '_self', '_etag', '_attachments', '_ts']) delete updated[field];
+        await this.container.items.upsert(updated);
+        return updated;
+    }
+
     /**
      * Newest-first page of log entries.
      * @param {{ guildId: string, action?: string, actorId?: string, targetId?: string,

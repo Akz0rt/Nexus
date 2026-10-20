@@ -288,3 +288,28 @@ export function untilText(iso, now = Date.now()) {
     if (hours < 48) return `через ${hours} ч`;
     return `через ${Math.round(hours / 24)} дн.`;
 }
+
+// Journal dot: green for the pass, amber for punishments, red for reports, blue for the rest
+export function journalTone(action) {
+    if (action.startsWith('verification.')) return 'ok';
+    if (action.startsWith('moderation.')) return 'warn';
+    if (action.startsWith('report.')) return 'danger';
+    return 'ink';
+}
+
+/** «пропуск, Девушка», «мут, 1 ч — флуд» */
+export function journalWhat(entry) {
+    const text = describeAction(entry).replace(' · ', ', ');
+    return `${text.charAt(0).toLowerCase()}${text.slice(1)}${entry.reason ? ` — ${entry.reason.toLowerCase()}` : ''}`;
+}
+
+/** What «Отменить» in the journal does for each undoable action */
+export const UNDO_LABELS = {
+    'moderation.warned': 'Снять варн',
+    'moderation.muted': 'Снять мут',
+    'moderation.banned': 'Разбанить',
+    'roles.added': 'Снять роль',
+    'roles.removed': 'Вернуть роль',
+    'verification.approved': 'Вернуть в очередь',
+    'booster.passed': 'Вернуть в очередь'
+};

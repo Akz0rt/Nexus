@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { apiGet, apiPost, describeError } from './api.js';
 import { ErrorState, Skeleton } from './States.jsx';
-import { GENDER_LABELS, accountAge, describeAction, formatDateTime, plural, timeAgo, untilText, waitLabel } from './format.js';
+import { GENDER_LABELS, accountAge, formatDateTime, journalTone, journalWhat, plural, timeAgo, untilText, waitLabel } from './format.js';
 import Avatar, { MemberLink } from './Avatar.jsx';
 import Icon from './icons.jsx';
 import { Chip } from './Chips.jsx';
@@ -44,20 +44,6 @@ function saveLayout(layout) {
 function attentionLine(items) {
     if (items.length === 0) return '';
     return items.length === 1 ? items[0] : `${items.slice(0, -1).join(', ')} и ${items.at(-1)}`;
-}
-
-// Journal dot: green for the pass, amber for punishments, red for reports, blue for the rest
-function journalTone(action) {
-    if (action.startsWith('verification.')) return 'ok';
-    if (action.startsWith('moderation.')) return 'warn';
-    if (action.startsWith('report.')) return 'danger';
-    return 'ink';
-}
-
-/** «пропуск, Девушка», «мут, 1 ч — флуд» */
-function journalWhat(entry) {
-    const text = describeAction(entry).replace(' · ', ', ');
-    return `${text.charAt(0).toLowerCase()}${text.slice(1)}${entry.reason ? ` — ${entry.reason.toLowerCase()}` : ''}`;
 }
 
 function Tile({ label, value, note, onClick, hot }) {

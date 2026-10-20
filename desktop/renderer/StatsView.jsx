@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { apiGet } from './api.js';
 import { ErrorState } from './States.jsx';
 import Avatar, { MemberLink } from './Avatar.jsx';
+import DailyBars from './DailyBars.jsx';
 
 const PERIODS = [
     { id: 'today', label: 'Сегодня' },
@@ -74,6 +75,12 @@ export default function StatsView({ guildId, revision, onOpenMember, onOpenJourn
                     </div>
                 </div>
             )}
+            {data?.daily && data.daily.length > 1 && (
+                <DailyBars title="Решения по новичкам" series={data.daily} parts={[
+                    { key: 'approved', label: 'Пропущено', tone: 'text', valueOf: d => d.approved },
+                    { key: 'kicked', label: 'Кикнуто из очереди', tone: 'voice', valueOf: d => d.kicked }
+                ]} />
+            )}
             {data && data.moderators.length === 0 && (
                 <div className="empty"><h2>За этот период действий модераторов не было</h2></div>
             )}
@@ -98,7 +105,7 @@ export default function StatsView({ guildId, revision, onOpenMember, onOpenJourn
                                             <button className="filter-by" title="Его действия в журнале" onClick={() => onOpenJournal({ actorId: m.actorId })}>⏷</button>
                                         </span>
                                     </td>
-                                    {COLUMNS.map(c => <td key={c.id} className={`num numeric ${m[c.id] ? '' : 'muted'}`}>{m[c.id] || '·'}</td>)}
+                                    {COLUMNS.map(c => <td key={c.id} className={`num numeric ${m[c.id] ? '' : 'is-zero'}`}>{m[c.id] || 0}</td>)}
                                     <td className="num numeric"><strong>{m.total}</strong></td>
                                     <td className="num numeric">{m.decided ? formatWait(m.averageWaitMs) : '—'}</td>
                                 </tr>

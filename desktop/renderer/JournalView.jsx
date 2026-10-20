@@ -1,8 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { apiGet, describeError } from './api.js';
-import { ErrorState } from './States.jsx';
-import { ACTION_GROUPS, ACTION_LABELS, SOURCE_LABELS, describeAction, describeMessage, formatDateTime, toCsv } from './format.js';
+import { apiGet, apiPost, describeError } from './api.js';
+import { EmptyState, ErrorState, Skeleton } from './States.jsx';
+import { ACTION_GROUPS, ACTION_LABELS, SOURCE_LABELS, UNDO_LABELS, describeAction, describeMessage, formatDateTime, journalTone, journalWhat, timeAgo, toCsv } from './format.js';
 import { MemberLink } from './Avatar.jsx';
+import Icon from './icons.jsx';
+import Dialog from './Dialog.jsx';
 
 const EMPTY_FILTERS = { action: '', source: '', actorId: '', targetId: '', since: '', until: '' };
 const EXPORT_PAGE = 200;
@@ -34,11 +36,37 @@ function matches(entry, filters) {
     return true;
 }
 
-/** Message entries have no actor when the author deleted it themselves. */
+/** Message entries have no actor when nobody knows who deleted it (Discord doesn't always say). */
 function actorText(entry) {
     if (entry.actorTag) return entry.actorTag;
-    return entry.action.startsWith('message.') ? '—' : 'бот';
+    return entry.action.startsWith('message.') ? 'неизвестно' : 'бот';
 }
+
+const MONTHS = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
+const localDay = iso => { const d = new Date(iso); return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`; };
+
+/** «Сегодня», «Вчера», «17 октября» */
+function dayTitle(iso) {
+    const date = new Date(iso);
+    const today = new Date();
+    const yesterday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1);
+    if (localDay(iso) === localDay(today)) return 'Сегодня';
+    if (localDay(iso) === localDay(yesterday)) return 'Вчера';
+    return `${date.getDate()} ${MONTHS[date.getMonth()]}`;
+}
+
+/** Rows grouped by local day, newest first: [{ key, title, entries }] */
+function byDay(rows) {
+    const groups = [];
+    for (const entry of rows) {
+        const key = localDay(entry.createdAt);
+        if (groups.at(-1)?.key !== key) groups.push({ key, title: dayTitle(entry.createdAt), entries: [] });
+        groups.at(-1).entries.push(entry);
+    }
+    return groups;
+}
+
+const TARGETS_SHOWN = 3;
 
 /** Reason column: the reason, or the message text for the message log. */
 function reasonText(entry) {
@@ -66,6 +94,10 @@ export default function JournalView({ guildId, liveEvents, preset, onOpenMember,
     const [loading, setLoading] = useState(true);
     const [exporting, setExporting] = useState(false);
     const [error, setError] = useState(null);
+    const [open, setOpen] = useState(null);        // entry id with its details shown
+    const [undoing, setUndoing] = useState(null);  // entry waiting for confirmation
+    const [busy, setBusy] = useState(false);
+    const [undone, setUndone] = useState({});      // entry id -> undone here just now
 
     const load = async nextCursor => {
         setLoading(true);
@@ -86,12 +118,28 @@ export default function JournalView({ guildId, liveEvents, preset, onOpenMember,
     // Live entries on top, only those matching the filters and not loaded yet
     const rows = useMemo(() => {
         const known = new Set(items.map(item => item.id));
-        return [...liveEvents.filter(entry => !known.has(entry.id) && matches(entry, filters)), ...items];
+        // Newest first: the days below are cut from this order
+        return [...liveEvents.filter(entry => !known.has(entry.id) && matches(entry, filters)), ...items]
+            .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
     }, [items, liveEvents, filters]);
 
     const setFilter = (key, value) => setFilters(f => ({ ...f, [key]: value }));
     const nameOf = id => users[id]?.displayName || null;
     const filtered = Object.values(filters).some(Boolean);
+    const groups = useMemo(() => byDay(rows), [rows]);
+    const namesOf = entry => (entry.targetIds || []).map(id => nameOf(id) || id);
+
+    const undo = async entry => {
+        setBusy(true);
+        const result = await apiPost(`/guilds/${guildId}/audit/${entry.id}/undo`);
+        setBusy(false);
+        if (!result.ok) { toast(describeError(result), { tone: 'error' }); return; }
+        setUndoing(null);
+        const failed = result.data.failed || [];
+        if (failed.length === 0) setUndone(map => ({ ...map, [entry.id]: true }));
+        toast(failed.length ? `${UNDO_LABELS[entry.action]}: не вышло у ${failed.length}` : `Готово: ${UNDO_LABELS[entry.action].toLowerCase()}`,
+            failed.length ? { tone: 'error' } : {});
+    };
 
     const exportCsv = async () => {
         setExporting(true);
@@ -160,49 +208,84 @@ export default function JournalView({ guildId, liveEvents, preset, onOpenMember,
                 )}
                 {filtered && <button className="btn btn-quiet" onClick={() => setFilters(EMPTY_FILTERS)}>Сбросить</button>}
             </div>
-            <p className="muted small">Клик по имени открывает карточку, ⏷ рядом с именем оставляет только записи этого человека. Удалённые и изменённые сообщения видны только из каналов, которые вы можете читать. Записи хранятся 30 дней.</p>
+            <p className="muted small">Клик по строке раскрывает подробности и «Отменить». Удалённые и изменённые сообщения видны только из каналов, которые вы можете читать. Записи хранятся 30 дней.</p>
 
             {error && <ErrorState what="журнал" error={error} onRetry={() => load(null)} />}
-            <div className="table-wrap">
-                <table className="journal">
-                    <thead>
-                        <tr><th>Время</th><th>Кто</th><th>Действие</th><th>Над кем</th><th>Причина</th><th>Источник</th></tr>
-                    </thead>
-                    <tbody>
-                        {rows.map(entry => (
-                            <tr key={entry.id}>
-                                <td className="numeric nowrap">{formatDateTime(entry.createdAt)}</td>
-                                <td>
-                                    {entry.actorId ? (
-                                        <span className="who">
-                                            <MemberLink id={entry.actorId} name={nameOf(entry.actorId)} onOpen={onOpenMember} />
-                                            <button className="filter-by" title="Только его действия" onClick={() => setFilter('actorId', entry.actorId)}>⏷</button>
+            {groups.map(group => (
+                <section key={group.key} className="journal-day" aria-label={group.title}>
+                    <h2>{group.title}</h2>
+                    <ol className="journal-list">
+                        {group.entries.map(entry => {
+                            const isOpen = open === entry.id;
+                            const targets = entry.targetIds || [];
+                            const wasUndone = entry.undoneAt || undone[entry.id];
+                            const canUndo = UNDO_LABELS[entry.action] && targets.length > 0 && !wasUndone;
+                            const extra = reasonText(entry);
+                            return (
+                                <li key={entry.id} className={`journal-row ${isOpen ? 'is-open' : ''}`}>
+                                    <div className="journal-line" onClick={event => { if (!event.target.closest('button')) setOpen(isOpen ? null : entry.id); }}>
+                                        <span className={`journal-dot tone-${journalTone(entry.action)}`} aria-hidden="true" />
+                                        <span className="journal-text">
+                                            {entry.actorId
+                                                ? <MemberLink id={entry.actorId} name={nameOf(entry.actorId) || entry.actorTag} onOpen={onOpenMember} />
+                                                : <strong className="muted">{actorText(entry)}</strong>}
+                                            <span className="journal-arrow" aria-label="→">→</span>
+                                            {targets.length === 0 && <strong>сервер</strong>}
+                                            {targets.slice(0, TARGETS_SHOWN).map((id, i) => (
+                                                <React.Fragment key={id}>
+                                                    {i > 0 && ', '}
+                                                    <MemberLink id={id} name={nameOf(id)} onOpen={onOpenMember} />
+                                                </React.Fragment>
+                                            ))}
+                                            {targets.length > TARGETS_SHOWN && <span className="muted"> и ещё {targets.length - TARGETS_SHOWN}</span>}
+                                            <span className="journal-what"> · {journalWhat(entry)}</span>
+                                            {wasUndone && <span className="journal-undone">отменено</span>}
                                         </span>
-                                    ) : <span className="muted">{actorText(entry)}</span>}
-                                </td>
-                                <td>{describeAction(entry)}</td>
-                                <td>
-                                    {(entry.targetIds || []).map(id => (
-                                        <span className="who" key={id}>
-                                            <MemberLink id={id} name={nameOf(id)} onOpen={onOpenMember} />
-                                            <button className="filter-by" title="Только записи о нём" onClick={() => setFilter('targetId', id)}>⏷</button>
-                                        </span>
-                                    ))}
-                                </td>
-                                <td className={`reason ${entry.action.startsWith('message.') ? 'message-text' : ''}`}>{reasonText(entry)}</td>
-                                <td><span className={`source source-${entry.source}`}>{SOURCE_LABELS[entry.source] || entry.source}</span></td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
-            {!loading && rows.length === 0 && (
-                <div className="empty">
-                    <h2>{filtered ? 'Под эти фильтры записей нет' : 'Записей пока нет'}</h2>
-                    {filtered && <p>Попробуйте сбросить фильтры или расширить период.</p>}
-                </div>
+                                        <time className="muted small numeric" dateTime={entry.createdAt} title={formatDateTime(entry.createdAt, true)}>{timeAgo(entry.createdAt)}</time>
+                                        <button type="button" className="journal-toggle" aria-expanded={isOpen} aria-label={isOpen ? 'Скрыть подробности' : 'Подробности'}
+                                            onClick={() => setOpen(isOpen ? null : entry.id)}>
+                                            <Icon name="chevron" size={14} />
+                                        </button>
+                                    </div>
+                                    {isOpen && (
+                                        <div className="journal-details">
+                                            <dl>
+                                                <div><dt>Когда</dt><dd className="numeric">{formatDateTime(entry.createdAt, true)}</dd></div>
+                                                <div><dt>Где</dt><dd>{SOURCE_LABELS[entry.source] || entry.source}</dd></div>
+                                                {extra && <div><dt>{entry.action.startsWith('message.') ? 'Текст' : 'Причина'}</dt><dd className={entry.action.startsWith('message.') ? 'message-text' : ''}>{extra}</dd></div>}
+                                                {targets.length > TARGETS_SHOWN && <div><dt>Все</dt><dd>{namesOf(entry).join(', ')}</dd></div>}
+                                                {wasUndone && <div><dt>Отменил</dt><dd>{entry.undoneByTag || (undone[entry.id] ? 'вы' : '—')}{entry.undoneAt && ` · ${formatDateTime(entry.undoneAt)}`}</dd></div>}
+                                            </dl>
+                                            <div className="journal-details-actions">
+                                                {entry.actorId && <button type="button" className="btn btn-small" onClick={() => setFilter('actorId', entry.actorId)}>Только этот модератор</button>}
+                                                {targets.length === 1 && <button type="button" className="btn btn-small" onClick={() => setFilter('targetId', targets[0])}>Только этот участник</button>}
+                                                <span className="toolbar-spacer" />
+                                                {canUndo && <button type="button" className="btn btn-small btn-primary" onClick={() => setUndoing(entry)}>{UNDO_LABELS[entry.action]}…</button>}
+                                            </div>
+                                        </div>
+                                    )}
+                                </li>
+                            );
+                        })}
+                    </ol>
+                </section>
+            ))}
+            {!loading && rows.length === 0 && !error && (
+                <EmptyState icon="journal" title={filtered ? 'Под эти фильтры записей нет' : 'Записей пока нет'}
+                    text={filtered ? 'Попробуйте сбросить фильтры или расширить период.' : null} />
             )}
-            {loading && <p className="muted">Загружаем…</p>}
+            {loading && <Skeleton rows={6} height={40} />}
+            {undoing && (
+                <Dialog title={`${UNDO_LABELS[undoing.action]}?`} onClose={() => setUndoing(null)} onSubmit={() => undo(undoing)}
+                    submitLabel={UNDO_LABELS[undoing.action]} busy={busy}>
+                    <p>{namesOf(undoing).slice(0, 10).join(', ')}{undoing.targetIds.length > 10 ? ` и ещё ${undoing.targetIds.length - 10}` : ''} · {journalWhat(undoing)}</p>
+                    <p className="muted small">
+                        {undoing.action === 'verification.approved' && 'Бот снимет роль парня или девушки и доп. роли, выданные при пропуске, вернёт @АНверефи — человек снова окажется в очереди. '}
+                        {undoing.action === 'booster.passed' && 'Бот снимет роль «Бустер-аккаунт» и срок — аккаунт снова окажется в очереди. '}
+                        В журнал попадёт, что это отменили вы.
+                    </p>
+                </Dialog>
+            )}
             {cursor && !loading && <button className="btn" onClick={() => load(cursor)}>Показать ещё</button>}
         </section>
     );

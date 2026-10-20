@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { apiGet, apiPost, apiPut, describeError } from './api.js';
 import { ErrorState } from './States.jsx';
 import { formatDateTime } from './format.js';
+import Icon from './icons.jsx';
 import Avatar, { MemberLink } from './Avatar.jsx';
 import Dialog from './Dialog.jsx';
 import PersonalRolesTab from './PersonalRolesTab.jsx';
@@ -44,10 +45,11 @@ export function LevelBadge({ level, prestige }) {
     );
 }
 
-export function XpBar({ exp, cost }) {
+export function XpBar({ exp, cost, level }) {
     const share = Math.min(1, exp / cost);
+    const text = `${number(exp)} / ${number(cost)} опыта${level ? (level >= 50 ? ' до престижа' : ` до ${level + 1}-го`) : ''}`;
     return (
-        <span className="xp-bar" role="img" aria-label={`${number(exp)} из ${number(cost)} опыта`} title={`${number(exp)} / ${number(cost)}`}>
+        <span className="xp-bar" role="img" aria-label={text} title={text}>
             <span style={{ width: `${share * 100}%` }} />
         </span>
     );
@@ -183,7 +185,7 @@ export function EconomyBlock({ guildId, userId, name, revision, toast, heading =
     );
 }
 
-function SettingsTab({ guildId, data, onSaved, toast }) {
+function SettingsTab({ guildId, data, onSaved, onReset, toast }) {
     const [enabled, setEnabled] = useState(data.settings.enabled);
     const [channelId, setChannelId] = useState(data.settings.channelId || '');
     const [levelRoles, setLevelRoles] = useState(data.settings.levelRoles.map(r => ({ level: String(r.level), roleId: r.roleId })));
@@ -199,17 +201,22 @@ function SettingsTab({ guildId, data, onSaved, toast }) {
     const [error, setError] = useState(null);
     const [syncing, setSyncing] = useState(false);
 
+    const payload = () => ({
+        enabled, channelId: channelId || null, payEnabled, gamesEnabled,
+        levelRoles: levelRoles.filter(r => r.roleId).map(r => ({ level: Number(r.level), roleId: r.roleId })),
+        personalRoles: {
+            enabled: roles.enabled, anchorRoleId: roles.anchorRoleId || null,
+            createPrice: Number(roles.createPrice), rentPrice: Number(roles.rentPrice),
+            periodDays: Number(roles.periodDays), maxActive: Number(roles.maxActive)
+        }
+    });
+    // What was loaded: «Сохранить» lights up only after a change
+    const [initial] = useState(() => JSON.stringify(payload()));
+    const dirty = JSON.stringify(payload()) !== initial;
+
     const save = async () => {
         setBusy(true);
-        const result = await apiPut(`/guilds/${guildId}/economy/settings`, {
-            enabled, channelId: channelId || null, payEnabled, gamesEnabled,
-            levelRoles: levelRoles.filter(r => r.roleId).map(r => ({ level: Number(r.level), roleId: r.roleId })),
-            personalRoles: {
-                enabled: roles.enabled, anchorRoleId: roles.anchorRoleId || null,
-                createPrice: Number(roles.createPrice), rentPrice: Number(roles.rentPrice),
-                periodDays: Number(roles.periodDays), maxActive: Number(roles.maxActive)
-            }
-        });
+        const result = await apiPut(`/guilds/${guildId}/economy/settings`, payload());
         setBusy(false);
         if (!result.ok) {
             const text = SETTINGS_ERRORS[result.error] || describeError(result);
@@ -235,10 +242,11 @@ function SettingsTab({ guildId, data, onSaved, toast }) {
                 <input type="checkbox" checked={enabled} onChange={e => setEnabled(e.target.checked)} />
                 Начислять опыт и монеты за активность
             </label>
-            <p className="muted small">
-                Минута в голосе (не в AFK-канале и не с выключенным звуком) или сообщение раз в минуту — 60 опыта и 1 монета.
-                Включайте после переноса данных из старого бота и после того, как старый бот выключен, иначе монеты начислятся дважды.
-            </p>
+            <p className="muted small">Минута в голосе (не в AFK-канале и не с выключенным звуком) или сообщение раз в минуту — 60 опыта и 1 монета.</p>
+            <div className="notice notice-warn" role="note">
+                <Icon name="alert" size={18} />
+                <span>Включайте только после переноса данных из старого бота и когда старый бот выключен — иначе монеты начислятся дважды.</span>
+            </div>
             <label className="field">
                 Канал для объявлений о новых уровнях
                 <select value={channelId} onChange={e => setChannelId(e.target.value)}>
@@ -304,16 +312,31 @@ function SettingsTab({ guildId, data, onSaved, toast }) {
                 Дуэли и «Орёл или решка» (/duel, /coinflip; ставка 10–50 000, выигрыш — 95%)
             </label>
 
-            {error && <p className="error">{error}</p>}
-            <div className="save-bar">
-                <button type="button" className="btn btn-primary" disabled={busy} onClick={save}>{busy ? 'Сохраняем…' : 'Сохранить'}</button>
+            <div className="save-bar is-pinned">
+                <button type="button" className="btn btn-primary" disabled={busy || !dirty} onClick={save}>{busy ? 'Сохраняем…' : 'Сохранить'}</button>
+                <button type="button" className="btn btn-quiet" disabled={busy || !dirty} onClick={onReset}>Отменить</button>
+                {dirty && !error && <span className="muted small">Есть несохранённые изменения</span>}
+                {error && <span className="error">{error}</span>}
             </div>
         </div>
     );
 }
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** The grey name of someone who left: when the account stops being theirs */
+function leftNote(leftAt) {
+    if (!leftAt) return 'Покинул сервер';
+    const back = Math.ceil((Date.parse(leftAt) + 3 * DAY_MS - Date.now()) / DAY_MS);
+    if (back > 0) return `Покинул сервер — счёт обезличен; вернётся в течение ${back} дн. — всё восстановится`;
+    const gone = Math.max(1, Math.ceil((Date.parse(leftAt) + 90 * DAY_MS - Date.now()) / DAY_MS));
+    return `Покинул сервер — счёт обезличен и удалится через ${gone} дн.`;
+}
+
 export default function EconomyView({ guildId, revision, onOpenMember, toast }) {
     const [tab, setTab] = useState('top');
+    const [showRules, setShowRules] = useState(false);
+    const [settingsKey, setSettingsKey] = useState(0); // «Отменить» starts the form over
     const [by, setBy] = useState('level');
     const [query, setQuery] = useState('');
     const [search, setSearch] = useState('');
@@ -353,7 +376,8 @@ export default function EconomyView({ guildId, revision, onOpenMember, toast }) 
             )}
             {tab === 'roles' && <PersonalRolesTab guildId={guildId} revision={revision} onOpenMember={onOpenMember} toast={toast} />}
             {data && tab === 'settings' && data.canManage && (
-                <SettingsTab key={JSON.stringify(data.settings)} guildId={guildId} data={data} onSaved={() => setReload(n => n + 1)} toast={toast} />
+                <SettingsTab key={`${JSON.stringify(data.settings)}:${settingsKey}`} guildId={guildId} data={data} onSaved={() => setReload(n => n + 1)}
+                    onReset={() => setSettingsKey(n => n + 1)} toast={toast} />
             )}
             {data && tab === 'top' && (
                 <>
@@ -365,6 +389,9 @@ export default function EconomyView({ guildId, revision, onOpenMember, toast }) 
                         <span className="muted small">
                             Участников с опытом: {number(data.totals.accounts)} · монет на руках: {number(data.totals.money)}
                         </span>
+                        <span className="toolbar-spacer" />
+                        <button type="button" className="icon-button help-button" aria-expanded={showRules} aria-label="Как считаются уровни"
+                            title="Как считаются уровни" onClick={() => setShowRules(v => !v)}>?</button>
                     </div>
                     {data.items.length === 0 && <div className="empty"><h2>{search ? 'Никого не нашли' : 'Пока никто не набрал опыта'}</h2></div>}
                     {data.items.length > 0 && (
@@ -389,11 +416,11 @@ export default function EconomyView({ guildId, revision, onOpenMember, toast }) 
                                                     <Avatar src={row.user.avatarURL} name={row.user.displayName} size={22} />
                                                     {row.user.member
                                                         ? <MemberLink id={row.user.id} name={row.user.displayName} onOpen={onOpenMember} />
-                                                        : <span className="muted">{row.user.displayName || row.user.id}</span>}
+                                                        : <span className="muted" title={leftNote(row.leftAt)}>{row.user.displayName || row.user.id}</span>}
                                                 </span>
                                             </td>
                                             <td><LevelBadge level={row.level} prestige={row.prestige} /></td>
-                                            <td><XpBar exp={row.exp} cost={row.cost} /></td>
+                                            <td><XpBar exp={row.exp} cost={row.cost} level={row.level} /></td>
                                             <td className="num numeric">{number(row.money)}</td>
                                             <td className="num numeric">{hours(row.voiceSeconds)}</td>
                                         </tr>
@@ -402,11 +429,11 @@ export default function EconomyView({ guildId, revision, onOpenMember, toast }) 
                             </table>
                         </div>
                     )}
-                    <p className="muted small">
+                    {showRules && <p className="muted small help-text">
                         Уровни 1–{data.curve.maxLevel}: переход с уровня N стоит 5000·N опыта, награда — 100·(N−1) монет.
                         После {data.curve.maxLevel}-го каждые {number(data.curve.prestigeExp)} опыта — престиж ★ и {number(data.curve.prestigeReward)} монет.
                         Счёт того, кто покинул сервер, сразу обезличивается и пропадает из топа. Вернётся в течение 3 дней — всё восстановится, позже — начнёт с нуля. Через 90 дней обезличенный счёт удаляется.
-                    </p>
+                    </p>}
                 </>
             )}
         </section>

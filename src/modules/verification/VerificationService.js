@@ -310,9 +310,10 @@ class VerificationService {
      * Undo a fresh approval: give @unverified back, drop the gender role and
      * reopen the card. Only the moderator who approved, only within UNDO_WINDOW_MS.
      */
-    async undoApprove(guild, userId, actor, source) {
+    async undoApprove(guild, userId, actor, source, { fromJournal = false } = {}) {
         const settings = await this.getQueueSettings(guild.id);
         if (!settings) return { ok: false, code: 'not_configured' };
+        if (fromJournal && !(await this.assertPermission(guild, actor.id, PermissionFlagsBits.ManageRoles))) return { ok: false, code: 'forbidden' };
 
         const key = this.lockKey(guild.id, userId);
         if (this.locks.has(key)) return { ok: false, code: 'in_progress' };
@@ -320,13 +321,18 @@ class VerificationService {
         try {
             const card = await QueueCardService.get(guild.id, userId);
             if (!card || card.status !== 'approved') return { ok: false, code: 'nothing_to_undo', card };
-            if (card.handledBy !== actor.id) return { ok: false, code: 'forbidden', card };
-            if (Date.now() - Date.parse(card.handledAt) > UNDO_WINDOW_MS) return { ok: false, code: 'undo_expired', card };
+            // The toast's «Отменить»: own pass, a few seconds. The journal: anyone with Manage Roles, any time
+            if (!fromJournal && card.handledBy !== actor.id) return { ok: false, code: 'forbidden', card };
+            if (!fromJournal && Date.now() - Date.parse(card.handledAt) > UNDO_WINDOW_MS) return { ok: false, code: 'undo_expired', card };
 
             const member = await this.fetchMember(guild, userId);
             if (!member) return { ok: false, code: 'member_left', card };
 
             const genderRoleId = card.gender === 'male' ? settings.maleRoleId : settings.femaleRoleId;
+            // Roles changed by hand since the pass: don't guess what to take away
+            if (fromJournal && (member.roles.cache.has(settings.unverifiedRoleId) || (genderRoleId && !member.roles.cache.has(genderRoleId)))) {
+                return { ok: false, code: 'roles_changed', card };
+            }
             const roles = new Set(member.roles.cache.keys());
             if (genderRoleId) roles.delete(genderRoleId);
             for (const roleId of card.extraRoleIds || []) roles.delete(roleId);
@@ -350,7 +356,7 @@ class VerificationService {
                 actorTag: actor.tag,
                 targetIds: [userId],
                 source,
-                details: { gender: card.gender }
+                details: fromJournal ? { gender: card.gender, fromJournal: true } : { gender: card.gender }
             });
             return { ok: true, card: reopened };
         } finally {

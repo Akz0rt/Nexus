@@ -3,6 +3,7 @@ import { apiGet } from './api.js';
 import { formatDateTime, timeAgo } from './format.js';
 import Avatar, { MemberLink } from './Avatar.jsx';
 import { ErrorState } from './States.jsx';
+import DailyBars from './DailyBars.jsx';
 
 const PERIODS = [{ id: 'day', label: 'Сутки' }, { id: 'week', label: 'Неделя' }, { id: 'month', label: 'Месяц' }];
 const MODES = [{ id: 'both', label: 'Вместе' }, { id: 'text', label: 'Сообщения' }, { id: 'voice', label: 'Голос' }];
@@ -11,57 +12,6 @@ function formatMinutes(minutes) {
     if (!minutes) return '—';
     if (minutes < 60) return `${minutes} мин`;
     return `${Math.floor(minutes / 60)} ч ${String(minutes % 60).padStart(2, '0')} мин`;
-}
-
-function shortDate(date) {
-    const [, month, day] = date.split('-');
-    return `${Number(day)}.${month}`;
-}
-
-/**
- * One measure per chart (messages and voice hours have different scales, so they
- * never share an axis): thin bars, rounded tops, hover shows the day's value.
- */
-function DailyBars({ title, series, valueOf, format, tone, markToday }) {
-    const [hover, setHover] = useState(null);
-    const max = Math.max(1, ...series.map(valueOf));
-    const total = series.reduce((sum, d) => sum + valueOf(d), 0);
-    const today = series[series.length - 1];
-    // «Сутки»: the week for context, today's bar marked and its value in the caption
-    const caption = markToday
-        ? `сегодня: ${format(valueOf(today))} · за 7 дней: ${format(total)}`
-        : `за ${series.length} дн.: ${format(total)}`;
-    return (
-        <figure className="daily-chart">
-            <figcaption>
-                <strong>{title}</strong>
-                <span className="muted small">{caption}</span>
-            </figcaption>
-            <div className="daily-plot" role="img" aria-label={`${title}: ${caption}`} onMouseLeave={() => setHover(null)}>
-                <span className="daily-max muted small numeric">{format(max)}</span>
-                <div className="daily-bars">
-                    {series.map((d, i) => {
-                        const value = valueOf(d);
-                        return (
-                            <div key={d.date} className={`daily-col ${hover === i ? 'is-hover' : ''} ${markToday && d === today ? 'is-today' : ''}`} onMouseEnter={() => setHover(i)}>
-                                <div className={`daily-bar daily-${tone}`} style={{ height: `${value ? Math.max(2, (value / max) * 100) : 0}%` }} />
-                            </div>
-                        );
-                    })}
-                </div>
-                {hover !== null && (
-                    <div className="daily-tip" style={{ left: `${((hover + 0.5) / series.length) * 100}%` }} role="status">
-                        <span className="muted small">{shortDate(series[hover].date)}</span>
-                        <strong className="numeric">{format(valueOf(series[hover]))}</strong>
-                    </div>
-                )}
-            </div>
-            <div className="daily-axis muted small numeric">
-                <span>{shortDate(series[0].date)}</span>
-                <span>{shortDate(series[series.length - 1].date)}</span>
-            </div>
-        </figure>
-    );
 }
 
 export default function ActivityView({ guildId, onOpenMember }) {
@@ -106,8 +56,9 @@ export default function ActivityView({ guildId, onOpenMember }) {
             {data && (
                 <>
                     <div className="daily-charts">
-                        <DailyBars title="Сообщения по дням" series={data.daily} valueOf={d => d.messages} format={n => n.toLocaleString('ru-RU')} tone="text" markToday={data.period === 'day'} />
-                        <DailyBars title="Часы в голосе по дням" series={data.daily} valueOf={d => d.voiceMinutes} format={formatMinutes} tone="voice" markToday={data.period === 'day'} />
+                        <DailyBars title="Сообщения по дням" series={data.daily} parts={[{ key: 'messages', label: 'Сообщения', tone: 'text', valueOf: d => d.messages }]} markToday={data.period === 'day'} />
+                        <DailyBars title="Часы в голосе по дням" series={data.daily} parts={[{ key: 'voice', label: 'В голосе', tone: 'voice', valueOf: d => d.voiceMinutes / 60 }]}
+                            format={hours => formatMinutes(Math.round(hours * 60))} tickFormat={hours => `${hours} ч`} markToday={data.period === 'day'} />
                     </div>
                     <h2 className="section-title">Топ участников</h2>
                     {data.top.length === 0 && <div className="empty"><h2>За этот период активности нет</h2></div>}
