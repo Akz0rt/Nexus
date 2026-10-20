@@ -1,45 +1,62 @@
 const config = require('../../config');
+const GuildSettingsService = require('../../services/GuildSettingsService');
 const SchedulerService = require('../../services/SchedulerService');
 const NotificationService = require('../../services/NotificationService');
 
-async function fetchChannelById(client, channelId, envName) {
+async function fetchChannelById(client, channelId, label) {
     if (!channelId) {
-        console.warn(`${envName} is not set`);
+        console.warn(`${label} is not set`);
         return null;
     }
 
     try {
         const channel = await client.channels.fetch(channelId);
         if (!channel || !channel.isTextBased?.()) {
-            console.warn(`${envName} (${channelId}) is not a text channel`);
+            console.warn(`${label} (${channelId}) is not a text channel`);
             return null;
         }
         return channel;
     } catch (error) {
-        console.error(`Failed to fetch channel for ${envName} (${channelId}):`, error.message || error);
+        console.error(`Failed to fetch channel for ${label} (${channelId}):`, error.message || error);
         return null;
     }
 }
 
+/** Birthdays are one list for the bot: they belong to the main server (GUILD_ID, or the only one) */
+function birthdayGuildId(client) {
+    return config.guildId || client?.guilds?.cache.values().next().value?.id || null;
+}
+
+/**
+ * Time and channels from Settings → «Дни рождения» (Azure variables until saved there).
+ * Called at startup and again after Settings are saved — no restart needed.
+ */
+async function applySettings(client, { initialCheck = false } = {}) {
+    const guildId = birthdayGuildId(client);
+    const settings = guildId ? await GuildSettingsService.get(guildId) : {};
+    // Fetch channels directly from API to avoid cache-miss on startup
+    const announceChannel = await fetchChannelById(client, settings.birthdayAnnounceChannelId, 'Birthday announce channel');
+    const congratsChannel = await fetchChannelById(client, settings.birthdayCongratsChannelId, 'Birthday congrats channel');
+    NotificationService.setChannels(announceChannel, congratsChannel);
+
+    if (announceChannel || congratsChannel) {
+        console.log('Notification channels configured successfully');
+    } else {
+        console.error('No notification channels found. Birthday checks will still run, but messages cannot be sent.');
+    }
+
+    // Always schedule so daily DB checks are not skipped
+    SchedulerService.start({ checkTime: settings.birthdayCheckTime || config.checkTime, initialCheck });
+}
+
 module.exports = {
     name: 'birthdays',
+    birthdayGuildId,
+    applySettings,
 
     register() {},
 
     async onReady(client) {
-        // Fetch channels directly from API to avoid cache-miss on startup
-        const announceChannel = await fetchChannelById(client, config.birthdayChannel, 'BIRTHDAY_CHANNEL_ID');
-        const congratsChannel = await fetchChannelById(client, config.congratsChannel, 'CONGRATS_CHANNEL_ID');
-
-        NotificationService.setChannels(announceChannel, congratsChannel);
-
-        if (announceChannel || congratsChannel) {
-            console.log('Notification channels configured successfully');
-        } else {
-            console.error('No notification channels found. Birthday checks will still run, but messages cannot be sent.');
-        }
-
-        // Always start scheduler so daily DB checks are not skipped
-        SchedulerService.start();
+        await applySettings(client, { initialCheck: true });
     }
 };

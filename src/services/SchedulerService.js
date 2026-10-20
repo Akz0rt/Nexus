@@ -18,12 +18,17 @@ class SchedulerService {
         }
     }
 
-    start() {
+    /**
+     * @param {{ checkTime?: string, initialCheck?: boolean }} [options] a new time from Settings
+     *   reschedules without the catch-up check (that one runs once, at startup)
+     */
+    start({ checkTime, initialCheck = true } = {}) {
         // Stop any existing jobs
         this.stop();
+        if (checkTime) this.checkTime = checkTime;
 
         // Perform initial check
-        this.checkBirthdays();
+        if (initialCheck) this.checkBirthdays();
 
         // Schedule birthday check at configured time
         const job = cron.schedule(this.getCronExpression(), () => this.checkBirthdays(), {

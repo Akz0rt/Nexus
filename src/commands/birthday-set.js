@@ -10,24 +10,24 @@ const {
 } = require('discord.js');
 const CosmosDBService = require('../services/CosmosDBService');
 const { isValidDate } = require('../utils/dateUtils');
-const config = require('../config');
+const NotificationService = require('../services/NotificationService');
 
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('birthday-set')
-        .setDescription('Set your birthday'),
+        .setDescription('Указать свой день рождения'),
 
     async execute(interaction) {
         const row = new ActionRowBuilder()
             .addComponents(
                 new ButtonBuilder()
                     .setCustomId('birthday_datepicker')
-                    .setLabel('Select your birthday')
+                    .setLabel('Указать дату')
                     .setStyle(ButtonStyle.Primary)
             );
 
         const response = await interaction.reply({
-            content: 'Click the button below to select your birthday:',
+            content: 'Нажмите кнопку, чтобы указать свой день рождения:',
             components: [row],
             flags: ['Ephemeral']
         });
@@ -42,13 +42,13 @@ module.exports = {
             // Create date picker modal
             const modal = new ModalBuilder()
                 .setCustomId('birthday_modal')
-                .setTitle('Select Your Birthday');
+                .setTitle('Ваш день рождения');
 
             const dateInput = new TextInputBuilder()
                 .setCustomId('birthday_date')
-                .setLabel('Your Birthday (DD/MM)')
+                .setLabel('Дата (ДД/ММ)')
                 .setStyle(TextInputStyle.Short)
-                .setPlaceholder('Enter date (e.g., 25/12)')
+                .setPlaceholder('Например, 25/12')
                 .setRequired(true);
 
             const actionRow = new ActionRowBuilder().addComponents(dateInput);
@@ -66,7 +66,7 @@ module.exports = {
 
             if (!isValidDate(inputMonth, inputDay)) {
                 await modalSubmit.reply({
-                    content: 'Invalid date! Please enter a valid date in DD/MM format.',
+                    content: 'Такой даты нет. Введите её в формате ДД/ММ, например 25/12.',
                     flags: ['Ephemeral']
                 });
                 return;
@@ -76,26 +76,29 @@ module.exports = {
             
             // Send confirmation to the user
             await modalSubmit.reply({
-                content: `Your birthday has been successfully set to ${inputDay}/${inputMonth}! 🎂`,
+                content: `Готово: ваш день рождения — ${String(inputDay).padStart(2, '0')}.${String(inputMonth).padStart(2, '0')} 🎂`,
                 flags: ['Ephemeral']
             });
 
-            // Send announcement to birthday channel
-            const birthdayChannel = interaction.guild.channels.cache.get(config.birthdayChannel);
+            // Announce it in the channel from Settings → «Дни рождения»
+            const birthdayChannel = NotificationService.announceChannel;
             if (birthdayChannel) {
-                await birthdayChannel.send(`${interaction.user} has set their birthday! We'll celebrate on ${inputDay}/${inputMonth}! 🎉`);
+                await birthdayChannel.send({
+                    content: `${interaction.user} указал(а) день рождения — поздравим ${String(inputDay).padStart(2, '0')}.${String(inputMonth).padStart(2, '0')}! 🎉`,
+                    allowedMentions: { parse: [] }
+                });
             }
 
         } catch (error) {
             if (error.code === 'INTERACTION_COLLECTOR_ERROR') {
                 await interaction.followUp({
-                    content: 'Birthday selection timed out. Please try again.',
+                    content: 'Время вышло — запустите /birthday-set ещё раз.',
                     flags: ['Ephemeral']
                 });
             } else {
                 console.error('Error in birthday-set command:', error);
                 await interaction.followUp({
-                    content: 'There was an error setting your birthday!',
+                    content: 'Не получилось сохранить день рождения. Попробуйте ещё раз чуть позже.',
                     flags: ['Ephemeral']
                 });
             }

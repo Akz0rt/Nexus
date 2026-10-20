@@ -5,6 +5,9 @@ const AuditLogService = require('../../../services/AuditLogService');
 const DiagnosticsService = require('../../../services/DiagnosticsService');
 const { MUTE_DURATIONS, WARN_TTL_DAYS } = require('../../../modules/moderation/templates');
 const { actorOf } = require('../result');
+const config = require('../../../config');
+const state = require('../../../state');
+const { birthdayGuildId, applySettings } = require('../../../modules/birthdays');
 
 // Mounted behind requireGuildAccess('senior'): administrators only
 const router = express.Router({ mergeParams: true });
@@ -113,6 +116,25 @@ function sanitize(guild, body, current) {
         patch.lockdown = lockdown;
     }
 
+    const BIRTHDAY_KEYS = ['birthdayCheckTime', 'birthdayCongratsChannelId', 'birthdayAnnounceChannelId'];
+    if (BIRTHDAY_KEYS.some(key => key in body)) {
+        if (guild.id !== birthdayGuildId(state.client)) return fail('birthdayCheckTime', 'not_birthday_guild');
+        if ('birthdayCheckTime' in body) {
+            const time = String(body.birthdayCheckTime || '');
+            if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) return fail('birthdayCheckTime', 'invalid_time');
+            patch.birthdayCheckTime = time;
+            fields.push('birthdayCheckTime');
+        }
+        for (const key of ['birthdayCongratsChannelId', 'birthdayAnnounceChannelId']) {
+            if (!(key in body)) continue;
+            const id = String(body[key] || '');
+            // A plain text channel: the bot posts messages there (a forum takes threads only)
+            if (id && !guild.channels.cache.get(id)?.isTextBased?.()) return fail(key, 'channel_not_found');
+            patch[key] = id;
+            fields.push(key);
+        }
+    }
+
     if (fields.length === 0) return fail(null, 'nothing_to_save');
     return { ok: true, patch, fields };
 }
@@ -124,6 +146,10 @@ function describeSettings(settings) {
         femaleRoleId: settings.femaleRoleId || '',
         boosterRoleId: settings.boosterRoleId || '',
         verifyQueueChannelId: settings.verifyQueueChannelId || '',
+        birthdayCheckTime: settings.birthdayCheckTime || '00:00',
+        birthdayCongratsChannelId: settings.birthdayCongratsChannelId || '',
+        birthdayAnnounceChannelId: settings.birthdayAnnounceChannelId || '',
+        timezone: config.timezone,
         verificationEnabled: Boolean(settings.modules.verification),
         assignUnverifiedOnJoin: Boolean(settings.assignUnverifiedOnJoin),
         youngAccountDays: settings.verification.youngAccountDays,
@@ -155,7 +181,7 @@ function describeOptions(guild) {
 router.get('/', async (req, res, next) => {
     try {
         const settings = await GuildSettingsService.get(req.guild.id);
-        res.json({ values: describeSettings(settings), options: describeOptions(req.guild) });
+        res.json({ values: { ...describeSettings(settings), birthdayGuild: req.guild.id === birthdayGuildId(state.client) }, options: describeOptions(req.guild) });
     } catch (error) {
         next(error);
     }
@@ -170,6 +196,10 @@ router.patch('/', async (req, res, next) => {
         if (!result.ok) return res.status(400).json({ error: result.code, field: result.field });
 
         await GuildSettingsService.update(guild.id, result.patch);
+        // The daily check moves to the new time, the channels switch — no restart
+        if (result.fields.some(field => field.startsWith('birthday'))) {
+            await applySettings(state.client).catch(error => console.error('Settings: applying birthday settings failed:', error.message || error));
+        }
         const actor = actorOf(req);
         await AuditLogService.log({
             guildId: guild.id,
@@ -179,7 +209,7 @@ router.patch('/', async (req, res, next) => {
             source: 'panel',
             details: { fields: result.fields }
         });
-        res.json({ ok: true, values: describeSettings(await GuildSettingsService.get(guild.id)) });
+        res.json({ ok: true, values: { ...describeSettings(await GuildSettingsService.get(guild.id)), birthdayGuild: guild.id === birthdayGuildId(state.client) } });
     } catch (error) {
         next(error);
     }

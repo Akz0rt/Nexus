@@ -1,6 +1,7 @@
 const express = require('express');
 const config = require('../../../config');
 const CosmosDBService = require('../../../services/CosmosDBService');
+const GuildSettingsService = require('../../../services/GuildSettingsService');
 const NotificationService = require('../../../services/NotificationService');
 const AuditLogService = require('../../../services/AuditLogService');
 const { isValidDate } = require('../../../utils/dateUtils');
@@ -86,15 +87,17 @@ router.get('/', async (req, res, next) => {
         const guild = req.guild;
         if (guild.members.cache.size < guild.memberCount) await guild.members.fetch();
         const todayStr = CosmosDBService.getTodayDateString();
-        const birthdays = await CosmosDBService.getAllBirthdays();
+        const [birthdays, settings] = await Promise.all([CosmosDBService.getAllBirthdays(), GuildSettingsService.get(guild.id)]);
         res.json({
             today: todayStr,
             items: describeBirthdays(guild, birthdays, todayStr),
+            // From Settings → «Дни рождения» (Azure variables until saved there)
             settings: {
-                checkTime: config.checkTime,
+                checkTime: settings.birthdayCheckTime || config.checkTime,
                 timezone: config.timezone,
-                congratsChannel: channelName(guild, config.congratsChannel || config.birthdayChannel),
-                announceChannel: channelName(guild, config.birthdayChannel)
+                congratsChannel: channelName(guild, settings.birthdayCongratsChannelId || settings.birthdayAnnounceChannelId),
+                announceChannel: channelName(guild, settings.birthdayAnnounceChannelId),
+                canEdit: req.panelRole === 'senior'
             }
         });
     } catch (error) {

@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { apiDelete, apiGet, apiPost, apiPut, describeError } from './api.js';
 import { ErrorState } from './States.jsx';
+import OverflowMenu from './OverflowMenu.jsx';
 import Avatar, { MemberLink } from './Avatar.jsx';
 import Dialog from './Dialog.jsx';
 
@@ -129,10 +130,15 @@ function Row({ item, guildId, onOpenMember, onEdit, onDelete, toast, onChanged, 
             </div>
             {showActions && (
                 <div className="birthday-actions">
-                    {item.inDays === 0 && !item.done && <button className="btn btn-primary" disabled={busy} onClick={() => act('congratulate', `Поздравление для ${item.user.displayName} отправлено`)}>Поздравить сейчас</button>}
-                    {!item.done && <button className="btn btn-quiet" disabled={busy} onClick={() => act('skip', 'В этом году бот его не поздравит')}>Пропустить в этом году</button>}
-                    <button className="btn btn-quiet" onClick={() => onEdit(item)}>Изменить</button>
-                    <button className="btn btn-quiet" onClick={() => onDelete(item)}>Удалить</button>
+                    {/* One main action: congratulate today's, otherwise edit; the rest in «⋯» */}
+                    {item.inDays === 0 && !item.done
+                        ? <button type="button" className="btn btn-primary" disabled={busy} onClick={() => act('congratulate', `Поздравление для ${item.user.displayName} отправлено`)}>Поздравить сейчас</button>
+                        : <button type="button" className="btn" onClick={() => onEdit(item)}>Изменить</button>}
+                    <OverflowMenu label={`Ещё для ${item.user.displayName}`} items={[
+                        !item.done && { label: 'Пропустить в этом году', onSelect: () => act('skip', 'В этом году бот его не поздравит'), disabled: busy },
+                        item.inDays === 0 && !item.done && { label: 'Изменить', onSelect: () => onEdit(item) },
+                        { label: 'Удалить…', onSelect: () => onDelete(item), end: true, danger: true }
+                    ]} />
                 </div>
             )}
         </li>
@@ -175,12 +181,15 @@ function Calendar({ items, today, onOpenMember }) {
                         <div key={day} className={`calendar-day ${isToday ? 'is-today' : ''} ${people.length ? 'has-people' : ''}`}>
                             <span className="calendar-date numeric">{day}</span>
                             <div className="calendar-people">
-                                {people.slice(0, 4).map(item => (
-                                    <button key={item.user.id} className="avatar-button" title={item.user.displayName} onClick={() => onOpenMember(item.user.id)}>
-                                        <Avatar src={item.user.avatarURL} name={item.user.displayName} size={22} />
+                                {people.slice(0, 2).map(item => (
+                                    <button key={item.user.id} type="button" className="calendar-person" title={item.user.displayName} onClick={() => onOpenMember(item.user.id)}>
+                                        <Avatar id={item.user.id} src={item.user.avatarURL} name={item.user.displayName} size={18} />
+                                        <span>{item.user.displayName}</span>
                                     </button>
                                 ))}
-                                {people.length > 4 && <span className="muted small">+{people.length - 4}</span>}
+                                {people.length > 2 && (
+                                    <span className="muted small" title={people.slice(2).map(item => item.user.displayName).join(', ')}>и ещё {people.length - 2}</span>
+                                )}
                             </div>
                         </div>
                     );
@@ -190,7 +199,7 @@ function Calendar({ items, today, onOpenMember }) {
     );
 }
 
-export default function BirthdaysView({ guildId, revision, onOpenMember, toast }) {
+export default function BirthdaysView({ guildId, revision, onOpenMember, onOpenSettings, toast }) {
     const [tab, setTab] = useState('upcoming');
     const [range, setRange] = useState(7);
     const [query, setQuery] = useState('');
@@ -237,9 +246,10 @@ export default function BirthdaysView({ guildId, revision, onOpenMember, toast }
             </div>
             {data && (
                 <p className="muted small">
-                    Бот поздравляет каждый день в {data.settings.checkTime} ({data.settings.timezone})
+                    Поздравляем каждый день в {data.settings.checkTime} ({data.settings.timezone})
                     {data.settings.congratsChannel ? ` в #${data.settings.congratsChannel}` : ', но канал поздравлений не выбран'}.
-                    Время и каналы задаёт администратор бота. Участники сами указывают день рождения командой /birthday-set.
+                    {data.settings.canEdit && <> <button type="button" className="link-button" onClick={() => onOpenSettings('birthdays')}>Изменить</button>.</>}
+                    {' '}Участники сами указывают день рождения командой /birthday-set.
                 </p>
             )}
             {error && <ErrorState what="дни рождения" error={error} onRetry={() => setReload(n => n + 1)} />}

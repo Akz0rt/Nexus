@@ -12,7 +12,11 @@ const ENV_DEFAULTS = {
     unverifiedRoleId: () => config.unverifiedRoleId,
     maleRoleId: () => config.maleRoleId,
     femaleRoleId: () => config.femaleRoleId,
-    verifyQueueChannelId: () => config.verifyQueueChannelId
+    verifyQueueChannelId: () => config.verifyQueueChannelId,
+    // Birthdays (the main server only): when to congratulate and where
+    birthdayCheckTime: () => config.checkTime,
+    birthdayCongratsChannelId: () => config.congratsChannel,
+    birthdayAnnounceChannelId: () => config.birthdayChannel
 };
 
 function parseBool(value) {

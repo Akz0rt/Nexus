@@ -1461,3 +1461,16 @@ body:has(.action-bar) .toasts, body:has(.selection-bar.is-floating) .toasts { bo
 .journal-details dd { margin: 0; overflow-wrap: anywhere; }
 .journal-details dd.message-text { white-space: pre-wrap; }
 .journal-details-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+
+/* ---------- step 7c ---------- */
+
+.diag-fix-toggle { font-size: 12px; }
+.diag-fix { flex-basis: 100%; margin: 4px 0 6px 26px; padding: 10px 12px; border-radius: 8px; background: var(--surface); box-shadow: inset 0 0 0 1px var(--line); display: grid; gap: 8px; justify-items: start; }
+.diag-fix ol { margin: 0; padding-left: 18px; display: grid; gap: 4px; }
+.calendar-person {
+    display: flex; align-items: center; gap: 4px; width: 100%; min-width: 0; padding: 1px 4px 1px 1px;
+    border: 0; border-radius: 999px; background: color-mix(in srgb, var(--ink) 12%, transparent); color: var(--text); cursor: pointer; font-size: 12px; text-align: left;
+}
+.calendar-person:hover { background: color-mix(in srgb, var(--ink) 22%, transparent); }
+.calendar-person span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.calendar-people { display: grid; gap: 3px; }

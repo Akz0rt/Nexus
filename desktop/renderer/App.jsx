@@ -341,7 +341,7 @@ export default function App() {
                         <EventsView key={guildId} guildId={guildId} revision={revision} eventRevision={eventRevision} onOpenMember={setDrawerUserId} toast={toast} />
                     )}
                     {guildId && view === 'birthdays' && (
-                        <BirthdaysView key={guildId} guildId={guildId} revision={revision} onOpenMember={setDrawerUserId} toast={toast} />
+                        <BirthdaysView key={guildId} guildId={guildId} revision={revision} onOpenMember={setDrawerUserId} onOpenSettings={openSettings} toast={toast} />
                     )}
                     {guildId && view === 'activity' && (
                         <ActivityView key={guildId} guildId={guildId} onOpenMember={setDrawerUserId} />

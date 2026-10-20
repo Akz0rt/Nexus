@@ -2,6 +2,7 @@ const express = require('express');
 const config = require('../../../config');
 const AuditLogService = require('../../../services/AuditLogService');
 const CosmosDBService = require('../../../services/CosmosDBService');
+const GuildSettingsService = require('../../../services/GuildSettingsService');
 const VerificationService = require('../../../modules/verification/VerificationService');
 const QueueCardService = require('../../../modules/verification/QueueCardService');
 const ReportService = require('../../../modules/reports/ReportService');
@@ -91,7 +92,7 @@ router.get('/', async (req, res, next) => {
             users,
             report: fresh ? describeReport(guild, fresh) : null,
             birthdays: upcomingBirthdays(guild, birthdays),
-            birthdayCheckTime: config.checkTime
+            birthdayCheckTime: settings?.birthdayCheckTime || (await GuildSettingsService.get(guild.id)).birthdayCheckTime || config.checkTime
         });
     } catch (error) {
         next(error);

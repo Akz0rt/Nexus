@@ -6,6 +6,7 @@ const SECTIONS = [
     { id: 'verification', label: 'Пропуск' },
     { id: 'moderation', label: 'Модерация' },
     { id: 'lockdown', label: 'Lockdown' },
+    { id: 'birthdays', label: 'Дни рождения' },
     { id: 'diagnostics', label: 'Диагностика' }
 ];
 
@@ -18,11 +19,15 @@ const SAVE_ERRORS = {
     invalid_slowmode: 'Такой задержки нет.',
     too_many_channels: 'Не больше 10 каналов.',
     nothing_to_save: 'Нечего сохранять.',
-    invalid_young_days: 'Порог «нового аккаунта» — от 1 до 365 дней.'
+    invalid_young_days: 'Порог «нового аккаунта» — от 1 до 365 дней.',
+    invalid_time: 'Время — в формате ЧЧ:ММ, например 09:00.',
+    not_birthday_guild: 'Дни рождения настраиваются на основном сервере бота.',
+    booster_role_unsafe: 'Роль буст-аккаунтов должна быть без прав и не совпадать с ролями пропуска.'
 };
 
 const LEVEL_MARK = { ok: '✓', warn: '!', bad: '✕' };
-const GROUPS = { intents: 'Intents', permissions: 'Права бота', verification: 'Пропуск', lockdown: 'Lockdown', system: 'Система' };
+const GROUPS = { intents: 'Intents', permissions: 'Права бота', verification: 'Пропуск', lockdown: 'Lockdown', birthdays: 'Дни рождения', system: 'Система' };
+const SECTION_NAMES = { verification: 'Пропуск', lockdown: 'Lockdown', birthdays: 'Дни рождения' };
 
 function slowmodeLabel(seconds) {
     if (seconds < 60) return `${seconds} секунд`;
@@ -140,6 +145,35 @@ function VerificationSection({ guildId, values, options, onSaved, toast }) {
     );
 }
 
+function BirthdaysSection({ guildId, values, options, onSaved, toast }) {
+    const keys = ['birthdayCheckTime', 'birthdayCongratsChannelId', 'birthdayAnnounceChannelId'];
+    const { draft, set, dirty, reset } = useDraft(values, keys);
+    const { busy, error, save } = useSave(guildId, onSaved, toast);
+    const env = key => values.fromEnv.includes(key) && draft[key] === values[key];
+    if (!values.birthdayGuild) {
+        return <p className="notice">Дни рождения у бота общие и настраиваются на его основном сервере. Здесь их поменять нельзя.</p>;
+    }
+    return (
+        <div className="settings-form">
+            <div className="settings-grid">
+                <label className="field">
+                    Во сколько поздравлять
+                    <input type="time" value={draft.birthdayCheckTime} onChange={e => set('birthdayCheckTime', e.target.value)} />
+                    <span className="muted small">По часовому поясу {values.timezone} — он задан в Azure и общий для всего бота.</span>
+                    {env('birthdayCheckTime') && <span className="muted small">Сейчас: из Azure. После сохранения — из настроек сервера.</span>}
+                </label>
+                <span />
+                <ChannelSelect label="Канал поздравлений" value={draft.birthdayCongratsChannelId} channels={options.textChannels}
+                    fromEnv={env('birthdayCongratsChannelId')} onChange={v => set('birthdayCongratsChannelId', v)} />
+                <ChannelSelect label="Канал объявлений «X указал день рождения»" value={draft.birthdayAnnounceChannelId} channels={options.textChannels}
+                    fromEnv={env('birthdayAnnounceChannelId')} onChange={v => set('birthdayAnnounceChannelId', v)} />
+            </div>
+            <p className="muted small">Сохранение сразу переставляет ежедневную проверку на новое время, перезапуск бота не нужен. Если канал поздравлений не выбран, бот поздравляет в канале объявлений.</p>
+            <SaveBar dirty={dirty} busy={busy} error={error} onReset={reset} onSave={() => save(Object.fromEntries(keys.map(k => [k, draft[k]])))} />
+        </div>
+    );
+}
+
 function ModerationSection({ guildId, values, options, onSaved, toast }) {
     const { draft, set, dirty, reset } = useDraft(values, ['reasons', 'escalation']);
     const { busy, error, save } = useSave(guildId, onSaved, toast);
@@ -247,8 +281,9 @@ function LockdownSection({ guildId, values, options, onSaved, toast }) {
     );
 }
 
-function DiagnosticsSection({ guildId }) {
+function DiagnosticsSection({ guildId, onOpenSection }) {
     const [data, setData] = useState(null);
+    const [fixing, setFixing] = useState(null); // label of the line with its steps open
     const [error, setError] = useState(null);
     const [loading, setLoading] = useState(false);
     const run = () => {
@@ -287,6 +322,22 @@ function DiagnosticsSection({ guildId }) {
                                 <span className="diag-mark" aria-hidden="true">{LEVEL_MARK[item.level]}</span>
                                 <span>{item.label}</span>
                                 {item.hint && <span className="muted small">— {item.hint}</span>}
+                                {item.fix && (
+                                    <button type="button" className="link-button diag-fix-toggle" aria-expanded={fixing === item.label}
+                                        onClick={() => setFixing(f => (f === item.label ? null : item.label))}>
+                                        {fixing === item.label ? 'Скрыть' : 'Как исправить'}
+                                    </button>
+                                )}
+                                {item.fix && fixing === item.label && (
+                                    <div className="diag-fix">
+                                        <ol>{item.fix.steps.map(step => <li key={step}>{step}</li>)}</ol>
+                                        {item.fix.section && (
+                                            <button type="button" className="btn btn-small" onClick={() => onOpenSection(item.fix.section)}>
+                                                Открыть раздел «{SECTION_NAMES[item.fix.section]}»
+                                            </button>
+                                        )}
+                                    </div>
+                                )}
                             </li>
                         ))}
                     </ul>
@@ -329,12 +380,13 @@ export default function SettingsView({ guildId, requestedSection, toast }) {
                     ))}
                 </div>
             </div>
-            <p className="muted small">Только для администраторов. Сохраняется для этого сервера и применяется сразу, без перезапуска бота. Время и каналы дней рождения и AI задаёт администратор бота.</p>
+            <p className="muted small">Только для администраторов. Сохраняется для этого сервера и применяется сразу, без перезапуска бота.</p>
             {error && section !== 'diagnostics' && <ErrorState what="настройки" error={error} onRetry={() => setReload(n => n + 1)} />}
             {section === 'verification' && props && <VerificationSection {...props} />}
             {section === 'moderation' && props && <ModerationSection {...props} />}
             {section === 'lockdown' && props && <LockdownSection {...props} />}
-            {section === 'diagnostics' && <DiagnosticsSection guildId={guildId} />}
+            {section === 'birthdays' && props && <BirthdaysSection {...props} />}
+            {section === 'diagnostics' && <DiagnosticsSection guildId={guildId} onOpenSection={setSection} />}
         </section>
     );
 }
