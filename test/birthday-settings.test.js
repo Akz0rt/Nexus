@@ -80,6 +80,13 @@ function guildWith(id) {
         // Applied at once: the check moves to 09:00 without the startup catch-up run, the channel switches
         assert.deepStrictEqual(scheduled.at(-1), { checkTime: '09:00', initialCheck: false });
         assert.strictEqual(channels.congrats, CONGRATS);
+        // A channel cleared in the panel stays cleared — no fallback to Azure's
+        const cleared = await call(MAIN, 'PATCH', { birthdayCongratsChannelId: '' });
+        assert.strictEqual(cleared.body.values.birthdayCongratsChannelId, '');
+        assert.ok(!cleared.body.values.fromEnv.includes('birthdayCongratsChannelId'));
+        // An unchanged (Azure) channel isn't re-checked: changing only the time works
+        delete docs[MAIN];
+        assert.strictEqual((await call(MAIN, 'PATCH', { birthdayCheckTime: '10:30', birthdayCongratsChannelId: '500000000000000009' })).status, 200);
         console.log('birthday settings tests passed');
     } finally {
         server.closeAllConnections?.();

@@ -100,7 +100,9 @@ function useSave(guildId, onSaved, toast) {
         setBusy(false);
         if (!result.ok) { setError(SAVE_ERRORS[result.error] || describeError(result)); return false; }
         onSaved(result.data.values);
-        toast('Настройки сохранены');
+        toast(result.data.warning === 'birthday_apply_failed'
+            ? 'Сохранено, но бот не смог сразу переключиться — проверьте Диагностику, после перезапуска настройки применятся'
+            : 'Настройки сохранены', result.data.warning ? { tone: 'error', ttl: 9000 } : {});
         return true;
     };
     return { busy, error, save };
@@ -150,6 +152,7 @@ function BirthdaysSection({ guildId, values, options, onSaved, toast }) {
     const { draft, set, dirty, reset } = useDraft(values, keys);
     const { busy, error, save } = useSave(guildId, onSaved, toast);
     const env = key => values.fromEnv.includes(key) && draft[key] === values[key];
+    const textOnly = options.textChannels.filter(channel => !channel.forum);
     if (!values.birthdayGuild) {
         return <p className="notice">Дни рождения у бота общие и настраиваются на его основном сервере. Здесь их поменять нельзя.</p>;
     }
@@ -163,13 +166,14 @@ function BirthdaysSection({ guildId, values, options, onSaved, toast }) {
                     {env('birthdayCheckTime') && <span className="muted small">Сейчас: из Azure. После сохранения — из настроек сервера.</span>}
                 </label>
                 <span />
-                <ChannelSelect label="Канал поздравлений" value={draft.birthdayCongratsChannelId} channels={options.textChannels}
+                <ChannelSelect label="Канал поздравлений" value={draft.birthdayCongratsChannelId} channels={textOnly}
                     fromEnv={env('birthdayCongratsChannelId')} onChange={v => set('birthdayCongratsChannelId', v)} />
-                <ChannelSelect label="Канал объявлений «X указал день рождения»" value={draft.birthdayAnnounceChannelId} channels={options.textChannels}
+                <ChannelSelect label="Канал объявлений «X указал день рождения»" value={draft.birthdayAnnounceChannelId} channels={textOnly}
                     fromEnv={env('birthdayAnnounceChannelId')} onChange={v => set('birthdayAnnounceChannelId', v)} />
             </div>
-            <p className="muted small">Сохранение сразу переставляет ежедневную проверку на новое время, перезапуск бота не нужен. Если канал поздравлений не выбран, бот поздравляет в канале объявлений.</p>
-            <SaveBar dirty={dirty} busy={busy} error={error} onReset={reset} onSave={() => save(Object.fromEntries(keys.map(k => [k, draft[k]])))} />
+            <p className="muted small">Сохранение сразу переставляет ежедневную проверку на новое время, перезапуск бота не нужен. Если канал поздравлений не выбран, бот поздравляет в канале объявлений; «не выбран» у обоих — не поздравляет вовсе.</p>
+            <SaveBar dirty={dirty} busy={busy} error={error} onReset={reset}
+                onSave={() => save(Object.fromEntries(keys.filter(k => draft[k] !== values[k]).map(k => [k, draft[k]])))} />
         </div>
     );
 }

@@ -18,6 +18,12 @@ const MAX_RULES = 6;
 const MAX_LOCKDOWN_CHANNELS = 10;
 const TEXT_TYPES = new Set([ChannelType.GuildText, ChannelType.GuildAnnouncement, ChannelType.GuildForum]);
 
+/** «9:00» from Azure → «09:00», which <input type="time"> understands */
+function hhmm(time) {
+    const match = /^(\d{1,2}):(\d{2})$/.exec(String(time || ''));
+    return match ? `${match[1].padStart(2, '0')}:${match[2]}` : '00:00';
+}
+
 function fail(field, code) {
     return { ok: false, field, code };
 }
@@ -128,8 +134,9 @@ function sanitize(guild, body, current) {
         for (const key of ['birthdayCongratsChannelId', 'birthdayAnnounceChannelId']) {
             if (!(key in body)) continue;
             const id = String(body[key] || '');
-            // A plain text channel: the bot posts messages there (a forum takes threads only)
-            if (id && !guild.channels.cache.get(id)?.isTextBased?.()) return fail(key, 'channel_not_found');
+            // A plain text channel: the bot posts messages there (a forum takes threads only).
+            // The value it already has isn't checked again (it may come from Azure)
+            if (id && id !== current[key] && !guild.channels.cache.get(id)?.isTextBased?.()) return fail(key, 'channel_not_found');
             patch[key] = id;
             fields.push(key);
         }
@@ -146,7 +153,7 @@ function describeSettings(settings) {
         femaleRoleId: settings.femaleRoleId || '',
         boosterRoleId: settings.boosterRoleId || '',
         verifyQueueChannelId: settings.verifyQueueChannelId || '',
-        birthdayCheckTime: settings.birthdayCheckTime || '00:00',
+        birthdayCheckTime: hhmm(settings.birthdayCheckTime),
         birthdayCongratsChannelId: settings.birthdayCongratsChannelId || '',
         birthdayAnnounceChannelId: settings.birthdayAnnounceChannelId || '',
         timezone: config.timezone,
@@ -171,7 +178,7 @@ function describeOptions(guild) {
         textChannels: [...guild.channels.cache.values()]
             .filter(channel => TEXT_TYPES.has(channel.type))
             .sort((a, b) => (a.parent?.rawPosition ?? -1) - (b.parent?.rawPosition ?? -1) || a.rawPosition - b.rawPosition)
-            .map(channel => ({ id: channel.id, name: channel.name, category: channel.parent?.name || null })),
+            .map(channel => ({ id: channel.id, name: channel.name, category: channel.parent?.name || null, forum: channel.type === ChannelType.GuildForum })),
         muteDurations: Object.entries(MUTE_DURATIONS).map(([id, { label, ms }]) => ({ id, label, ms })),
         slowmodeChoices: SLOWMODE_CHOICES,
         warnTtlDays: WARN_TTL_DAYS
@@ -197,8 +204,12 @@ router.patch('/', async (req, res, next) => {
 
         await GuildSettingsService.update(guild.id, result.patch);
         // The daily check moves to the new time, the channels switch — no restart
+        let warning = null;
         if (result.fields.some(field => field.startsWith('birthday'))) {
-            await applySettings(state.client).catch(error => console.error('Settings: applying birthday settings failed:', error.message || error));
+            await applySettings(state.client).catch(error => {
+                console.error('Settings: applying birthday settings failed:', error.message || error);
+                warning = 'birthday_apply_failed';
+            });
         }
         const actor = actorOf(req);
         await AuditLogService.log({
@@ -209,7 +220,7 @@ router.patch('/', async (req, res, next) => {
             source: 'panel',
             details: { fields: result.fields }
         });
-        res.json({ ok: true, values: { ...describeSettings(await GuildSettingsService.get(guild.id)), birthdayGuild: guild.id === birthdayGuildId(state.client) } });
+        res.json({ ok: true, warning, values: { ...describeSettings(await GuildSettingsService.get(guild.id)), birthdayGuild: guild.id === birthdayGuildId(state.client) } });
     } catch (error) {
         next(error);
     }

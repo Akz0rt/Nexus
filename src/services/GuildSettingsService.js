@@ -19,6 +19,9 @@ const ENV_DEFAULTS = {
     birthdayAnnounceChannelId: () => config.birthdayChannel
 };
 
+// Keys the panel may switch off on purpose: a saved '' means «none», not «use Azure»
+const CLEARABLE = new Set(['birthdayCongratsChannelId', 'birthdayAnnounceChannelId']);
+
 function parseBool(value) {
     if (value === undefined || value === null || value === '') return undefined;
     return String(value).toLowerCase() === 'true';
@@ -75,7 +78,7 @@ class GuildSettingsService {
 
         for (const [key, envFn] of Object.entries(ENV_DEFAULTS)) {
             const docValue = doc?.[key];
-            result[key] = docValue !== undefined && docValue !== ''
+            result[key] = docValue !== undefined && (docValue !== '' || CLEARABLE.has(key))
                 ? docValue
                 : (useEnv ? envFn() || undefined : undefined);
         }
@@ -134,7 +137,7 @@ class GuildSettingsService {
 
         // Which env-backed keys come from env rather than the guild doc (shown in Settings)
         result.fromEnv = Object.keys(ENV_DEFAULTS).filter(key =>
-            (doc?.[key] === undefined || doc[key] === '') && result[key] !== undefined);
+            (doc?.[key] === undefined || (doc[key] === '' && !CLEARABLE.has(key))) && result[key] !== undefined);
 
         return result;
     }

@@ -83,10 +83,11 @@ module.exports = {
             // Announce it in the channel from Settings → «Дни рождения»
             const birthdayChannel = NotificationService.announceChannel;
             if (birthdayChannel) {
+                // Saved already: a channel the bot can't write to only loses the announcement
                 await birthdayChannel.send({
                     content: `${interaction.user} указал(а) день рождения — поздравим ${String(inputDay).padStart(2, '0')}.${String(inputMonth).padStart(2, '0')}! 🎉`,
                     allowedMentions: { parse: [] }
-                });
+                }).catch(error => console.error('birthday-set: announcement failed:', error.message || error));
             }
 
         } catch (error) {

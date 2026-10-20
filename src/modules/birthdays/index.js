@@ -22,9 +22,14 @@ async function fetchChannelById(client, channelId, label) {
     }
 }
 
-/** Birthdays are one list for the bot: they belong to the main server (GUILD_ID, or the only one) */
+/**
+ * Birthdays are one list for the bot: they belong to the main server — GUILD_ID, or
+ * without it the lowest server id (the same one after every restart, joins and leaves aside)
+ */
 function birthdayGuildId(client) {
-    return config.guildId || client?.guilds?.cache.values().next().value?.id || null;
+    if (config.guildId) return config.guildId;
+    const ids = [...(client?.guilds?.cache.keys() || [])];
+    return ids.length ? ids.reduce((low, id) => (BigInt(id) < BigInt(low) ? id : low)) : null;
 }
 
 /**

@@ -2,6 +2,8 @@ const cron = require('node-cron');
 const config = require('../config');
 const NotificationService = require('./NotificationService');
 
+const TIME_RE = /^([01]?\d|2[0-3]):[0-5]\d$/;
+
 class SchedulerService {
     constructor() {
         this.checkTime = config.checkTime;
@@ -23,9 +25,13 @@ class SchedulerService {
      *   reschedules without the catch-up check (that one runs once, at startup)
      */
     start({ checkTime, initialCheck = true } = {}) {
+        // A malformed time (a hand-edited value, CHECK_TIME="9") falls back instead of leaving no job
+        const time = [checkTime, this.checkTime, config.checkTime, '00:00'].find(value => TIME_RE.test(String(value || '')));
+        if (time !== checkTime && checkTime) console.error(`Birthday check time "${checkTime}" is not HH:MM — using ${time}`);
+
         // Stop any existing jobs
         this.stop();
-        if (checkTime) this.checkTime = checkTime;
+        this.checkTime = time;
 
         // Perform initial check
         if (initialCheck) this.checkBirthdays();

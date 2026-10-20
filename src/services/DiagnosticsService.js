@@ -3,6 +3,7 @@ const GuildSettingsService = require('./GuildSettingsService');
 const AuditLogService = require('./AuditLogService');
 const InviteTracker = require('../modules/invites/InviteTracker');
 const { birthdayGuildId } = require('../modules/birthdays');
+const config = require('../config');
 
 const DB_TIMEOUT_MS = 5000;
 
@@ -133,6 +134,10 @@ async function run(guild, { database = pingDatabase } = {}) {
     }
 
     // Birthdays: the main server only (one list for the bot)
+    if (!config.guildId && (client?.guilds?.cache.size || 0) > 1) {
+        checks.push(check('birthdays', 'Основной сервер бота', 'warn', 'GUILD_ID не задан — дни рождения привязаны к самому старому серверу',
+            { steps: ['Azure → App Service → Configuration → GUILD_ID: укажите ID основного сервера.', 'Перезапустите бота: App Service → Restart.'] }));
+    }
     if (guild.id === birthdayGuildId(client)) {
         const channelId = settings.birthdayCongratsChannelId || settings.birthdayAnnounceChannelId;
         const channel = channelId ? guild.channels.cache.get(channelId) : null;
