@@ -29,14 +29,38 @@ const UNDO = {
     'verification.approved': (guild, entry, actor) => VerificationService.undoApprove(guild, entry.targetIds[0], actor, 'panel', { fromJournal: true }),
     'booster.passed': async (guild, entry, actor) => {
         const failed = [];
-        for (const userId of entry.targetIds.slice(0, MAX_UNDO_TARGETS)) {
+        for (const userId of entry.targetIds) {
             const result = await BoosterPassService.release(guild, userId, actor);
-            if (!result.ok) failed.push({ userId, code: result.code });
+            // Already released (or gone): nothing left to undo for that one
+            if (!result.ok && result.code !== 'pass_not_found') failed.push({ userId, code: result.code });
         }
-        return failed.length === Math.min(entry.targetIds.length, MAX_UNDO_TARGETS) ? { ok: false, code: failed[0].code } : { ok: true, failed };
+        return failed.length === entry.targetIds.length ? { ok: false, code: failed[0].code } : { ok: true, failed };
     }
 };
 const UNDOABLE = new Set(Object.keys(UNDO));
+
+// The state the entry made is gone already: the entry is marked, so the button doesn't stay forever
+const OUTDATED = new Set(['warning_not_found', 'not_muted', 'not_banned', 'member_left', 'nothing_to_undo', 'pass_not_found']);
+// Per-person actions that a later one of the same kind replaces (an old mute must not lift a newer one)
+const SUPERSEDED_BY_LATER = new Set(['moderation.muted', 'moderation.banned', 'verification.approved', 'roles.added', 'roles.removed']);
+const SAME_ROLE_ACTIONS = { 'roles.added': ['roles.added', 'roles.removed'], 'roles.removed': ['roles.added', 'roles.removed'] };
+const MAX_LATER_CHECKS = 10;
+
+/** Is there a newer entry about the same person (and role) that this undo would trample? */
+async function hasNewer(guild, entry) {
+    if (!SUPERSEDED_BY_LATER.has(entry.action)) return false;
+    const actions = SAME_ROLE_ACTIONS[entry.action] || [entry.action];
+    // Big role groups: checking everyone would be a query each; a newer change for them is caught by roleProblem/no-ops
+    for (const targetId of entry.targetIds.slice(0, MAX_LATER_CHECKS)) {
+        for (const action of actions) {
+            const { items } = await AuditLogService.query({ guildId: guild.id, targetId, action, since: entry.createdAt }, { limit: 20 });
+            const later = items.find(other => other.id !== entry.id && other.createdAt > entry.createdAt
+                && (!SAME_ROLE_ACTIONS[entry.action] || other.details?.roleId === entry.details?.roleId));
+            if (later) return true;
+        }
+    }
+    return false;
+}
 
 // GET /audit?action&actorId&targetId&source&since&until&limit&cursor
 router.get('/', async (req, res, next) => {
@@ -85,9 +109,18 @@ router.post('/:entryId/undo', async (req, res, next) => {
         if (!entry || !canSeeEntry(guild, viewer, entry)) return res.status(404).json({ error: 'entry_not_found' });
         if (!UNDOABLE.has(entry.action) || !(entry.targetIds || []).length) return res.status(400).json({ error: 'cannot_undo' });
         if (entry.undoneAt) return res.status(409).json({ error: 'already_undone' });
+        // Big groups (the journal keeps up to 1000 ids of them) are undone from the Roles screen, not one click here
+        if (entry.targetIds.length > MAX_UNDO_TARGETS || (entry.details?.count || 0) > entry.targetIds.length) {
+            return res.status(409).json({ error: 'too_many_to_undo' });
+        }
+        if (await hasNewer(guild, entry)) return res.status(409).json({ error: 'newer_action' });
         const actor = actorOf(req);
         const result = await UNDO[entry.action](guild, entry, actor);
-        if (!result.ok) return res.status(result.code === 'forbidden' ? 403 : 409).json({ error: result.code });
+        if (!result.ok) {
+            const outdated = OUTDATED.has(result.code);
+            if (outdated) await AuditLogService.markUndone(entry, actor, { outdated: true });
+            return res.status(result.code === 'forbidden' ? 403 : 409).json({ error: result.code, outdated });
+        }
         const failed = result.failed || [];
         // A group undone only partly stays undoable for the rest
         if (failed.length === 0) await AuditLogService.markUndone(entry, actor);

@@ -30,9 +30,13 @@ const EXTRA = '700000000000000003';
 const entries = new Map();
 const logged = [];
 AuditLogService.get = async (guildId, id) => entries.get(id) || null;
-AuditLogService.markUndone = async (entry, actor) => { entries.set(entry.id, { ...entry, undoneAt: 'now', undoneBy: actor.id }); };
+AuditLogService.markUndone = async (entry, actor, { outdated = false } = {}) => { entries.set(entry.id, { ...entry, undoneAt: 'now', undoneBy: actor.id, outdated }); };
+AuditLogService.query = async ({ targetId, action, since }) => ({
+    items: [...entries.values()].filter(e => e.action === action && e.targetIds.includes(targetId) && e.createdAt >= since).sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+});
 AuditLogService.log = async entry => { logged.push(entry); return entry; };
-const add = (id, action, targetIds, details = {}) => entries.set(id, { id, action, targetIds, details, guildId: 'g', createdAt: new Date().toISOString() });
+let clock = Date.parse('2026-10-20T10:00:00Z');
+const add = (id, action, targetIds, details = {}) => entries.set(id, { id, action, targetIds, details, guildId: 'g', createdAt: new Date(clock += 1000).toISOString() });
 
 const calls = [];
 ModerationService.unwarn = async (guild, warnId) => { calls.push(`unwarn ${warnId}`); return { ok: true }; };
@@ -68,6 +72,9 @@ guild.memberCount = guild.members.cache.size;
         { date: '2026-10-20', approved: 1, kicked: 0 }
     ]);
 
+    // Around the clock change (Berlin, 25.10) every day is there once
+    assert.deepStrictEqual(dailyDecisions([], 3, 'Europe/Berlin', Date.parse('2026-10-26T23:30:00Z')).map(d => d.date), ['2026-10-25', '2026-10-26', '2026-10-27']);
+
     let token = 'mod';
     PanelSessionService.get = async t => ({ mod: { userId: MOD, username: 'mod' }, helper: { userId: HELPER, username: 'helper' } }[t] || null);
     state.client = { isReady: () => true, guilds: { cache: new Map([[guild.id, guild]]) } };
@@ -84,8 +91,18 @@ guild.memberCount = guild.members.cache.size;
         assert.strictEqual((await undo('w')).body.error, 'already_undone', 'not twice');
 
         add('m', 'moderation.muted', [NEWBIE]);
-        assert.strictEqual((await undo('m')).body.error, 'not_muted', 'the service says why');
-        assert.ok(!entries.get('m').undoneAt);
+        const stale = await undo('m');
+        assert.strictEqual(stale.body.error, 'not_muted', 'the service says why');
+        assert.strictEqual(stale.body.outdated, true);
+        assert.ok(entries.get('m').outdated, 'nothing left to undo: the entry stops offering it');
+
+        // An older mute must not lift a newer one
+        add('m1', 'moderation.muted', [HELPER]);
+        add('m2', 'moderation.muted', [HELPER]);
+        assert.strictEqual((await undo('m1')).body.error, 'newer_action');
+        // A group bigger than one click undoes
+        add('big', 'roles.added', Array.from({ length: 101 }, (_, i) => `4000000000000${String(i).padStart(5, '0')}`), { roleId: EXTRA });
+        assert.strictEqual((await undo('big')).body.error, 'too_many_to_undo');
 
         add('x', 'moderation.kicked', [NEWBIE]);
         assert.strictEqual((await undo('x')).body.error, 'cannot_undo');

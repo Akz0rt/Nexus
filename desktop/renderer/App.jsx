@@ -299,7 +299,7 @@ export default function App() {
                         </div>
                     )}
                     {guildId && view === 'overview' && (
-                        <OverviewView guildId={guildId} revision={revision} voiceRevision={voiceRevision} waiting={waiting} seen={seen}
+                        <OverviewView key={guildId} guildId={guildId} revision={revision} voiceRevision={voiceRevision} waiting={waiting} seen={seen}
                             onView={setView} onOpenMember={setDrawerUserId} onChanged={() => setReloadWaiting(n => n + 1)} toast={toast}
                             openReports={openReports} lockdown={lockdown}
                             onOpenTab={(next, tab) => {
@@ -310,6 +310,7 @@ export default function App() {
                     )}
                     {guildId && view === 'queue' && (
                         <QueueView
+                            key={guildId}
                             guildId={guildId}
                             waiting={waiting}
                             seen={seen}
@@ -323,36 +324,36 @@ export default function App() {
                         />
                     )}
                     {guildId && view === 'voice' && (
-                        <VoiceView guildId={guildId} myId={me?.id} revision={revision} voiceRevision={voiceRevision}
+                        <VoiceView key={guildId} guildId={guildId} myId={me?.id} revision={revision} voiceRevision={voiceRevision}
                             onOpenMember={setDrawerUserId} toast={toast} />
                     )}
                     {guildId && view === 'roles' && guild?.can?.roles && (
-                        <RolesView guildId={guildId} revision={revision} job={roleJob} onJob={updateJob} onOpenMember={setDrawerUserId} toast={toast} />
+                        <RolesView key={guildId} guildId={guildId} revision={revision} job={roleJob} onJob={updateJob} onOpenMember={setDrawerUserId} toast={toast} />
                     )}
                     {guildId && view === 'moderation' && (
-                        <ModerationView guildId={guildId} revision={moderationRevision} openReports={openReports} requestedTab={moderationTab} myId={me?.id}
+                        <ModerationView key={guildId} guildId={guildId} revision={moderationRevision} openReports={openReports} requestedTab={moderationTab} myId={me?.id}
                             onOpenMember={setDrawerUserId} toast={toast} />
                     )}
                     {guildId && view === 'journal' && (
-                        <JournalView guildId={guildId} liveEvents={liveEvents} preset={journalPreset} onOpenMember={setDrawerUserId} toast={toast} />
+                        <JournalView key={guildId} guildId={guildId} liveEvents={liveEvents} preset={journalPreset} onOpenMember={setDrawerUserId} toast={toast} />
                     )}
                     {guildId && view === 'events' && (
-                        <EventsView guildId={guildId} revision={revision} eventRevision={eventRevision} onOpenMember={setDrawerUserId} toast={toast} />
+                        <EventsView key={guildId} guildId={guildId} revision={revision} eventRevision={eventRevision} onOpenMember={setDrawerUserId} toast={toast} />
                     )}
                     {guildId && view === 'birthdays' && (
-                        <BirthdaysView guildId={guildId} revision={revision} onOpenMember={setDrawerUserId} toast={toast} />
+                        <BirthdaysView key={guildId} guildId={guildId} revision={revision} onOpenMember={setDrawerUserId} toast={toast} />
                     )}
                     {guildId && view === 'activity' && (
-                        <ActivityView guildId={guildId} onOpenMember={setDrawerUserId} />
+                        <ActivityView key={guildId} guildId={guildId} onOpenMember={setDrawerUserId} />
                     )}
                     {guildId && view === 'economy' && (
-                        <EconomyView guildId={guildId} revision={revision} onOpenMember={setDrawerUserId} toast={toast} />
+                        <EconomyView key={guildId} guildId={guildId} revision={revision} onOpenMember={setDrawerUserId} toast={toast} />
                     )}
                     {guildId && view === 'stats' && (
-                        <StatsView guildId={guildId} revision={revision} onOpenMember={setDrawerUserId} onOpenJournal={openJournal} />
+                        <StatsView key={guildId} guildId={guildId} revision={revision} onOpenMember={setDrawerUserId} onOpenJournal={openJournal} />
                     )}
                     {guildId && view === 'settings' && senior && (
-                        <SettingsView guildId={guildId} requestedSection={settingsSection} toast={toast} />
+                        <SettingsView key={guildId} guildId={guildId} requestedSection={settingsSection} toast={toast} />
                     )}
                 </main>
             </div>

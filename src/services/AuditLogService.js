@@ -133,9 +133,9 @@ class AuditLogService {
     }
 
     /** Mark an entry as undone from the journal (who and when), so the button doesn't come back */
-    async markUndone(entry, actor) {
+    async markUndone(entry, actor, { outdated = false } = {}) {
         await this.initialize();
-        const updated = { ...entry, undoneBy: actor.id, undoneByTag: actor.tag || null, undoneAt: new Date().toISOString() };
+        const updated = { ...entry, undoneBy: actor.id, undoneByTag: actor.tag || null, undoneAt: new Date().toISOString(), ...(outdated ? { outdated: true } : {}) };
         for (const field of ['_rid', '_self', '_etag', '_attachments', '_ts']) delete updated[field];
         await this.container.items.upsert(updated);
         return updated;

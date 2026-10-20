@@ -29,8 +29,10 @@ const CATEGORIES = {
  */
 function dailyDecisions(cards, days, timeZone = config.timezone, now = Date.now()) {
     const dayOf = at => new Date(at).toLocaleDateString('sv-SE', { timeZone });
+    // Count back by calendar date: a clock change never skips or repeats a day
+    const [y, m, d] = dayOf(now).split('-').map(Number);
     const series = new Map();
-    for (let i = days - 1; i >= 0; i--) series.set(dayOf(now - i * DAY_MS), { approved: 0, kicked: 0 });
+    for (let i = days - 1; i >= 0; i--) series.set(new Date(Date.UTC(y, m - 1, d - i)).toISOString().slice(0, 10), { approved: 0, kicked: 0 });
     for (const card of cards) {
         const day = series.get(dayOf(card.handledAt));
         if (day && (card.status === 'approved' || card.status === 'kicked')) day[card.status]++;

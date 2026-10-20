@@ -99,15 +99,19 @@ export default function JournalView({ guildId, liveEvents, preset, onOpenMember,
     const [busy, setBusy] = useState(false);
     const [undone, setUndone] = useState({});      // entry id -> undone here just now
 
+    const request = useRef(0);
     const load = async nextCursor => {
+        const mine = ++request.current;
         setLoading(true);
         try {
             const page = await apiGet(`/guilds/${guildId}/audit${buildQuery(filters, nextCursor)}`);
+            if (mine !== request.current) return; // filters changed meanwhile: a newer request owns the list
             setItems(list => (nextCursor ? [...list, ...page.items] : page.items));
             setUsers(map => ({ ...map, ...page.users }));
             setCursor(page.cursor);
             setError(null);
         } catch (err) {
+            if (mine !== request.current) return;
             setError(err);
         }
         setLoading(false);
@@ -133,7 +137,12 @@ export default function JournalView({ guildId, liveEvents, preset, onOpenMember,
         setBusy(true);
         const result = await apiPost(`/guilds/${guildId}/audit/${entry.id}/undo`);
         setBusy(false);
-        if (!result.ok) { toast(describeError(result), { tone: 'error' }); return; }
+        if (!result.ok) {
+            // Nothing left to undo: the row stops offering it
+            if (result.body?.outdated) { setUndone(map => ({ ...map, [entry.id]: 'outdated' })); setUndoing(null); }
+            toast(describeError(result), { tone: 'error' });
+            return;
+        }
         setUndoing(null);
         const failed = result.data.failed || [];
         if (failed.length === 0) setUndone(map => ({ ...map, [entry.id]: true }));
@@ -219,7 +228,8 @@ export default function JournalView({ guildId, liveEvents, preset, onOpenMember,
                             const isOpen = open === entry.id;
                             const targets = entry.targetIds || [];
                             const wasUndone = entry.undoneAt || undone[entry.id];
-                            const canUndo = UNDO_LABELS[entry.action] && targets.length > 0 && !wasUndone;
+                            const canUndo = UNDO_LABELS[entry.action] && targets.length > 0 && targets.length <= 100 && !wasUndone;
+                            const outdated = entry.outdated || undone[entry.id] === 'outdated';
                             const extra = reasonText(entry);
                             return (
                                 <li key={entry.id} className={`journal-row ${isOpen ? 'is-open' : ''}`}>
@@ -239,7 +249,7 @@ export default function JournalView({ guildId, liveEvents, preset, onOpenMember,
                                             ))}
                                             {targets.length > TARGETS_SHOWN && <span className="muted"> и ещё {targets.length - TARGETS_SHOWN}</span>}
                                             <span className="journal-what"> · {journalWhat(entry)}</span>
-                                            {wasUndone && <span className="journal-undone">отменено</span>}
+                                            {wasUndone && <span className="journal-undone">{outdated ? 'неактуально' : 'отменено'}</span>}
                                         </span>
                                         <time className="muted small numeric" dateTime={entry.createdAt} title={formatDateTime(entry.createdAt, true)}>{timeAgo(entry.createdAt)}</time>
                                         <button type="button" className="journal-toggle" aria-expanded={isOpen} aria-label={isOpen ? 'Скрыть подробности' : 'Подробности'}
@@ -254,7 +264,7 @@ export default function JournalView({ guildId, liveEvents, preset, onOpenMember,
                                                 <div><dt>Где</dt><dd>{SOURCE_LABELS[entry.source] || entry.source}</dd></div>
                                                 {extra && <div><dt>{entry.action.startsWith('message.') ? 'Текст' : 'Причина'}</dt><dd className={entry.action.startsWith('message.') ? 'message-text' : ''}>{extra}</dd></div>}
                                                 {targets.length > TARGETS_SHOWN && <div><dt>Все</dt><dd>{namesOf(entry).join(', ')}</dd></div>}
-                                                {wasUndone && <div><dt>Отменил</dt><dd>{entry.undoneByTag || (undone[entry.id] ? 'вы' : '—')}{entry.undoneAt && ` · ${formatDateTime(entry.undoneAt)}`}</dd></div>}
+                                                {wasUndone && <div><dt>{outdated ? 'Проверил' : 'Отменил'}</dt><dd>{entry.undoneByTag || (undone[entry.id] ? 'вы' : '—')}{entry.undoneAt && ` · ${formatDateTime(entry.undoneAt)}`}</dd></div>}
                                             </dl>
                                             <div className="journal-details-actions">
                                                 {entry.actorId && <button type="button" className="btn btn-small" onClick={() => setFilter('actorId', entry.actorId)}>Только этот модератор</button>}

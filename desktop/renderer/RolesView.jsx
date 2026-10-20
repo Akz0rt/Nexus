@@ -161,7 +161,7 @@ function RolesTab({ guildId, roles, revision, onOpenMember, onStartJob, toast })
                     ))}
                 </ul>
                 {role
-                    ? <Owners guildId={guildId} role={role} revision={revision} dialogOpen={Boolean(dialog)} onOpenMember={onOpenMember}
+                    ? <Owners key={role.id} guildId={guildId} role={role} revision={revision} dialogOpen={Boolean(dialog)} onOpenMember={onOpenMember}
                         onStartJob={onStartJob} onGrant={r => setDialog({ roleId: r.id, add: true, filter: { type: 'role' } })} />
                     : <EmptyState icon="roles" title={query ? 'Таких ролей нет' : 'На сервере нет ролей'} />}
             </div>

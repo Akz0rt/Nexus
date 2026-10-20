@@ -9,7 +9,7 @@ function shortDate(date) {
 function ticksFor(max) {
     const raw = max / 2;
     const magnitude = 10 ** Math.floor(Math.log10(raw || 1));
-    const step = [1, 2, 2.5, 5, 10].map(m => m * magnitude).find(s => s >= raw) || raw;
+    const step = [1, 2, 5, 10].map(m => m * magnitude).find(s => s >= raw) || raw;
     const whole = Math.max(1, step); // counts and minutes: no «0,5»
     return [0, whole, whole * 2];
 }
@@ -22,6 +22,7 @@ function ticksFor(max) {
  */
 export default function DailyBars({ title, series, parts, format = n => n.toLocaleString('ru-RU'), tickFormat = format, markToday = false }) {
     const [hover, setHover] = useState(null);
+    if (!series?.length) return null;
     const totalOf = d => parts.reduce((sum, part) => sum + part.valueOf(d), 0);
     const ticks = ticksFor(Math.max(1, ...series.map(totalOf)));
     const top = ticks[2];
