@@ -78,13 +78,15 @@ export default function CommandBar({ guildId, canLockdown, senior, actions, toas
 
     useEffect(() => { setChannels(null); setMembers({ q: '', items: [] }); }, [guildId]);
 
-    // Voice channels once the bar is used (the board, without the people)
+    // Voice channels each time the bar opens: who is where changes all the time
     useEffect(() => {
-        if (!open || channels || !guildId) return;
+        if (!open || !guildId) return undefined;
+        let cancelled = false;
         apiGet(`/guilds/${guildId}/voice`)
-            .then(board => setChannels(board.categories.flatMap(c => c.channels.map(ch => ({ id: ch.id, name: ch.name, people: ch.members.length, category: c.name })))))
-            .catch(() => setChannels([]));
-    }, [open, channels, guildId]);
+            .then(board => { if (!cancelled) setChannels(board.categories.flatMap(c => c.channels.map(ch => ({ id: ch.id, name: ch.name, people: ch.members.length, category: c.name })))); })
+            .catch(() => { if (!cancelled) setChannels(list => list || []); });
+        return () => { cancelled = true; };
+    }, [open, guildId]);
 
     useEffect(() => {
         const q = memberQuery.trim();
@@ -126,6 +128,7 @@ export default function CommandBar({ guildId, canLockdown, senior, actions, toas
     const add = (group, item) => items.push({ group, ...item });
     const typed = query.trim();
     const searching = memberQuery.trim().length >= 2 && members.q !== memberQuery.trim();
+    const shownMembers = searching ? [] : members.items;
 
     if (command) {
         const { kind } = command;
@@ -135,13 +138,15 @@ export default function CommandBar({ guildId, canLockdown, senior, actions, toas
                 disabled: !canLockdown, hint: 'только администраторам', run: () => actions.onLockdown()
             });
         } else if (kind === 'move') {
-            const from = findChannels(channels || [], command.from).slice(0, 2);
-            const to = command.to ? findChannels(channels || [], command.to).slice(0, 2) : [];
+            const split = command.splits.find(s => findChannels(channels || [], s.from).length && findChannels(channels || [], s.to).length)
+                || { from: command.from, to: command.to };
+            const from = findChannels(channels || [], split.from).slice(0, 2);
+            const to = split.to ? findChannels(channels || [], split.to).slice(0, 2) : [];
             if (command.missing || from.length === 0 || to.length === 0) {
                 add('commands', {
                     key: 'move-hint', icon: 'voice', label: 'Перенести всех из канала в канал', disabled: true,
                     sub: command.missing ? `допишите, ${command.missing}: «перенести Болталка в Мафия»`
-                        : from.length === 0 ? `нет канала «${command.from}»` : `нет канала «${command.to}»`
+                        : from.length === 0 ? `нет канала «${split.from}»` : `нет канала «${split.to}»`
                 });
             }
             for (const source of from) {
@@ -157,20 +162,21 @@ export default function CommandBar({ guildId, canLockdown, senior, actions, toas
         } else if (command.missing === 'ник') {
             add('commands', { key: 'need-member', icon: 'search', label: `${KIND_LABELS[kind]}: кому?`, sub: 'допишите ник, ID или @упоминание', disabled: true });
         } else {
-            for (const member of members.items) {
+            if (searching) add('commands', { key: 'searching', icon: 'search', label: 'Ищем…', disabled: true });
+            for (const member of shownMembers) {
                 const base = { key: `${kind}-${member.id}`, member };
                 if (kind === 'mute') {
                     const option = command.durationMs && matchDuration(command.durationMs, options?.muteDurations);
                     add('commands', {
                         ...base, label: `Мут${option ? ` на ${option.label}` : ''}: ${member.displayName}`, sub: command.reason || 'причину спросим в диалоге',
-                        disabled: !option, hint: command.durationMs ? 'такого срока нет: 10м, 1ч, 6ч, 1д, 7д' : 'допишите срок: 10м, 1ч, 6ч, 1д, 7д',
+                        disabled: !option, hint: !options ? 'загружаем сроки…' : command.durationMs ? 'такого срока нет: 10м, 1ч, 6ч, 1д, 7д' : 'допишите срок: 10м, 1ч, 6ч, 1д, 7д',
                         run: () => setDialog({ type: 'punish', kind, member, initial: { duration: option.id, reason: command.reason } })
                     });
                 } else if (kind === 'ban') {
                     const option = command.durationMs ? matchDuration(command.durationMs, options?.banDurations) : { id: 'forever', label: 'навсегда' };
                     add('commands', {
                         ...base, label: `Бан ${option ? option.label : durationLabel(command.durationMs)}: ${member.displayName}`, sub: command.reason || 'причину спросим в диалоге',
-                        disabled: !option, hint: 'такого срока нет: 7д, 30д или без срока — навсегда',
+                        disabled: !option, hint: !options ? 'загружаем сроки…' : 'такого срока нет: 7д, 30д или без срока — навсегда',
                         run: () => setDialog({ type: 'punish', kind, member, initial: { duration: option.id, reason: command.reason } })
                     });
                 } else if (kind === 'warn' || kind === 'kick') {
@@ -187,10 +193,10 @@ export default function CommandBar({ guildId, canLockdown, senior, actions, toas
                         run: () => approve(member, command.gender)
                     });
                 } else if (kind === 'booster') {
-                    const days = command.durationMs ? Math.round(command.durationMs / DAY_MS) : null;
+                    const days = command.durationMs && command.durationMs % DAY_MS === 0 ? command.durationMs / DAY_MS : null;
                     add('commands', {
                         ...base, label: `Буст-аккаунт${days ? ` на ${days} дн.` : ''}: ${member.displayName}`, sub: 'срок проверим в диалоге',
-                        disabled: !days, hint: 'допишите срок в днях: 30д',
+                        disabled: !days, hint: command.durationMs ? 'срок — целым числом дней: 30д' : 'допишите срок в днях: 30д',
                         run: () => setDialog({ type: 'booster', member, days })
                     });
                 } else if (kind === 'journal') {
@@ -199,7 +205,7 @@ export default function CommandBar({ guildId, canLockdown, senior, actions, toas
             }
         }
     } else if (typed) {
-        for (const member of members.items) {
+        for (const member of shownMembers) {
             add('members', { key: `m-${member.id}`, member, label: member.displayName, sub: `@${member.username}`, run: () => actions.onOpenMember(member.id) });
         }
         for (const channel of findChannels(channels || [], typed).slice(0, 4)) {

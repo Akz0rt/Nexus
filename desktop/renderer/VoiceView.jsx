@@ -119,7 +119,7 @@ function Tile({ tile, selected, match, canDrag, onClick, onToggle, onOpen, onDra
     );
 }
 
-export default function VoiceView({ guildId, myId, revision, voiceRevision, focus, onOpenMember, toast }) {
+export default function VoiceView({ guildId, myId, revision, voiceRevision, focus, onFocused, onOpenMember, toast }) {
     const [board, setBoard] = useState(null);
     const [error, setError] = useState(null);
     const [retry, setRetry] = useState(0);
@@ -266,12 +266,14 @@ export default function VoiceView({ guildId, myId, revision, voiceRevision, focu
     useEffect(() => {
         if (!focus || !board) return undefined;
         const node = document.querySelector(`[data-channel-id="${focus.id}"]`);
+        onFocused?.(); // once: live updates and coming back to the board don't scroll there again
         if (!node) return undefined;
         node.scrollIntoView({ behavior: 'smooth', block: 'center' });
         node.classList.add('is-flash');
-        const timer = setTimeout(() => node.classList.remove('is-flash'), 1600);
-        return () => clearTimeout(timer);
-    }, [focus, board]);
+        // Not cleared with the effect: clearing `focus` above re-runs it at once
+        setTimeout(() => node.classList.remove('is-flash'), 1600);
+        return undefined;
+    }, [focus, board]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const dropProps = channel => ({
         'data-channel-id': channel.id,

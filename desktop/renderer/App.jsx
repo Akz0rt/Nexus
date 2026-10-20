@@ -335,7 +335,7 @@ export default function App() {
                         />
                     )}
                     {guildId && view === 'voice' && (
-                        <VoiceView key={guildId} guildId={guildId} myId={me?.id} revision={revision} voiceRevision={voiceRevision} focus={voiceFocus}
+                        <VoiceView key={guildId} guildId={guildId} myId={me?.id} revision={revision} voiceRevision={voiceRevision} focus={voiceFocus} onFocused={() => setVoiceFocus(null)}
                             onOpenMember={setDrawerUserId} toast={toast} />
                     )}
                     {guildId && view === 'roles' && guild?.can?.roles && (

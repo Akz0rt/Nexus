@@ -61,11 +61,15 @@ export function parseCommand(input) {
     if (kind === 'lockdown') return { kind };
 
     if (kind === 'move') {
-        // «перенести Болталка в Мафия», «… -> …», «… → …»
-        const parts = rest.split(/\s+(?:в|во|->|→|to)\s+/i);
-        const from = (parts[0] || '').trim();
-        const to = parts.slice(1).join(' ').trim();
-        return { kind, from, to, missing: !from ? 'откуда' : !to ? 'куда' : null };
+        // «перенести Болталка в Мафия», «… -> …», «… → …». A channel name may hold « в » itself,
+        // so every split is offered and the bar keeps the ones that match real channels
+        const separator = /\s+(?:в|во|->|→|to)\s+/gi;
+        const splits = [...rest.matchAll(separator)]
+            .map(match => ({ from: rest.slice(0, match.index).trim(), to: rest.slice(match.index + match[0].length).trim() }))
+            .filter(split => split.from && split.to);
+        const from = splits[0]?.from || rest;
+        const to = splits[0]?.to || '';
+        return { kind, from, to, splits, missing: !from ? 'откуда' : !to ? 'куда' : null };
     }
 
     const { member, rest: after } = takeMember(rest);

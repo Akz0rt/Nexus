@@ -43,7 +43,11 @@ const fs = require('fs');
 
     assert.strictEqual(parseCommand('бустер @boost01 30д').durationMs, 30 * 24 * H);
 
-    assert.deepStrictEqual(parseCommand('перенести Болталка в Мафия — лобби'), { kind: 'move', from: 'Болталка', to: 'Мафия — лобби', missing: null });
+    const move = parseCommand('перенести Болталка в Мафия — лобби');
+    assert.deepStrictEqual([move.from, move.to, move.missing], ['Болталка', 'Мафия — лобби', null]);
+    // A name with « в » inside: every split is offered
+    assert.deepStrictEqual(parseCommand('перенести Игры в сети в Мафия').splits,
+        [{ from: 'Игры', to: 'сети в Мафия' }, { from: 'Игры в сети', to: 'Мафия' }]);
     assert.strictEqual(parseCommand('перенести Болталка').missing, 'куда');
     assert.deepStrictEqual(parseCommand('lockdown'), { kind: 'lockdown' });
     assert.deepStrictEqual(parseCommand('журнал @Борис'), { kind: 'journal', member: 'Борис', missing: null });
