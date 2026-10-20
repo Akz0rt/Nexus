@@ -208,6 +208,13 @@ export default function App() {
         setJournalPreset({ ...filters, nonce: Date.now() });
         setView('journal');
     }, []);
+    // A screen, optionally on one of its tabs (the start screen's tiles, the command bar)
+    const openTab = useCallback((next, tab) => {
+        if (tab && next === 'moderation') setModerationTab({ tab, at: Date.now() });
+        if (tab && next === 'queue') setQueueTab({ tab, at: Date.now() });
+        setView(next);
+    }, []);
+    const [voiceFocus, setVoiceFocus] = useState(null); // { id, at }: a channel to show on the board
 
     // «Смотрит Kira»: tell the others whose card is open here (repeated so a crashed app's mark expires)
     useEffect(() => {
@@ -278,6 +285,14 @@ export default function App() {
                     onOpenSettings={openSettings}
                     onOpenJournal={() => openJournal({})}
                     onCheckUpdates={checkUpdates}
+                    commands={{
+                        onOpenMember: setDrawerUserId,
+                        onOpenTab: openTab,
+                        onOpenJournal: openJournal,
+                        onLockdown: () => setLockdownConfirm(true),
+                        onQueueChanged: () => setReloadWaiting(n => n + 1),
+                        onFocusVoice: id => { setVoiceFocus({ id, at: Date.now() }); setView('voice'); }
+                    }}
                     toast={toast}
                 />
                 {lockdown?.active && (
@@ -302,11 +317,7 @@ export default function App() {
                         <OverviewView key={guildId} guildId={guildId} revision={revision} voiceRevision={voiceRevision} waiting={waiting} seen={seen}
                             onView={setView} onOpenMember={setDrawerUserId} onChanged={() => setReloadWaiting(n => n + 1)} toast={toast}
                             openReports={openReports} lockdown={lockdown}
-                            onOpenTab={(next, tab) => {
-                                if (next === 'moderation') setModerationTab({ tab, at: Date.now() });
-                                if (next === 'queue') setQueueTab({ tab, at: Date.now() });
-                                setView(next);
-                            }} />
+                            onOpenTab={openTab} />
                     )}
                     {guildId && view === 'queue' && (
                         <QueueView
@@ -324,7 +335,7 @@ export default function App() {
                         />
                     )}
                     {guildId && view === 'voice' && (
-                        <VoiceView key={guildId} guildId={guildId} myId={me?.id} revision={revision} voiceRevision={voiceRevision}
+                        <VoiceView key={guildId} guildId={guildId} myId={me?.id} revision={revision} voiceRevision={voiceRevision} focus={voiceFocus}
                             onOpenMember={setDrawerUserId} toast={toast} />
                     )}
                     {guildId && view === 'roles' && guild?.can?.roles && (

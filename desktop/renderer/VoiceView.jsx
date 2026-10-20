@@ -119,7 +119,7 @@ function Tile({ tile, selected, match, canDrag, onClick, onToggle, onOpen, onDra
     );
 }
 
-export default function VoiceView({ guildId, myId, revision, voiceRevision, onOpenMember, toast }) {
+export default function VoiceView({ guildId, myId, revision, voiceRevision, focus, onOpenMember, toast }) {
     const [board, setBoard] = useState(null);
     const [error, setError] = useState(null);
     const [retry, setRetry] = useState(0);
@@ -262,7 +262,19 @@ export default function VoiceView({ guildId, myId, revision, voiceRevision, onOp
         }
     };
 
+    // From the command bar: scroll to the channel and flash it (an empty one shows as a chip)
+    useEffect(() => {
+        if (!focus || !board) return undefined;
+        const node = document.querySelector(`[data-channel-id="${focus.id}"]`);
+        if (!node) return undefined;
+        node.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        node.classList.add('is-flash');
+        const timer = setTimeout(() => node.classList.remove('is-flash'), 1600);
+        return () => clearTimeout(timer);
+    }, [focus, board]);
+
     const dropProps = channel => ({
+        'data-channel-id': channel.id,
         onDragOver: event => {
             if (!can.move || !event.dataTransfer.types.includes(DRAG_TYPE)) return;
             event.preventDefault();

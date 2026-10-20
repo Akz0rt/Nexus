@@ -52,12 +52,13 @@ const SNOWFLAKE_RE = /^\d{17,20}$/;
  * target: { id, displayName } or null for "ban by ID";
  * targets: several members at once (the voice board's «Тайм-аут…»).
  */
-export default function PunishDialog({ guildId, kind, target, targets, onClose, onDone, toast }) {
+export default function PunishDialog({ guildId, kind, target, targets, initial = {}, onClose, onDone, toast }) {
     const options = useModerationOptions(guildId);
     const meta = KINDS[kind];
     const [userId, setUserId] = useState(target?.id || '');
-    const [reason, setReason] = useState('');
-    const [duration, setDuration] = useState(kind === 'mute' ? '1h' : 'forever');
+    // `initial`: what a command bar line already said («мут @ник 1ч флуд»)
+    const [reason, setReason] = useState(initial.reason || '');
+    const [duration, setDuration] = useState(initial.duration || (kind === 'mute' ? '1h' : 'forever'));
     const [deleteDays, setDeleteDays] = useState(0);
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState(null);

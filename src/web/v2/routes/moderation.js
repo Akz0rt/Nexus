@@ -76,7 +76,7 @@ function validUserId(req, res, next) {
 router.get('/options', async (req, res, next) => {
     try {
         const settings = await GuildSettingsService.get(req.guild.id);
-        const list = presets => Object.entries(presets).map(([id, { label }]) => ({ id, label }));
+        const list = presets => Object.entries(presets).map(([id, { label, ms }]) => ({ id, label, ms: ms ?? null }));
         res.json({
             reasons: settings.moderation.reasons,
             muteDurations: list(MUTE_DURATIONS),

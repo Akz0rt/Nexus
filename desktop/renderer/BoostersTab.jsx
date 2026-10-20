@@ -32,10 +32,10 @@ function leftText(iso) {
  * the moderator's time). Used for a new pass and for «Продлить…».
  * onSubmit({ until, note })
  */
-export function BoosterDialog({ title, names = [], from, withNote = true, submitLabel, busy, onClose, onSubmit }) {
+export function BoosterDialog({ title, names = [], from, initialDays = 30, withNote = true, submitLabel, busy, onClose, onSubmit }) {
     const base = from ? Math.max(Date.parse(from), Date.now()) : Date.now();
-    const [days, setDays] = useState(30);
-    const [date, setDate] = useState(dateInput(base + 30 * DAY_MS));
+    const [days, setDays] = useState(TERMS.includes(initialDays) ? initialDays : null);
+    const [date, setDate] = useState(dateInput(base + initialDays * DAY_MS));
     const [note, setNote] = useState('');
     const pickDays = n => { setDays(n); setDate(dateInput(base + n * DAY_MS)); };
     // The chosen date until 23:59 of that day

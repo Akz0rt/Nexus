@@ -3,6 +3,7 @@ import { apiGet } from './api.js';
 import Avatar from './Avatar.jsx';
 import Icon from './icons.jsx';
 import LockdownButton from './LockdownButton.jsx';
+import CommandBar from './CommandBar.jsx';
 import Notifications from './Notifications.jsx';
 
 const STREAM = {
@@ -95,89 +96,6 @@ function BotStatus({ streamState, guildId, canDiagnose, onOpenSettings }) {
     return <span className={`link-state tone-${stream.tone}`} title={stream.label}><span className="link-state-text">{stream.label}</span></span>;
 }
 
-function Search({ guildId, onOpenMember }) {
-    const [query, setQuery] = useState('');
-    const [results, setResults] = useState([]);
-    const [active, setActive] = useState(0);
-    const [open, setOpen] = useState(false);
-    const inputRef = useRef(null);
-
-    // Ctrl+K focuses search from anywhere
-    useEffect(() => {
-        const onKey = event => {
-            if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
-                event.preventDefault();
-                inputRef.current?.focus();
-                inputRef.current?.select();
-            }
-        };
-        window.addEventListener('keydown', onKey);
-        return () => window.removeEventListener('keydown', onKey);
-    }, []);
-
-    useEffect(() => {
-        const q = query.trim();
-        if (!guildId || q.length < 2) { setResults([]); return; }
-        let cancelled = false;
-        const timer = setTimeout(() => {
-            apiGet(`/guilds/${guildId}/members/search?q=${encodeURIComponent(q)}`)
-                .then(data => { if (!cancelled) { setResults(data.items); setActive(0); } })
-                .catch(() => { if (!cancelled) setResults([]); });
-        }, 200);
-        return () => { cancelled = true; clearTimeout(timer); };
-    }, [query, guildId]);
-
-    const choose = member => {
-        onOpenMember(member.id);
-        setOpen(false);
-        setQuery('');
-        inputRef.current?.blur();
-    };
-
-    const onKeyDown = event => {
-        if (event.key === 'ArrowDown') { event.preventDefault(); setActive(i => Math.min(i + 1, results.length - 1)); }
-        if (event.key === 'ArrowUp') { event.preventDefault(); setActive(i => Math.max(i - 1, 0)); }
-        if (event.key === 'Enter' && results[active]) choose(results[active]);
-        if (event.key === 'Escape') { setOpen(false); inputRef.current?.blur(); }
-    };
-
-    return (
-        <div className="search">
-            <Icon name="search" size={16} strokeWidth={2} className="search-icon" />
-            <input
-                ref={inputRef}
-                type="search"
-                placeholder="Ник, ID или @упоминание"
-                aria-label="Поиск участника"
-                value={query}
-                onChange={e => { setQuery(e.target.value); setOpen(true); }}
-                onFocus={() => setOpen(true)}
-                onBlur={() => setTimeout(() => setOpen(false), 150)}
-                onKeyDown={onKeyDown}
-            />
-            <kbd className="search-hint">Ctrl K</kbd>
-            {open && query.trim().length >= 2 && (
-                <ul className="search-results" role="listbox">
-                    {results.length === 0 && <li className="muted small search-empty">Никого не нашлось.</li>}
-                    {results.map((member, index) => (
-                        <li
-                            key={member.id}
-                            role="option"
-                            aria-selected={index === active}
-                            className={index === active ? 'is-active' : ''}
-                            onMouseDown={() => choose(member)}
-                            onMouseEnter={() => setActive(index)}
-                        >
-                            <Avatar src={member.avatarURL} name={member.displayName} size={24} />
-                            <span>{member.displayName}</span>
-                            <span className="muted small">@{member.username}</span>
-                        </li>
-                    ))}
-                </ul>
-            )}
-        </div>
-    );
-}
 
 function AccountMenu({ me, theme, onTheme, onCheckUpdates }) {
     const [open, setOpen] = useState(false);
@@ -227,11 +145,11 @@ function AccountMenu({ me, theme, onTheme, onCheckUpdates }) {
 }
 
 export default function Header({ guilds, guild, onGuild, me, streamState, onOpenMember, theme, onTheme, lockdown, canLockdown, onLockdown,
-    lockdownConfirm, onLockdownConfirm, events, onOpenSettings, onOpenJournal, onCheckUpdates, toast }) {
+    lockdownConfirm, onLockdownConfirm, events, onOpenSettings, onOpenJournal, onCheckUpdates, commands, toast }) {
     return (
         <header className="topbar">
             <GuildSwitch guilds={guilds} guild={guild} onGuild={onGuild} />
-            <Search guildId={guild?.id} onOpenMember={onOpenMember} />
+            <CommandBar guildId={guild?.id} canLockdown={canLockdown} senior={canLockdown} actions={commands} toast={toast} />
             <div className="topbar-spacer" />
             {canLockdown && guild && (
                 <LockdownButton guildId={guild.id} lockdown={lockdown} onChange={onLockdown} toast={toast}
