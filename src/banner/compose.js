@@ -69,11 +69,12 @@ function ffmpegPath() {
         // read-only: copy it below
     }
     try {
-        const copy = path.join(os.tmpdir(), 'nexus-ffmpeg');
-        if (!runnable(copy)) {
-            syncFs.copyFileSync(binary, copy);
-            syncFs.chmodSync(copy, 0o755);
-        }
+        // A fresh private folder each time (never a file someone else could have put at a known path)
+        const dir = syncFs.mkdtempSync(path.join(os.tmpdir(), 'nexus-ffmpeg-'));
+        syncFs.chmodSync(dir, 0o700);
+        const copy = path.join(dir, 'ffmpeg');
+        syncFs.copyFileSync(binary, copy, syncFs.constants.COPYFILE_EXCL);
+        syncFs.chmodSync(copy, 0o700);
         if (runnable(copy)) return (resolvedFfmpeg = copy);
     } catch (error) {
         throw new ComposeError('ffmpeg_unavailable', `ffmpeg is not runnable: ${error.message}`);
