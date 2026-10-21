@@ -175,6 +175,8 @@ const NOTE_STATUSES = { note_not_found: 404, not_note_author: 403 };
 router.post('/:userId/notes', async (req, res, next) => {
     try {
         if (!SNOWFLAKE_RE.test(req.params.userId)) return res.status(400).json({ error: 'invalid_user_id' });
+        // Notes are about this server's members only
+        if (!req.guild.members.cache.has(req.params.userId)) return res.status(404).json({ error: 'member_not_found' });
         const result = await MemberNoteService.add(req.guild.id, req.params.userId, req.body?.text, actorOf(req));
         if (!result.ok) return sendResult(res, result, NOTE_STATUSES);
         const { note } = result;

@@ -393,25 +393,21 @@ class ActivityService {
     }
 
     /**
-     * Counts collected before servers were told apart carry no server. They all came from
-     * the one server the channel sync records name, and go to it. Nothing is guessed: if
-     * those records name several servers, or not GUILD_ID, the old counts stay unassigned
-     * (shown nowhere) until they expire. Safe to repeat: only unassigned documents are touched.
-     * Per-message dedup docs aren't touched: they expire in 35 days and only back a fallback.
-     * @param {string[]} sourceGuildIds servers named by the channel sync records
-     * @param {string|null} mainGuildId GUILD_ID
+     * Counts collected before servers were told apart carry no server; they go to the server
+     * they were collected from (chosen by the activity module). Safe to repeat: only
+     * unassigned documents are touched. Per-message dedup docs aren't touched: they expire
+     * in 35 days and only back a fallback.
+     * @param {string|null} target the server, or null when it can't be told (nothing is guessed)
      */
-    async migrateLegacy(sourceGuildIds, mainGuildId) {
+    async migrateLegacy(target) {
         await this.initialize();
         const { resources } = await this.container.items
             .query('SELECT c.id, c.userId FROM c WHERE NOT IS_DEFINED(c.guildId)')
             .fetchAll();
         if (resources.length === 0) return { migrated: 0 };
 
-        const unique = [...new Set(sourceGuildIds)];
-        const target = unique.length === 1 && (!mainGuildId || unique[0] === mainGuildId) ? unique[0] : null;
         if (!target) {
-            console.warn(`ActivityService: ${resources.length} old activity record(s) left unassigned — collected from ${unique.join(', ') || 'unknown'}, GUILD_ID ${mainGuildId || 'not set'}`);
+            console.warn(`ActivityService: ${resources.length} old activity record(s) left unassigned — the server they came from is unclear (shown nowhere until they expire)`);
             return { migrated: 0, skipped: resources.length };
         }
 

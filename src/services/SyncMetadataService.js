@@ -98,6 +98,23 @@ class SyncMetadataService {
         }
     }
 
+    /** A small marker document (typed, so never mistaken for a channel record), or null */
+    async getMarker(id) {
+        await this.initialize();
+        try {
+            const { resource } = await this.container.item(id, id).read();
+            return resource || null;
+        } catch (error) {
+            if (error.code === 404) return null;
+            throw error;
+        }
+    }
+
+    async setMarker(id, data) {
+        await this.initialize();
+        await this.container.items.upsert({ ...data, id, channelId: id, type: 'marker' });
+    }
+
     /** Servers whose channels the sync has gone through (channel records carry the server) */
     async listSyncedGuildIds() {
         await this.initialize();

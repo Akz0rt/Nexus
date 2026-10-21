@@ -1,5 +1,6 @@
 const { GatewayIntentBits, PermissionFlagsBits } = require('discord.js');
 const GuildSettingsService = require('./GuildSettingsService');
+const CosmosDBService = require('./CosmosDBService');
 const AuditLogService = require('./AuditLogService');
 const InviteTracker = require('../modules/invites/InviteTracker');
 const config = require('../config');
@@ -143,7 +144,10 @@ async function run(guild, { database = pingDatabase } = {}) {
         const channelId = settings.birthdayCongratsChannelId || settings.birthdayAnnounceChannelId;
         const channel = channelId ? guild.channels.cache.get(channelId) : null;
         if (!channelId) {
-            checks.push(check('birthdays', 'Канал поздравлений', 'warn', 'не выбран — дни рождения не поздравляются', FIX.pick('выберите канал поздравлений', 'birthdays')));
+            // A problem once people have set their dates here; otherwise birthdays just aren't used
+            const used = Object.keys(await CosmosDBService.getAllBirthdays(guild.id).catch(() => ({}))).length > 0;
+            checks.push(check('birthdays', 'Канал поздравлений', used ? 'bad' : 'warn',
+                used ? 'не выбран — поздравлять некуда' : 'не выбран — дни рождения не поздравляются', FIX.pick('выберите канал поздравлений', 'birthdays')));
         } else if (!channel) {
             checks.push(check('birthdays', 'Канал поздравлений', 'bad', 'канал удалён — выберите другой', FIX.pick('выберите другой канал поздравлений', 'birthdays')));
         } else {
