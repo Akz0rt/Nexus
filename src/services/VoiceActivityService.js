@@ -6,6 +6,26 @@ const config = require('../config');
 const VOICE_ACTIVITY_CONTAINER = 'voice_activity_sessions';
 const TTL_35_DAYS = 35 * 24 * 60 * 60; // 3,024,000 seconds
 
+const HOUR_MS = 60 * 60 * 1000;
+const DAY_MS = 24 * HOUR_MS;
+
+/** A day document's seconds that fall between cutoffTs and now */
+function windowSeconds(doc, cutoffTs, now, windowMs) {
+    if (!doc.hours || typeof doc.hours !== 'object') {
+        return windowMs >= DAY_MS && Number(doc.endedAt || 0) >= cutoffTs ? Number(doc.durationSeconds || 0) : 0;
+    }
+    let total = 0;
+    for (const [hour, seconds] of Object.entries(doc.hours)) {
+        const start = Date.parse(`${doc.date}T${hour}:00:00Z`);
+        if (!Number.isFinite(start)) continue;
+        const end = Math.min(start + HOUR_MS, now);
+        if (end <= cutoffTs || end <= start) continue;
+        const share = (end - Math.max(start, cutoffTs)) / (end - start);
+        total += Number(seconds || 0) * Math.min(1, share);
+    }
+    return Math.round(total);
+}
+
 class VoiceActivityService {
     constructor() {
         this.client = null;
@@ -67,6 +87,9 @@ class VoiceActivityService {
                 doc = doc || { id, guildId, userId: member.id, date, startedAt: now, durationSeconds: 0, isActive: false, createdAt: now, ttl: TTL_35_DAYS };
             }
             doc.durationSeconds += seconds;
+            // The same time per UTC hour, for the banner's «1 ч» / «2 ч» / «24 ч»
+            const hour = String(new Date(now).getUTCHours()).padStart(2, '0');
+            doc.hours = { ...(doc.hours || {}), [hour]: (doc.hours?.[hour] || 0) + seconds };
             doc.endedAt = now;
             doc.lastMeasuredAt = now;
             doc.displayName = member.displayName || member.user?.username || doc.displayName || null;
@@ -142,21 +165,28 @@ class VoiceActivityService {
     }
 
 
-    async getTopUsersByRecentWindow(guildId, windowMs) {
+    /**
+     * Voice time inside the last `windowMs`: the day documents' hourly sums, an hour
+     * that only partly falls in the window counted by its share. Days counted before
+     * the hourly sums existed only count for windows of a day or more (whole day).
+     */
+    async getTopUsersByRecentWindow(guildId, windowMs, now = Date.now()) {
         await this.initialize();
 
-        const cutoffTs = Date.now() - windowMs;
+        const cutoffTs = now - windowMs;
         const query = `
-            SELECT c.userId, c.displayName, c.avatarURL, c.endedAt, c.durationSeconds
+            SELECT c.userId, c.displayName, c.avatarURL, c.endedAt, c.durationSeconds, c.date, c.hours
             FROM c
-            WHERE c.guildId = @guildId AND c.endedAt >= @cutoffTs
+            WHERE c.guildId = @guildId AND c.date >= @cutoffDate
         `;
+        const cutoffDate = new Date(cutoffTs).toISOString().split('T')[0];
 
         const { resources } = await this.container.items
-            .query({ query, parameters: [{ name: '@guildId', value: guildId }, { name: '@cutoffTs', value: cutoffTs }] }, { partitionKey: guildId })
+            .query({ query, parameters: [{ name: '@guildId', value: guildId }, { name: '@cutoffDate', value: cutoffDate }] }, { partitionKey: guildId })
             .fetchAll();
 
-        return this._aggregateUsers(resources || []);
+        return this._aggregateUsers((resources || []).map(doc => ({ ...doc, durationSeconds: windowSeconds(doc, cutoffTs, now, windowMs) })))
+            .filter(user => user.totalDurationSeconds > 0);
     }
 
     async getTopUsersByPeriod(guildId, periodOrDays = 'week') {
@@ -370,3 +400,4 @@ class VoiceActivityService {
 }
 
 module.exports = new VoiceActivityService();
+module.exports.windowSeconds = windowSeconds;

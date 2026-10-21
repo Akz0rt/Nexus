@@ -8,17 +8,29 @@ const AIService = require('./services/AIService');
 const ActivityService = require('./services/ActivityService');
 const ActivitySyncService = require('./services/ActivitySyncService');
 const VoiceActivityService = require('./services/VoiceActivityService');
-const BirthdayService = require('./services/BirthdayService');
+const CosmosDBService = require('./services/CosmosDBService');
+const GuildSettingsService = require('./services/GuildSettingsService');
+const { toLegacy: legacyFromBanner } = require('./banner/settings');
+const { getLeaders } = require('./banner/leaders');
 const state = require('./state');
 const { createV2Router } = require('./web/v2');
 
-const BANNER_MODE_KEY = 'BANNER_MODE';
-const ACTIVITY_PERIOD_KEY = 'ACTIVITY_PERIOD';
-const ACTIVITY_CALC_MODE_KEY = 'ACTIVITY_CALC_MODE';
 const SHOW_GAME_ACTIVITY_KEY = 'SHOW_GAME_ACTIVITY';
 const VALID_BANNER_MODES = new Set(['active', 'birthday', 'random', 'none']);
 const VALID_ACTIVITY_PERIODS = new Set(['hour', 'day', 'week', 'month']);
 const VALID_ACTIVITY_CALC_MODES = new Set(['text', 'voice', 'combined']);
+// The old dashboard's values in the banner settings' terms (src/banner/settings.js)
+const LEGACY_PERIODS = { hour: '1h', day: '24h', week: '7d', month: '30d' };
+const LEGACY_CALCS = { text: 'messages', voice: 'voice', combined: 'combined' };
+
+/** The main server's banner settings as the old dashboard reads them */
+async function legacyBannerSettings(guildId) {
+    const [{ banner }, settings] = await Promise.all([GuildSettingsService.get(guildId), SettingsService.getSettings()]);
+    return {
+        ...legacyFromBanner(banner),
+        showGameActivity: String(settings[SHOW_GAME_ACTIVITY_KEY] || '').toLowerCase() === 'true'
+    };
+}
 
 // Names of settings that can be edited via the panel (secrets are read-only)
 const EDITABLE_SETTINGS = [
@@ -217,33 +229,42 @@ function createApp() {
         }
     });
 
-    // GET /api/server-banner-settings — persisted banner mode/activity period from settings table
+    // GET /api/server-banner-settings — the main server's banner settings in the old dashboard's terms
     app.get('/api/server-banner-settings', async (req, res) => {
+        if (!state.guild) {
+            return res.status(503).json({ error: 'Bot is not connected to Discord yet. Please wait.' });
+        }
         try {
-            const settings = await SettingsService.getSettings();
-            const mode = VALID_BANNER_MODES.has(settings[BANNER_MODE_KEY]) ? settings[BANNER_MODE_KEY] : 'active';
-            const period = VALID_ACTIVITY_PERIODS.has(settings[ACTIVITY_PERIOD_KEY]) ? settings[ACTIVITY_PERIOD_KEY] : 'week';
-            const calcMode = VALID_ACTIVITY_CALC_MODES.has(settings[ACTIVITY_CALC_MODE_KEY]) ? settings[ACTIVITY_CALC_MODE_KEY] : 'text';
-            const showGameActivity = String(settings[SHOW_GAME_ACTIVITY_KEY] || '').toLowerCase() === 'true';
-            res.json({ mode, period, calcMode, showGameActivity });
+            res.json(await legacyBannerSettings(state.guild.id));
         } catch (err) {
             console.error('GET /api/server-banner-settings error:', err);
             res.status(500).json({ error: 'Failed to load server banner settings' });
         }
     });
 
-    // POST /api/server-banner-settings — persist banner mode/activity period to settings table
+    // POST /api/server-banner-settings — saved into the main server's banner settings (the panel's «Баннер»)
     app.post('/api/server-banner-settings', async (req, res) => {
+        if (!state.guild) {
+            return res.status(503).json({ error: 'Bot is not connected to Discord yet. Please wait.' });
+        }
         try {
             const body = req.body || {};
-            const patch = {};
+            const guildId = state.guild.id;
+            const { banner } = await GuildSettingsService.get(guildId);
+            const next = { ...banner };
+            let changed = false;
+            let showGameActivity = null;
 
             if (Object.prototype.hasOwnProperty.call(body, 'mode')) {
                 const mode = String(body.mode || '').trim();
                 if (!VALID_BANNER_MODES.has(mode)) {
                     return res.status(400).json({ error: 'Invalid mode' });
                 }
-                patch[BANNER_MODE_KEY] = mode;
+                // «none» turns the banner off; turning it on is the panel's «Баннер» (the old dashboard
+                // always sends «active»). «birthday» and «random» also show the birthday person on their day
+                if (mode === 'none') next.enabled = false;
+                if (mode === 'birthday' || mode === 'random') next.autoBirthday = true;
+                changed = true;
             }
 
             if (Object.prototype.hasOwnProperty.call(body, 'period')) {
@@ -251,7 +272,8 @@ function createApp() {
                 if (!VALID_ACTIVITY_PERIODS.has(period)) {
                     return res.status(400).json({ error: 'Invalid period' });
                 }
-                patch[ACTIVITY_PERIOD_KEY] = period;
+                next.period = LEGACY_PERIODS[period];
+                changed = true;
             }
 
             if (Object.prototype.hasOwnProperty.call(body, 'calcMode')) {
@@ -259,25 +281,23 @@ function createApp() {
                 if (!VALID_ACTIVITY_CALC_MODES.has(calcMode)) {
                     return res.status(400).json({ error: 'Invalid calcMode' });
                 }
-                patch[ACTIVITY_CALC_MODE_KEY] = calcMode;
+                next.calc = LEGACY_CALCS[calcMode];
+                changed = true;
             }
 
             if (Object.prototype.hasOwnProperty.call(body, 'showGameActivity')) {
-                patch[SHOW_GAME_ACTIVITY_KEY] = Boolean(body.showGameActivity) ? 'true' : 'false';
+                showGameActivity = Boolean(body.showGameActivity);
             }
 
-            if (Object.keys(patch).length === 0) {
+            if (!changed && showGameActivity === null) {
                 return res.status(400).json({ error: 'No valid banner settings provided' });
             }
 
-            await SettingsService.updateSettings(patch);
-
-            const settings = await SettingsService.getSettings();
-            const mode = VALID_BANNER_MODES.has(settings[BANNER_MODE_KEY]) ? settings[BANNER_MODE_KEY] : 'active';
-            const period = VALID_ACTIVITY_PERIODS.has(settings[ACTIVITY_PERIOD_KEY]) ? settings[ACTIVITY_PERIOD_KEY] : 'week';
-            const calcMode = VALID_ACTIVITY_CALC_MODES.has(settings[ACTIVITY_CALC_MODE_KEY]) ? settings[ACTIVITY_CALC_MODE_KEY] : 'text';
-            const showGameActivity = String(settings[SHOW_GAME_ACTIVITY_KEY] || '').toLowerCase() === 'true';
-            res.json({ ok: true, mode, period, calcMode, showGameActivity });
+            if (showGameActivity !== null) {
+                await SettingsService.updateSettings({ [SHOW_GAME_ACTIVITY_KEY]: showGameActivity ? 'true' : 'false' });
+            }
+            if (changed) await GuildSettingsService.update(guildId, { banner: next });
+            res.json({ ok: true, ...(await legacyBannerSettings(guildId)) });
         } catch (err) {
             console.error('POST /api/server-banner-settings error:', err);
             res.status(500).json({ error: 'Failed to save server banner settings' });
@@ -293,18 +313,6 @@ function createApp() {
         let { mode = 'active', period = 'week', calcMode, showGameActivity } = req.query;
         if (!VALID_ACTIVITY_PERIODS.has(period)) period = 'week';
 
-        if (!VALID_ACTIVITY_CALC_MODES.has(calcMode)) {
-            const settings = await SettingsService.getSettings();
-            calcMode = VALID_ACTIVITY_CALC_MODES.has(settings[ACTIVITY_CALC_MODE_KEY]) ? settings[ACTIVITY_CALC_MODE_KEY] : 'text';
-            if (showGameActivity === undefined) {
-                showGameActivity = String(settings[SHOW_GAME_ACTIVITY_KEY] || '').toLowerCase() === 'true';
-            }
-        }
-
-        if (showGameActivity !== true && showGameActivity !== false) {
-            showGameActivity = String(showGameActivity || '').toLowerCase() === 'true';
-        }
-
         let resolvedMode = mode;
         let resolvedPeriod = period;
 
@@ -318,8 +326,24 @@ function createApp() {
         }
 
         try {
+            const guildSettings = await GuildSettingsService.get(state.guild.id);
+
+            if (!VALID_ACTIVITY_CALC_MODES.has(calcMode)) {
+                calcMode = legacyFromBanner(guildSettings.banner).calcMode;
+                if (showGameActivity === undefined) {
+                    const settings = await SettingsService.getSettings();
+                    showGameActivity = String(settings[SHOW_GAME_ACTIVITY_KEY] || '').toLowerCase() === 'true';
+                }
+            }
+
+            if (showGameActivity !== true && showGameActivity !== false) {
+                showGameActivity = String(showGameActivity || '').toLowerCase() === 'true';
+            }
+
             if (resolvedMode === 'birthday') {
-                const userIds = await BirthdayService.getTodaysBirthdays();
+                // This server's birthdays, «today» in its own timezone
+                const birthdays = await CosmosDBService.getTodaysBirthdays(state.guild.id, guildSettings.timezone);
+                const userIds = birthdays.map(entry => entry.userId);
                 if (!userIds.length) return res.json({ found: false, reason: 'no_birthdays' });
 
                 const userId = userIds[Math.floor(Math.random() * userIds.length)];
@@ -362,95 +386,34 @@ function createApp() {
                     console.warn('On-demand activity sync failed:', syncErr?.message || syncErr);
                 }
 
-                const textTopUsers = resolvedPeriod === 'hour'
-                    ? await ActivityService.getTopUsersByRecentWindow(state.guild.id, 60 * 60 * 1000)
-                    : await ActivityService.getTopUsersByPeriod(state.guild.id, resolvedPeriod);
-                const voiceTopUsers = resolvedPeriod === 'hour'
-                    ? await VoiceActivityService.getTopUsersByRecentWindow(state.guild.id, 60 * 60 * 1000)
-                    : await VoiceActivityService.getTopUsersByPeriod(state.guild.id, resolvedPeriod);
+                // The same leader the banner shows: same counting, same exclusions
+                const [top] = await getLeaders(state.guild, {
+                    period: LEGACY_PERIODS[resolvedPeriod],
+                    calc: LEGACY_CALCS[calcMode],
+                    exclude: guildSettings.banner.exclude,
+                    limit: 1
+                });
 
-                let selectedUser = null;
-                let stat = '';
-
-                if (calcMode === 'text') {
-                    const top = textTopUsers[0];
-                    if (top) {
-                        selectedUser = { ...top };
-                        stat = `💬 ${top.totalMessages} сообщений за ${periodLabel}`;
-                    }
-                } else if (calcMode === 'voice') {
-                    const top = voiceTopUsers[0];
-                    if (top) {
-                        selectedUser = { ...top };
-                        stat = `🔊 ${top.totalMinutes} мин в голосе за ${periodLabel}`;
-                    }
-                } else {
-                    const merged = new Map();
-
-                    for (const row of textTopUsers || []) {
-                        merged.set(row.userId, {
-                            userId: row.userId,
-                            displayName: row.displayName || null,
-                            avatarURL: row.avatarURL || null,
-                            totalMessages: Number(row.totalMessages || 0),
-                            totalMinutes: 0,
-                            score: 0
-                        });
-                    }
-
-                    for (const row of voiceTopUsers || []) {
-                        const prev = merged.get(row.userId) || {
-                            userId: row.userId,
-                            displayName: row.displayName || null,
-                            avatarURL: row.avatarURL || null,
-                            totalMessages: 0,
-                            totalMinutes: 0,
-                            score: 0
-                        };
-                        prev.displayName = prev.displayName || row.displayName || null;
-                        prev.avatarURL = prev.avatarURL || row.avatarURL || null;
-                        prev.totalMinutes += Number(row.totalMinutes || 0);
-                        prev.score += Number(row.totalMinutes || 0);
-                        merged.set(row.userId, prev);
-                    }
-
-                    for (const row of merged.values()) {
-                        row.score += Number(row.totalMessages || 0);
-                    }
-
-                    const ranked = Array.from(merged.values()).sort((a, b) => b.score - a.score);
-                    const top = ranked[0];
-                    if (top) {
-                        selectedUser = { ...top };
-                        stat = `🧮 ${top.totalMessages} сообщ., ${top.totalMinutes} мин за ${periodLabel}`;
-                    }
-                }
-
-                if (!selectedUser) {
+                if (!top) {
+                    const debugPeriod = resolvedPeriod === 'hour' ? 'day' : resolvedPeriod;
                     const [textDebug, voiceDebug] = await Promise.all([
-                        ActivityService.getPeriodDebugStats(state.guild.id, resolvedPeriod),
-                        VoiceActivityService.getPeriodDebugStats(state.guild.id, resolvedPeriod)
+                        ActivityService.getPeriodDebugStats(state.guild.id, debugPeriod),
+                        VoiceActivityService.getPeriodDebugStats(state.guild.id, debugPeriod)
                     ]);
                     const debug = { text: textDebug, voice: voiceDebug, calcMode };
                     console.warn('featured-user no_activity debug:', { period: resolvedPeriod, ...debug });
                     return res.json({ found: false, reason: 'no_activity', debug });
                 }
 
-                const topUser = { ...selectedUser };
-                if (topUser.userId && state.guild && (showGameActivity || !topUser.displayName || !topUser.avatarURL)) {
-                    try {
-                        const member = await state.guild.members.fetch(topUser.userId);
-                        topUser.displayName = topUser.displayName || member.displayName;
-                        topUser.avatarURL = topUser.avatarURL || member.user.displayAvatarURL({ size: 128, extension: 'png' });
-
-                        if (showGameActivity) {
-                            const game = member.presence?.activities?.find(a => a.type === 0) || member.presence?.activities?.[0];
-                            if (game?.name) {
-                                stat += ` • 🎮 ${game.name}`;
-                            }
-                        }
-                    } catch {
-                        topUser.displayName = topUser.displayName || `User ${topUser.userId}`;
+                let stat = calcMode === 'text'
+                    ? `💬 ${top.messages} сообщений за ${periodLabel}`
+                    : calcMode === 'voice'
+                        ? `🔊 ${top.minutes} мин в голосе за ${periodLabel}`
+                        : `🧮 ${top.messages} сообщ., ${top.minutes} мин за ${periodLabel}`;
+                if (showGameActivity) {
+                    const game = top.member.presence?.activities?.find(a => a.type === 0) || top.member.presence?.activities?.[0];
+                    if (game?.name) {
+                        stat += ` • 🎮 ${game.name}`;
                     }
                 }
 
@@ -461,8 +424,8 @@ function createApp() {
                     calcMode,
                     showGameActivity,
                     user: {
-                        displayName: topUser.displayName,
-                        avatarURL: topUser.avatarURL,
+                        displayName: top.displayName,
+                        avatarURL: top.member.user.displayAvatarURL({ size: 128, extension: 'png' }),
                         stat
                     }
                 });

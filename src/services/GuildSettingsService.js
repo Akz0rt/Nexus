@@ -2,6 +2,7 @@ const { CosmosClient } = require('@azure/cosmos');
 const config = require('../config');
 const state = require('../state');
 const { DEFAULT_REASONS, DEFAULT_ESCALATION, DEFAULT_PUNISH_TEMPLATES } = require('../modules/moderation/templates');
+const { resolveBanner } = require('../banner/settings');
 
 const GUILD_SETTINGS_CONTAINER = 'guild_settings';
 const CACHE_TTL_MS = 60 * 1000;
@@ -91,13 +92,24 @@ class GuildSettingsService {
         }
     }
 
+    // The old global settings doc (BANNER_MODE and the like), {} when unavailable
+    async readLegacy() {
+        try {
+            return await require('./SettingsService').getSettings();
+        } catch (error) {
+            console.error('GuildSettingsService.readLegacy error:', error.message || error);
+            return {};
+        }
+    }
+
     isDefaultGuild(guildId) {
         // Azure variables belong to the main server only, never to every server
         return Boolean(guildId) && mainGuildId() === guildId;
     }
 
-    // Resolution order: guild doc → env (default guild only) → undefined
-    resolve(guildId, doc) {
+    // Resolution order: guild doc → env (default guild only) → undefined.
+    // `legacy` is the old global settings doc, read only for the main server's banner
+    resolve(guildId, doc, legacy = null) {
         const useEnv = this.isDefaultGuild(guildId);
         const result = { guildId };
 
@@ -165,6 +177,9 @@ class GuildSettingsService {
             }
         };
 
+        // Server banner: its own group; the main server falls back to the old global settings
+        result.banner = resolveBanner(doc?.banner, useEnv ? legacy : null);
+
         // Which env-backed keys come from env rather than the guild doc (shown in Settings)
         result.fromEnv = useEnv ? Object.keys(ENV_DEFAULTS).filter(key =>
             (doc?.[key] === undefined || (doc[key] === '' && !CLEARABLE.has(key))) && ENV_DEFAULTS[key]() && result[key] !== undefined) : [];
@@ -177,7 +192,8 @@ class GuildSettingsService {
         if (cached && Date.now() - cached.at < CACHE_TTL_MS) return cached.value;
 
         const doc = await this.readDoc(guildId);
-        const value = this.resolve(guildId, doc);
+        const legacy = !doc?.banner && this.isDefaultGuild(guildId) ? await this.readLegacy() : null;
+        const value = this.resolve(guildId, doc, legacy);
         this.cache.set(guildId, { at: Date.now(), value });
         return value;
     }

@@ -49,10 +49,12 @@ function createV2Router({ hub = new SseHub().attach() } = {}) {
     guildRouter.use('/activity', require('./routes/activity'));
     guildRouter.use('/economy', require('./routes/economy'));
     guildRouter.use('/tasks', require('./routes/tasks'));
-    // Settings: administrators ("senior") only
-    guildRouter.use('/settings', (req, res, next) => (req.panelRole === 'senior'
+    // Settings and the server banner: administrators ("senior") only
+    const seniorOnly = (req, res, next) => (req.panelRole === 'senior'
         ? next()
-        : res.status(403).json({ error: 'forbidden' })), require('./routes/settings'));
+        : res.status(403).json({ error: 'forbidden' }));
+    guildRouter.use('/settings', seniorOnly, require('./routes/settings'));
+    guildRouter.use('/banner', seniorOnly, require('./routes/banner'));
     guildRouter.get('/events', (req, res) => {
         const ref = userRef(req.guild, req.session.userId);
         hub.subscribe(req.guild.id, res, {

@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Nexus — Баннер сервера</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>body{margin:0;background:#0f1218} button,select{font:inherit;cursor:pointer}</style>
+</helmet>
+<div style="width: 1400px; height: 900px; overflow: hidden; display: flex; background: #0f1218; color: #e6edf5; font-family: 'Segoe UI', system-ui, sans-serif; font-size: 14px">
+<dc-import name="Sidebar" active="banner" hint-size="240px,900px"></dc-import>
+<div style="flex: 1; min-width: 0; display: flex; flex-direction: column">
+<dc-import name="Topbar" lockdown="{{ false }}" hint-size="1160px,56px"></dc-import>
+<main style="flex: 1; padding: 20px 28px; display: flex; flex-direction: column; gap: 14px; box-sizing: border-box">
+
+<div style="display: flex; align-items: center; gap: 12px">
+<h1 style="margin: 0; font-size: 24px; font-weight: 600">Баннер сервера</h1>
+<span style="display: inline-flex; align-items: center; gap: 6px; font-size: 12px; padding: 3px 10px; border-radius: 999px; border: 1px solid #1f6b4c; color: #7be0b0"><span style="width: 6px; height: 6px; border-radius: 50%; background: #3ccf8e"></span>На сервере · обновлён в 13:25 · следующий в 13:55</span>
+<div style="flex: 1"></div>
+<button type="button" style="height: 34px; padding: 0 14px; border-radius: 8px; border: 1px solid #2d3644; background: #1a2029; color: #e6edf5">Обновить сейчас</button>
+<button type="button" style="height: 34px; padding: 0 16px; border-radius: 8px; border: 0; background: #2ec4ff; color: #0f1218; font-weight: 600">Сохранить</button>
+</div>
+
+<div style="display: flex; gap: 16px; min-height: 0">
+<div style="width: 704px; flex: none; display: flex; flex-direction: column; gap: 12px">
+<section aria-label="Предпросмотр" style="background: #1a2029; border: 1px solid #2d3644; border-radius: 10px; padding: 12px 16px 16px; display: flex; flex-direction: column; gap: 10px">
+<div style="display: flex; align-items: center; gap: 8px">
+<div role="tablist" style="display: flex; gap: 2px; padding: 3px; border-radius: 9px; background: #131820; border: 1px solid #2d3644">
+<button type="button" role="tab" aria-selected="true" style="height: 28px; padding: 0 12px; border-radius: 7px; border: 0; background: #222a35; color: #e6edf5; font-weight: 600">Полный размер</button>
+<button type="button" role="tab" aria-selected="false" style="height: 28px; padding: 0 12px; border-radius: 7px; border: 0; background: transparent; color: #aeb9c7">Как в Discord</button>
+</div>
+<div style="flex: 1"></div>
+<button type="button" aria-pressed="true" style="height: 28px; padding: 0 12px; border-radius: 999px; border: 1px solid #ff7a1a; background: #2c1a0d; color: #ffb27a; font-size: 13px">Безопасная зона</button>
+<span style="font-size: 12px; color: #8b97a8">960 × 540</span>
+</div>
+<div style="width: 672px; height: 378px; overflow: hidden; border-radius: 8px; border: 1px solid #05070a">
+<div style="width: 960px; height: 540px; transform: scale(0.7); transform-origin: 0 0">
+<dc-import name="Banner" mode="leader" safe="{{ true }}" hint-size="960px,540px"></dc-import>
+</div>
+</div>
+</section>
+
+<section aria-labelledby="bnow" style="background: #1a2029; border: 1px solid #2d3644; border-radius: 10px; padding: 12px 16px; display: flex; flex-direction: column; gap: 8px">
+<h2 id="bnow" style="margin: 0; font-size: 13px; font-weight: 600; color: #8b97a8">Гонка за баннер · последние 24 ч, сообщения + голос</h2>
+<sc-for list="{{race}}" as="r" hint-placeholder-count="3">
+<div style="display: flex; align-items: center; gap: 10px; height: 30px">
+<span style="width: 18px; color: #8b97a8; font-variant-numeric: tabular-nums">{{r.n}}</span>
+<span style="width: 24px; height: 24px; border-radius: 50%; background: {{r.av}}"></span>
+<span style="width: 110px; font-weight: 600">{{r.name}}</span>
+<div style="flex: 1; height: 8px; border-radius: 4px; background: #222a35"><div style="width: {{r.w}}%; height: 8px; border-radius: 4px; background: {{r.bar}}"></div></div>
+<span style="width: 70px; text-align: right; font-variant-numeric: tabular-nums">{{r.score}}</span>
+<span style="width: 150px; font-size: 12px; color: #8b97a8">{{r.note}}</span>
+</div>
+</sc-for>
+</section>
+
+<section aria-labelledby="bhist" style="display: flex; flex-direction: column; gap: 8px">
+<h2 id="bhist" style="margin: 0; font-size: 13px; font-weight: 600; color: #8b97a8">История · клик — вернуть этот баннер</h2>
+<div style="display: flex; gap: 10px">
+<sc-for list="{{hist}}" as="h" hint-placeholder-count="4">
+<button type="button" style="display: flex; flex-direction: column; gap: 4px; padding: 0; border: 0; background: transparent; color: #e6edf5; text-align: left">
+<div style="width: 160px; height: 90px; overflow: hidden; border-radius: 6px; border: 1px solid {{h.border}}">
+<div style="width: 960px; height: 540px; transform: scale(0.1667); transform-origin: 0 0">
+<dc-import name="Banner" mode="{{h.mode}}" safe="{{ false }}" hint-size="960px,540px"></dc-import>
+</div>
+</div>
+<span style="font-size: 12px; color: #aeb9c7">{{h.label}}</span>
+</button>
+</sc-for>
+</div>
+</section>
+</div>
+
+<div style="flex: 1; min-width: 0; background: #1a2029; border: 1px solid #2d3644; border-radius: 10px; padding: 12px 16px; display: flex; flex-direction: column; gap: 10px">
+
+<fieldset style="border: 0; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px">
+<legend style="font-size: 13px; font-weight: 600; color: #8b97a8; padding: 0 0 4px">Что показывать</legend>
+<sc-for list="{{modes}}" as="m" hint-placeholder-count="5">
+<label style="display: flex; align-items: center; gap: 10px; height: 28px; padding: 0 10px; border-radius: 8px; border: 1px solid {{m.border}}; background: {{m.bg}}; cursor: pointer">
+<input type="radio" name="mode" checked="{{m.on}}" style="accent-color: #2ec4ff; margin: 0">
+<span style="font-weight: {{m.weight}}">{{m.name}}</span>
+<span style="font-size: 12px; color: #8b97a8; margin-left: auto">{{m.hint}}</span>
+</label>
+</sc-for>
+<label style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: #c7d1dd; margin-top: 2px"><input type="checkbox" checked style="accent-color: #2ec4ff; margin: 0">В день рождения — показывать именинника</label>
+<label style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: #c7d1dd"><input type="checkbox" checked style="accent-color: #2ec4ff; margin: 0">За 3 ч до ивента — показывать ивент</label>
+</fieldset>
+
+<div style="display: flex; flex-direction: column; gap: 6px">
+<span style="font-size: 13px; font-weight: 600; color: #8b97a8">Расположение · для «Самый активный»</span>
+<div role="radiogroup" aria-label="Расположение карточки" style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px">
+<sc-for list="{{lays}}" as="l" hint-placeholder-count="4">
+<button type="button" role="radio" aria-checked="{{l.on}}" style="display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 6px 4px; border-radius: 8px; border: 1px solid {{l.border}}; background: {{l.bg}}; color: {{l.c}}; font-size: 12px">
+<span style="position: relative; width: 64px; height: 36px; border-radius: 4px; background: #0a1628; border: 1px solid #2d3644; overflow: hidden"><span style="position: absolute; left: 0; right: 0; top: 0; height: 9px; background: rgba(255,122,26,0.25)"></span><span style="position: absolute; left: {{l.x}}px; top: {{l.y}}px; width: 26px; height: 14px; border-radius: 3px; background: {{l.block}}"></span></span>
+{{l.name}}
+</button>
+</sc-for>
+</div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 6px">
+<span style="font-size: 13px; font-weight: 600; color: #8b97a8">Период и подсчёт</span>
+<div role="group" aria-label="Период" style="display: flex; gap: 2px; padding: 2px; border-radius: 8px; background: #131820; border: 1px solid #2d3644">
+<button type="button" aria-pressed="false" style="flex: 1; height: 28px; border-radius: 6px; border: 0; background: transparent; color: #aeb9c7">1 ч</button>
+<button type="button" aria-pressed="false" style="flex: 1; height: 28px; border-radius: 6px; border: 0; background: transparent; color: #aeb9c7">2 ч</button>
+<button type="button" aria-pressed="true" style="flex: 1; height: 28px; border-radius: 6px; border: 0; background: #222a35; color: #e6edf5; font-weight: 600">24 ч</button>
+<button type="button" aria-pressed="false" style="flex: 1; height: 28px; border-radius: 6px; border: 0; background: transparent; color: #aeb9c7">7 дн.</button>
+</div>
+<div role="group" aria-label="Что считать" style="display: flex; gap: 2px; padding: 2px; border-radius: 8px; background: #131820; border: 1px solid #2d3644">
+<button type="button" aria-pressed="false" style="flex: 1; height: 28px; border-radius: 6px; border: 0; background: transparent; color: #aeb9c7">Сообщения</button>
+<button type="button" aria-pressed="false" style="flex: 1; height: 28px; border-radius: 6px; border: 0; background: transparent; color: #aeb9c7">Голос</button>
+<button type="button" aria-pressed="true" style="flex: 1; height: 28px; border-radius: 6px; border: 0; background: #222a35; color: #e6edf5; font-weight: 600">Вместе</button>
+</div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 8px">
+<span style="font-size: 13px; font-weight: 600; color: #8b97a8">Фон</span>
+<div style="display: flex; align-items: center; gap: 10px">
+<span style="width: 64px; height: 36px; border-radius: 5px; background: #163a63; border: 1px solid #2d3644; flex: none"></span>
+<div style="flex: 1; min-width: 0; display: flex; flex-direction: column"><span>fon_blue.gif</span><span style="font-size: 12px; color: #8b97a8">анимированный · 2,1 МБ</span></div>
+<button type="button" style="height: 30px; padding: 0 12px; border-radius: 7px; border: 1px solid #2d3644; background: #222a35; color: #e6edf5">Заменить</button>
+</div>
+<div style="display: flex; align-items: center; gap: 10px; font-size: 13px">
+<span style="width: 70px; color: #c7d1dd">Подложка</span>
+<div role="group" aria-label="Подложка" style="flex: 1; display: flex; gap: 2px; padding: 2px; border-radius: 8px; background: #131820; border: 1px solid #2d3644">
+<button type="button" aria-pressed="true" style="flex: 1; height: 26px; border-radius: 6px; border: 0; background: #222a35; color: #e6edf5; font-weight: 600; font-size: 13px">Стекло</button>
+<button type="button" aria-pressed="false" style="flex: 1; height: 26px; border-radius: 6px; border: 0; background: transparent; color: #aeb9c7; font-size: 13px">Плашка</button>
+<button type="button" aria-pressed="false" style="flex: 1; height: 26px; border-radius: 6px; border: 0; background: transparent; color: #aeb9c7; font-size: 13px">Нет</button>
+</div>
+</div>
+<div style="display: flex; align-items: center; gap: 10px; font-size: 13px">
+<label for="blur" style="width: 70px; color: #c7d1dd">Размытие</label>
+<input id="blur" type="range" min="0" max="40" value="20" style="flex: 1; accent-color: #2ec4ff">
+<span style="width: 40px; text-align: right; font-variant-numeric: tabular-nums">20 px</span>
+</div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 6px">
+<span style="font-size: 13px; font-weight: 600; color: #8b97a8">Не учитывать</span>
+<div style="display: flex; flex-wrap: wrap; gap: 6px">
+<button type="button" aria-pressed="true" style="height: 28px; padding: 0 10px; border-radius: 999px; border: 1px solid #2ec4ff; background: #10324a; color: #8ae6ff; font-size: 13px">Боты</button>
+<button type="button" aria-pressed="false" style="height: 28px; padding: 0 10px; border-radius: 999px; border: 1px solid #2d3644; background: transparent; color: #c7d1dd; font-size: 13px">Администрацию</button>
+<button type="button" aria-pressed="false" style="height: 28px; padding: 0 10px; border-radius: 999px; border: 1px solid #2d3644; background: transparent; color: #c7d1dd; font-size: 13px">Кто был на баннере вчера</button>
+<button type="button" style="height: 28px; padding: 0 10px; border-radius: 999px; border: 1px dashed #2d3644; background: transparent; color: #aeb9c7; font-size: 13px">+ участник</button>
+</div>
+</div>
+
+<div style="display: flex; align-items: center; gap: 8px; font-size: 13px">
+<label for="upd" style="color: #c7d1dd">Обновлять</label>
+<select id="upd" style="height: 30px; border-radius: 7px; border: 1px solid #2d3644; background: #131820; color: #e6edf5; padding: 0 8px"><option>каждые 30 мин</option></select>
+<label style="display: flex; align-items: center; gap: 6px; color: #c7d1dd"><input type="checkbox" checked style="accent-color: #2ec4ff; margin: 0">если лидер сменился</label>
+</div>
+
+<div style="margin-top: auto; display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 8px; background: #131820; font-size: 12px; color: #8b97a8">
+<span style="width: 16px; height: 18px; flex: none; background: #3ccf8e; clip-path: polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%)"></span>Анимированный баннер — 3-й уровень буста. У сервера: 3.
+</div>
+</div>
+</div>
+
+</main>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1400,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const mode = (name, hint, on) => ({ name: name, hint: hint, on: !!on, border: on ? '#2ec4ff' : '#2d3644', bg: on ? '#132130' : 'transparent', weight: on ? '600' : '400' });
+    const lay = (name, x, y, on) => ({ name: name, x: x, y: y, on: on ? 'true' : 'false', border: on ? '#2ec4ff' : '#2d3644', bg: on ? '#132130' : 'transparent', c: on ? '#e6edf5' : '#aeb9c7', block: on ? '#2ec4ff' : '#5f6b7c' });
+    return {
+      lays: [lay('Слева', 5, 14, true), lay('По центру', 18, 14), lay('Справа', 33, 14)],
+      modes: [mode('Самый активный', 'один лидер', true), mode('Топ недели', 'лидер + 2 и 3 место'), mode('Ближайший ивент', 'название и время'), mode('Только фон', 'без надписей'), mode('Не менять баннер', 'бот не трогает')],
+      race: [
+        { n: '1', name: 'maks_lil', av: '#e84393', w: 100, bar: '#2ec4ff', score: '1 618', note: 'на баннере с 13:25' },
+        { n: '2', name: 'Вика', av: '#ffb020', w: 91, bar: '#2d6d8f', score: '1 474', note: 'отстаёт на 144' },
+        { n: '3', name: 'Гриша', av: '#3ccf8e', w: 74, bar: '#2d6d8f', score: '1 196', note: '' }
+      ],
+      hist: [
+        { mode: 'leader', label: 'сейчас · maks_lil', border: '#2ec4ff' },
+        { mode: 'event', label: '20 окт · Мафия', border: '#2d3644' },
+        { mode: 'birthday', label: '18 окт · ДР Вики', border: '#2d3644' },
+        { mode: 'podium', label: '17 окт · топ недели', border: '#2d3644' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

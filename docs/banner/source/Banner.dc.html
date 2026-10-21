@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Баннер сервера</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>body{margin:0} span{white-space:nowrap}</style>
+</helmet>
+<div style="position: relative; width: 960px; height: 540px; overflow: hidden; background: #08111f; font-family: 'Segoe UI', system-ui, sans-serif; color: #ffffff">
+
+<svg aria-hidden="true" width="960" height="540" viewBox="0 0 960 540" style="position: absolute; inset: 0">
+<rect width="960" height="540" fill="#0a1628"></rect>
+<defs><pattern id="hexbg" width="84" height="96" patternUnits="userSpaceOnUse"><polygon points="42,4 78,25 78,67 42,88 6,67 6,25" fill="none" stroke="#1c4a7a" stroke-width="3"></polygon></pattern></defs>
+<rect width="960" height="540" fill="url(#hexbg)" opacity="0.7"></rect>
+<g opacity="0.55"><circle cx="150" cy="300" r="90" fill="#2ec4ff"></circle><circle cx="420" cy="260" r="70" fill="#e84393"></circle><circle cx="300" cy="440" r="60" fill="#ff7a1a"></circle><circle cx="620" cy="380" r="80" fill="#5865f2"></circle><circle cx="860" cy="420" r="70" fill="#2ec4ff"></circle></g>
+<g transform="translate({{artX}} 0)">
+<g fill="none" stroke="#163a63" stroke-width="3">
+<polygon points="760,40 860,98 860,214 760,272 660,214 660,98"></polygon>
+<polygon points="880,250 960,296 960,388 880,434 800,388 800,296"></polygon>
+<polygon points="620,300 690,340 690,420 620,460 550,420 550,340"></polygon>
+</g>
+<g stroke="#08111f" stroke-width="6" stroke-linejoin="round">
+<polygon points="760,120 820,155 760,190 700,155" fill="#1f6fb8"></polygon>
+<polygon points="820,155 820,225 760,260 760,190" fill="#1a5c9c"></polygon>
+<polygon points="700,155 760,190 760,260 700,225" fill="#103e70"></polygon>
+</g>
+<circle cx="760" cy="190" r="9" fill="#ffb020" opacity="0.8"></circle>
+</g>
+<g fill="none" stroke="#163a63" stroke-width="3"><polygon points="430,-40 510,6 510,98 430,144 350,98 350,6"></polygon></g>
+<g fill="#2ec4ff" opacity="0.18"><circle cx="600" cy="90" r="4"></circle><circle cx="900" cy="140" r="3"></circle><circle cx="700" cy="480" r="5"></circle><circle cx="120" cy="80" r="3"></circle></g>
+<text x="936" y="520" text-anchor="end" font-size="18" fill="#3d5a80">[ваш GIF-фон]</text>
+</svg>
+
+<div aria-hidden="true" style="position: absolute; inset: 0; background: {{scrim}}"></div>
+
+<div style="position: absolute; top: {{WT}}; left: {{L}}; right: {{R}}; width: {{W}}; margin: {{M}}; padding: {{PAD}}; border-radius: 30px; background: {{PBG}}; backdrop-filter: {{PBF}}; -webkit-backdrop-filter: {{PBF}}; border: {{PBR}}; display: flex; flex-direction: column; align-items: {{AI}}; gap: 24px">
+
+<sc-if value="{{chipLead}}" hint-placeholder-val="{{ true }}"><span style="height: 50px; box-sizing: border-box; display: inline-flex; align-items: center; font-size: 28px; font-weight: 800; letter-spacing: .08em; color: #ffb020; border: 2px solid #ffb020; background: rgba(255,176,32,0.12); border-radius: 999px; padding: 0 20px">САМЫЙ АКТИВНЫЙ · 24 Ч</span></sc-if>
+<sc-if value="{{chipTop}}" hint-placeholder-val="{{ false }}"><span style="height: 50px; box-sizing: border-box; display: inline-flex; align-items: center; font-size: 28px; font-weight: 800; letter-spacing: .08em; color: #ffb020; border: 2px solid #ffb020; background: rgba(255,176,32,0.12); border-radius: 999px; padding: 0 20px">ТОП НЕДЕЛИ</span></sc-if>
+<sc-if value="{{chipBday}}" hint-placeholder-val="{{ false }}"><span style="height: 50px; box-sizing: border-box; display: inline-flex; align-items: center; font-size: 28px; font-weight: 800; letter-spacing: .08em; color: #ff8cc6; border: 2px solid #ff8cc6; background: rgba(255,140,198,0.14); border-radius: 999px; padding: 0 20px">С ДНЁМ РОЖДЕНИЯ</span></sc-if>
+<sc-if value="{{chipEvent}}" hint-placeholder-val="{{ false }}"><span style="height: 50px; box-sizing: border-box; display: inline-flex; align-items: center; font-size: 28px; font-weight: 800; letter-spacing: .08em; color: #8ae6ff; border: 2px solid #2ec4ff; background: rgba(46,196,255,0.14); border-radius: 999px; padding: 0 20px">СЕГОДНЯ · 21:00</span></sc-if>
+
+<div style="height: 210px; display: flex; align-items: center">
+
+<sc-if value="{{leadSide}}" hint-placeholder-val="{{ true }}">
+<div style="display: flex; flex-direction: {{RD}}; align-items: center; gap: 34px">
+<div style="position: relative; width: 196px; height: 196px; flex: none">
+<span style="position: absolute; inset: 0; border-radius: 50%; background: #e84393; box-shadow: 0 0 0 8px #2ec4ff; color: #0a1628; font-size: 88px; font-weight: 800; display: flex; align-items: center; justify-content: center">M</span>
+<span style="position: absolute; right: -6px; bottom: -2px; width: 64px; height: 56px; background: #ff7a1a; color: #0a1628; font-size: 32px; font-weight: 800; display: flex; align-items: center; justify-content: center; clip-path: polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%)">1</span>
+</div>
+<div style="display: flex; flex-direction: column; align-items: {{TAI}}; text-align: {{TA}}; gap: 6px">
+<span style="font-size: 78px; font-weight: 800; line-height: 1">maks_lil</span>
+<span style="font-size: 32px; color: #c7d1dd">Заколдую</span>
+<div style="display: flex; flex-direction: {{RD}}; gap: 14px; margin-top: 14px">
+<span style="display: flex; align-items: center; gap: 12px; padding: 8px 18px; border-radius: 16px; background: rgba(46,196,255,0.14); border: 2px solid rgba(46,196,255,0.5)"><svg aria-hidden="true" width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#8ae6ff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg><span style="font-size: 44px; font-weight: 800">1 240</span></span>
+<span style="display: flex; align-items: center; gap: 12px; padding: 8px 18px; border-radius: 16px; background: rgba(46,196,255,0.14); border: 2px solid rgba(46,196,255,0.5)"><svg aria-hidden="true" width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#8ae6ff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v3"></path></svg><span style="font-size: 44px; font-weight: 800">6 ч 20</span></span>
+</div>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{leadCenter}}" hint-placeholder-val="{{ false }}">
+<div style="display: flex; align-items: center; gap: 36px">
+<div style="width: 280px; display: flex; flex-direction: column; align-items: flex-end; text-align: right; gap: 8px">
+<span style="font-size: 64px; font-weight: 800; line-height: 1">maks_lil</span>
+<span style="font-size: 30px; color: #c7d1dd">Заколдую</span>
+</div>
+<div style="position: relative; width: 196px; height: 196px; flex: none">
+<span style="position: absolute; inset: 0; border-radius: 50%; background: #e84393; box-shadow: 0 0 0 8px #2ec4ff; color: #0a1628; font-size: 88px; font-weight: 800; display: flex; align-items: center; justify-content: center">M</span>
+<span style="position: absolute; left: 50%; bottom: -12px; transform: translateX(-50%); width: 64px; height: 56px; background: #ff7a1a; color: #0a1628; font-size: 32px; font-weight: 800; display: flex; align-items: center; justify-content: center; clip-path: polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%)">1</span>
+</div>
+<div style="width: 280px; display: flex; flex-direction: column; align-items: flex-start; gap: 12px">
+<span style="display: flex; align-items: baseline; gap: 12px"><span style="font-size: 52px; font-weight: 800">1 240</span><span style="font-size: 26px; color: #8ae6ff">сообщ.</span></span>
+<span style="display: flex; align-items: baseline; gap: 12px"><span style="font-size: 52px; font-weight: 800">6 ч 20</span><span style="font-size: 26px; color: #8ae6ff">в голосе</span></span>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{topSide}}" hint-placeholder-val="{{ false }}">
+<div style="display: flex; flex-direction: {{RD}}; align-items: center; gap: 40px">
+<div style="display: flex; flex-direction: {{RD}}; align-items: center; gap: 28px">
+<div style="position: relative; width: 156px; height: 156px; flex: none">
+<span style="position: absolute; inset: 0; border-radius: 50%; background: #e84393; box-shadow: 0 0 0 7px #2ec4ff; color: #0a1628; font-size: 70px; font-weight: 800; display: flex; align-items: center; justify-content: center">M</span>
+<span style="position: absolute; right: -8px; bottom: -4px; width: 56px; height: 48px; background: #ff7a1a; color: #0a1628; font-size: 28px; font-weight: 800; display: flex; align-items: center; justify-content: center; clip-path: polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%)">1</span>
+</div>
+<div style="display: flex; flex-direction: column; align-items: {{TAI}}; gap: 6px">
+<span style="font-size: 62px; font-weight: 800; line-height: 1">maks_lil</span>
+<span style="font-size: 32px; font-weight: 700; color: #8ae6ff">8 420 очков</span>
+</div>
+</div>
+<div style="width: 3px; height: 150px; background: rgba(138,230,255,0.25); border-radius: 2px"></div>
+<div style="display: flex; flex-direction: column; align-items: {{TAI}}; gap: 18px">
+<div style="display: flex; flex-direction: {{RD}}; align-items: center; gap: 16px">
+<span style="width: 40px; height: 34px; background: rgba(46,196,255,0.18); color: #8ae6ff; font-size: 22px; font-weight: 800; display: flex; align-items: center; justify-content: center; clip-path: polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%)">2</span>
+<span style="width: 64px; height: 64px; border-radius: 50%; background: #ffb020; color: #0a1628; font-size: 30px; font-weight: 800; display: flex; align-items: center; justify-content: center">В</span>
+<div style="display: flex; flex-direction: column; align-items: {{TAI}}"><span style="font-size: 36px; font-weight: 700; line-height: 1.05">Вика</span><span style="font-size: 26px; color: #aeb9c7">7 910</span></div>
+</div>
+<div style="display: flex; flex-direction: {{RD}}; align-items: center; gap: 16px">
+<span style="width: 40px; height: 34px; background: rgba(46,196,255,0.18); color: #8ae6ff; font-size: 22px; font-weight: 800; display: flex; align-items: center; justify-content: center; clip-path: polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%)">3</span>
+<span style="width: 64px; height: 64px; border-radius: 50%; background: #3ccf8e; color: #0a1628; font-size: 30px; font-weight: 800; display: flex; align-items: center; justify-content: center">Г</span>
+<div style="display: flex; flex-direction: column; align-items: {{TAI}}"><span style="font-size: 36px; font-weight: 700; line-height: 1.05">Гриша</span><span style="font-size: 26px; color: #aeb9c7">6 340</span></div>
+</div>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{topCenter}}" hint-placeholder-val="{{ false }}">
+<div style="height: 210px; display: flex; align-items: flex-end; gap: 44px">
+<div style="width: 190px; display: flex; flex-direction: column; align-items: center; gap: 8px">
+<span style="width: 92px; height: 92px; border-radius: 50%; background: #ffb020; box-shadow: 0 0 0 5px rgba(138,230,255,0.35); color: #0a1628; font-size: 42px; font-weight: 800; display: flex; align-items: center; justify-content: center">В</span>
+<span style="font-size: 36px; font-weight: 700; line-height: 1.05">Вика</span>
+<span style="display: flex; align-items: center; gap: 8px; font-size: 26px; color: #aeb9c7"><span style="width: 30px; height: 26px; background: rgba(46,196,255,0.18); color: #8ae6ff; font-size: 16px; font-weight: 800; display: inline-flex; align-items: center; justify-content: center; clip-path: polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%)">2</span>7 910</span>
+</div>
+<div style="width: 250px; display: flex; flex-direction: column; align-items: center; gap: 8px">
+<div style="position: relative; width: 124px; height: 124px">
+<span style="position: absolute; inset: 0; border-radius: 50%; background: #e84393; box-shadow: 0 0 0 7px #2ec4ff; color: #0a1628; font-size: 58px; font-weight: 800; display: flex; align-items: center; justify-content: center">M</span>
+</div>
+<span style="font-size: 48px; font-weight: 800; line-height: 1.05">maks_lil</span>
+<span style="display: flex; align-items: center; gap: 8px; font-size: 28px; font-weight: 700; color: #8ae6ff"><span style="width: 34px; height: 30px; background: #ff7a1a; color: #0a1628; font-size: 18px; font-weight: 800; display: inline-flex; align-items: center; justify-content: center; clip-path: polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%)">1</span>8 420</span>
+</div>
+<div style="width: 190px; display: flex; flex-direction: column; align-items: center; gap: 8px">
+<span style="width: 92px; height: 92px; border-radius: 50%; background: #3ccf8e; box-shadow: 0 0 0 5px rgba(138,230,255,0.35); color: #0a1628; font-size: 42px; font-weight: 800; display: flex; align-items: center; justify-content: center">Г</span>
+<span style="font-size: 36px; font-weight: 700; line-height: 1.05">Гриша</span>
+<span style="display: flex; align-items: center; gap: 8px; font-size: 26px; color: #aeb9c7"><span style="width: 30px; height: 26px; background: rgba(46,196,255,0.18); color: #8ae6ff; font-size: 16px; font-weight: 800; display: inline-flex; align-items: center; justify-content: center; clip-path: polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%)">3</span>6 340</span>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{bdaySide}}" hint-placeholder-val="{{ false }}">
+<div style="display: flex; flex-direction: {{RD}}; align-items: center; gap: 34px">
+<span style="width: 196px; height: 196px; flex: none; border-radius: 50%; background: #ffb020; box-shadow: 0 0 0 8px #ff8cc6; color: #0a1628; font-size: 88px; font-weight: 800; display: flex; align-items: center; justify-content: center">В</span>
+<div style="display: flex; flex-direction: column; align-items: {{TAI}}; text-align: {{TA}}; gap: 10px">
+<span style="font-size: 82px; font-weight: 800; line-height: 1">Вика</span>
+<span style="font-size: 34px; color: #c7d1dd">сегодня празднует</span>
+<span style="font-size: 34px; color: #ff8cc6; font-weight: 700">поздравь в #поздравления</span>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{bdayCenter}}" hint-placeholder-val="{{ false }}">
+<div style="display: flex; align-items: center; gap: 36px">
+<div style="width: 280px; display: flex; flex-direction: column; align-items: flex-end; text-align: right; gap: 6px">
+<span style="font-size: 80px; font-weight: 800; line-height: 1">Вика</span>
+<span style="font-size: 30px; color: #c7d1dd">сегодня празднует</span>
+</div>
+<div style="position: relative; width: 196px; height: 196px; flex: none">
+<span style="position: absolute; inset: 0; border-radius: 50%; background: #ffb020; box-shadow: 0 0 0 8px #ff8cc6; color: #0a1628; font-size: 88px; font-weight: 800; display: flex; align-items: center; justify-content: center">В</span>
+<span style="position: absolute; left: -26px; top: 6px; width: 22px; height: 22px; background: #ff8cc6; clip-path: polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%)"></span>
+<span style="position: absolute; right: -30px; top: 40px; width: 16px; height: 16px; background: #ffb020; clip-path: polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%)"></span>
+<span style="position: absolute; right: -14px; bottom: 4px; width: 26px; height: 26px; background: #2ec4ff; clip-path: polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%)"></span>
+</div>
+<div style="width: 280px; display: flex; flex-direction: column; align-items: flex-start; gap: 6px">
+<span style="font-size: 30px; color: #c7d1dd">поздравь в</span>
+<span style="font-size: 34px; font-weight: 800; color: #ff8cc6">#поздравления</span>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{eventAny}}" hint-placeholder-val="{{ false }}">
+<div style="display: flex; flex-direction: column; align-items: {{AI}}; text-align: {{TA2}}; gap: 12px">
+<span style="font-size: 86px; font-weight: 800; line-height: 1">Мафия</span>
+<span style="font-size: 30px; line-height: 1.2; color: #c7d1dd">ведущий Kira · сбор в «Мафия — лобби»</span>
+<div style="display: flex; flex-direction: {{RD}}; align-items: center; gap: 18px; margin-top: 4px">
+<div style="display: flex; padding-left: 16px">
+<span style="width: 52px; height: 52px; border-radius: 50%; background: #3ccf8e; box-shadow: 0 0 0 5px #0a1628; margin-left: -16px"></span>
+<span style="width: 52px; height: 52px; border-radius: 50%; background: #ffb020; box-shadow: 0 0 0 5px #0a1628; margin-left: -16px"></span>
+<span style="width: 52px; height: 52px; border-radius: 50%; background: #e84393; box-shadow: 0 0 0 5px #0a1628; margin-left: -16px"></span>
+<span style="width: 52px; height: 52px; border-radius: 50%; background: #5865f2; box-shadow: 0 0 0 5px #0a1628; margin-left: -16px"></span>
+</div>
+<span style="font-size: 36px; font-weight: 700">6 записались</span>
+</div>
+</div>
+</sc-if>
+
+</div>
+</div>
+
+<sc-if value="{{safe}}" hint-placeholder-val="{{ false }}">
+<div aria-hidden="true" style="position: absolute; left: 0; top: 0; width: 960px; height: 130px; box-sizing: border-box; border: 3px dashed #ff7a1a; background: rgba(255,122,26,0.12); display: flex; align-items: center; padding-left: 28px; font-size: 26px; font-weight: 700; color: #ffb27a">Здесь Discord пишет название сервера — сюда ничего не ставим</div>
+</sc-if>
+<sc-if value="{{guides}}" hint-placeholder-val="{{ false }}">
+<div aria-hidden="true" style="position: absolute; left: 0; right: 0; top: 150px; height: 50px; border-top: 2px dashed rgba(138,230,255,0.6); border-bottom: 2px dashed rgba(138,230,255,0.6)"></div>
+<div aria-hidden="true" style="position: absolute; left: 0; right: 0; top: 224px; height: 210px; border-top: 2px dashed rgba(138,230,255,0.6); border-bottom: 2px dashed rgba(138,230,255,0.6)"></div>
+</sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"mode":{"editor":"enum","options":["leader","podium","birthday","event"],"default":"leader"},"layout":{"editor":"enum","options":["left","center","right"],"default":"left"},"backing":{"editor":"enum","options":["glass","solid","none"],"default":"glass"},"blur":{"editor":"range","min":0,"max":40,"step":2,"unit":"px","default":20},"safe":{"editor":"boolean","default":false},"guides":{"editor":"boolean","default":false},"dim":{"editor":"range","min":0,"max":100,"step":5,"unit":"%","default":85},"$preview":{"width":960,"height":540}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const mode = this.props.mode ?? 'leader';
+    let layout = this.props.layout ?? 'left';
+    if (['left', 'center', 'right'].indexOf(layout) < 0) layout = 'left';
+    const backing = this.props.backing ?? 'glass';
+    const blur = this.props.blur ?? 20;
+    const panel = backing !== 'none';
+    const d = (this.props.dim ?? 85) / 100 * (panel ? 0.45 : 1);
+    const m = Math.round(d * 65) / 100;
+    const c = (a) => 'rgba(5,8,14,' + a + ')';
+    const side = layout !== 'center';
+    const L = {
+      left: { L: '56px', R: 'auto', AI: 'flex-start', RD: 'row', TAI: 'flex-start', TA: 'left', TA2: 'left', artX: '0',
+        scrim: 'linear-gradient(90deg, ' + c(d) + ' 0%, ' + c(m) + ' 48%, ' + c(0) + ' 78%)' },
+      right: { L: 'auto', R: '56px', AI: 'flex-end', RD: 'row-reverse', TAI: 'flex-end', TA: 'right', TA2: 'right', artX: '-560',
+        scrim: 'linear-gradient(270deg, ' + c(d) + ' 0%, ' + c(m) + ' 48%, ' + c(0) + ' 78%)' },
+      center: { L: '0px', R: '0px', AI: 'center', RD: 'row', TAI: 'center', TA: 'center', TA2: 'center', artX: '0',
+        scrim: 'radial-gradient(ellipse 60% 62% at 50% 58%, ' + c(d) + ' 0%, ' + c(m) + ' 60%, ' + c(Math.round(m * 40) / 100) + ' 100%)' }
+    };
+    return Object.assign({
+      chipLead: mode === 'leader', chipTop: mode === 'podium', chipBday: mode === 'birthday', chipEvent: mode === 'event',
+      leadSide: mode === 'leader' && side, leadCenter: mode === 'leader' && !side,
+      topSide: mode === 'podium' && side, topCenter: mode === 'podium' && !side,
+      bdaySide: mode === 'birthday' && side, bdayCenter: mode === 'birthday' && !side,
+      eventAny: mode === 'event',
+      safe: !!this.props.safe, guides: !!this.props.guides
+    }, L[layout], {
+      WT: panel ? '130px' : '150px',
+      PAD: panel ? '20px 28px' : '0px',
+      PBG: backing === 'glass' ? 'rgba(10,18,32,0.42)' : (backing === 'solid' ? 'rgba(10,18,32,0.86)' : 'transparent'),
+      PBF: backing === 'glass' ? 'blur(' + blur + 'px) saturate(140%)' : 'none',
+      PBR: panel ? '2px solid rgba(138,230,255,0.22)' : '0px solid transparent',
+      L: panel ? (layout === 'left' ? '28px' : (layout === 'center' ? '0px' : 'auto')) : L[layout].L,
+      R: panel ? (layout === 'right' ? '28px' : (layout === 'center' ? '0px' : 'auto')) : L[layout].R,
+      W: layout === 'center' ? 'fit-content' : 'auto',
+      M: layout === 'center' ? '0 auto' : '0'
+    });
+  }
+}
+</script>
+</body>
+</html>

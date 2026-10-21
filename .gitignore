@@ -77,3 +77,6 @@ desktop/release/
 
 # Data dumps for one-time imports (personal data, never committed)
 data/
+
+# Banner test renders (node scripts/render-banner-samples.js)
+docs/banner/renders/

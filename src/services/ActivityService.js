@@ -83,7 +83,8 @@ class ActivityService {
                 channelId: params.channelId,
                 messageId: params.messageId,
                 userId: params.userId,
-                date
+                date,
+                sentAt: timestamp
             });
 
             if (!dedupInserted) {
@@ -141,7 +142,7 @@ class ActivityService {
         }
     }
 
-    async _insertDedupMessage({ guildId, channelId, messageId, userId, date }) {
+    async _insertDedupMessage({ guildId, channelId, messageId, userId, date, sentAt }) {
         try {
             await this.messagesContainer.items.create({
                 id: `${channelId}-${messageId}`,
@@ -150,6 +151,8 @@ class ActivityService {
                 messageId,
                 userId,
                 date,
+                // When it was written; createdAt is when the sync saw it (backfills see old messages late)
+                sentAt: sentAt || null,
                 createdAt: Date.now(),
                 ttl: TTL_35_DAYS
             });
@@ -255,10 +258,11 @@ class ActivityService {
         await this.initialize();
 
         const cutoffTs = Date.now() - windowMs;
+        // createdAt (indexed) narrows it first: a message is always sent before the sync saves it
         const query = `
             SELECT c.userId
             FROM c
-            WHERE c.guildId = @guildId AND c.createdAt >= @cutoffTs
+            WHERE c.guildId = @guildId AND c.createdAt >= @cutoffTs AND (c.sentAt ?? c.createdAt) >= @cutoffTs
         `;
 
         const { resources } = await this.messagesContainer.items
