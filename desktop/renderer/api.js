@@ -96,7 +96,7 @@ const ERROR_TEXT = {
     event_closed: 'Ивент уже прошёл или отменён.',
     menu_not_found: 'Меню ролей уже удалено.',
     already_muted: 'У него уже есть мут.',
-    guild_not_found: 'Бот больше не на этом сервере.',
+    guild_not_found: 'Сервер недоступен: бота или вас на нём больше нет.',
     invalid_action: 'Такого действия нет.',
     invalid_channel_id: 'Канал не найден.',
     invalid_delete_days: 'Удалять сообщения можно за 0–7 дней.',

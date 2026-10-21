@@ -7,6 +7,7 @@ const SECTIONS = [
     { id: 'moderation', label: 'Модерация' },
     { id: 'lockdown', label: 'Lockdown' },
     { id: 'birthdays', label: 'Дни рождения' },
+    { id: 'general', label: 'Общие' },
     { id: 'diagnostics', label: 'Диагностика' }
 ];
 
@@ -22,12 +23,13 @@ const SAVE_ERRORS = {
     invalid_young_days: 'Порог «нового аккаунта» — от 1 до 365 дней.',
     invalid_time: 'Время — в формате ЧЧ:ММ, например 09:00.',
     not_birthday_guild: 'Дни рождения настраиваются на основном сервере бота.',
+    invalid_timezone: 'Такого часового пояса нет.',
     booster_role_unsafe: 'Роль буст-аккаунтов должна быть без прав и не совпадать с ролями пропуска.'
 };
 
 const LEVEL_MARK = { ok: '✓', warn: '!', bad: '✕' };
 const GROUPS = { intents: 'Intents', permissions: 'Права бота', verification: 'Пропуск', lockdown: 'Lockdown', birthdays: 'Дни рождения', system: 'Система' };
-const SECTION_NAMES = { verification: 'Пропуск', lockdown: 'Lockdown', birthdays: 'Дни рождения' };
+const SECTION_NAMES = { verification: 'Пропуск', lockdown: 'Lockdown', birthdays: 'Дни рождения', general: 'Общие' };
 
 function slowmodeLabel(seconds) {
     if (seconds < 60) return `${seconds} секунд`;
@@ -147,12 +149,13 @@ function VerificationSection({ guildId, values, options, onSaved, toast }) {
     );
 }
 
-function BirthdaysSection({ guildId, values, options, onSaved, toast }) {
+function BirthdaysSection({ guildId, values, options, onSaved, toast, onOpenSection }) {
     const keys = ['birthdayCheckTime', 'birthdayCongratsChannelId', 'birthdayAnnounceChannelId'];
     const { draft, set, dirty, reset } = useDraft(values, keys);
     const { busy, error, save } = useSave(guildId, onSaved, toast);
     const env = key => values.fromEnv.includes(key) && draft[key] === values[key];
     const textOnly = options.textChannels.filter(channel => !channel.forum);
+    // An older bot keeps one shared list on its main server
     if (!values.birthdayGuild) {
         return <p className="notice">Дни рождения у бота общие и настраиваются на его основном сервере. Здесь их поменять нельзя.</p>;
     }
@@ -162,7 +165,10 @@ function BirthdaysSection({ guildId, values, options, onSaved, toast }) {
                 <label className="field">
                     Во сколько поздравлять
                     <input type="time" value={draft.birthdayCheckTime} onChange={e => set('birthdayCheckTime', e.target.value)} />
-                    <span className="muted small">По часовому поясу {values.timezone} — он задан в Azure и общий для всего бота.</span>
+                    <span className="muted small">
+                        По часовому поясу сервера: {values.timezone}.{' '}
+                        <button type="button" className="link-button" onClick={() => onOpenSection('general')}>Изменить</button>
+                    </span>
                     {env('birthdayCheckTime') && <span className="muted small">Сейчас: из Azure. После сохранения — из настроек сервера.</span>}
                 </label>
                 <span />
@@ -171,9 +177,38 @@ function BirthdaysSection({ guildId, values, options, onSaved, toast }) {
                 <ChannelSelect label="Канал объявлений «X указал день рождения»" value={draft.birthdayAnnounceChannelId} channels={textOnly}
                     fromEnv={env('birthdayAnnounceChannelId')} onChange={v => set('birthdayAnnounceChannelId', v)} />
             </div>
-            <p className="muted small">Сохранение сразу переставляет ежедневную проверку на новое время, перезапуск бота не нужен. Если канал поздравлений не выбран, бот поздравляет в канале объявлений; «не выбран» у обоих — не поздравляет вовсе.</p>
+            <p className="muted small">У этого сервера свой список дней рождения: даты, указанные на других серверах бота, здесь не видны. Сохранение сразу переставляет ежедневную проверку на новое время, перезапуск бота не нужен. Если канал поздравлений не выбран, бот поздравляет в канале объявлений; «не выбран» у обоих — не поздравляет вовсе.</p>
             <SaveBar dirty={dirty} busy={busy} error={error} onReset={reset}
                 onSave={() => save(Object.fromEntries(keys.filter(k => draft[k] !== values[k]).map(k => [k, draft[k]])))} />
+        </div>
+    );
+}
+
+function GeneralSection({ guildId, values, options, onSaved, toast }) {
+    const keys = ['timezone', 'aiChannelId'];
+    const { draft, set, dirty, reset } = useDraft(values, keys);
+    const { busy, error, save } = useSave(guildId, onSaved, toast);
+    const env = key => values.fromEnv.includes(key) && draft[key] === values[key];
+    const zones = options.timezones?.length ? options.timezones : [values.timezone];
+    const textOnly = options.textChannels.filter(channel => !channel.forum);
+    return (
+        <div className="settings-form">
+            <div className="settings-grid">
+                <label className="field">
+                    Часовой пояс сервера
+                    <select value={draft.timezone} onChange={e => set('timezone', e.target.value)}>
+                        {zones.map(zone => <option key={zone} value={zone}>{zone}</option>)}
+                    </select>
+                    <span className="muted small">По нему бот поздравляет с днём рождения и считает «сегодня» в Пропуске, Обзоре и Статистике.</span>
+                </label>
+                {'aiChannelId' in values ? (
+                    <ChannelSelect label="Канал ИИ-ассистента" value={draft.aiChannelId} channels={textOnly}
+                        fromEnv={env('aiChannelId')} onChange={v => set('aiChannelId', v)} />
+                ) : <span />}
+            </div>
+            <p className="muted small">ИИ отвечает только в этом канале и только на @упоминание бота или ответ на его сообщение. «Не выбран» — ИИ на сервере молчит.</p>
+            <SaveBar dirty={dirty} busy={busy} error={error} onReset={reset}
+                onSave={() => save(Object.fromEntries(keys.filter(k => k in values && draft[k] !== values[k]).map(k => [k, draft[k]])))} />
         </div>
     );
 }
@@ -389,7 +424,8 @@ export default function SettingsView({ guildId, requestedSection, toast }) {
             {section === 'verification' && props && <VerificationSection {...props} />}
             {section === 'moderation' && props && <ModerationSection {...props} />}
             {section === 'lockdown' && props && <LockdownSection {...props} />}
-            {section === 'birthdays' && props && <BirthdaysSection {...props} />}
+            {section === 'birthdays' && props && <BirthdaysSection {...props} onOpenSection={setSection} />}
+            {section === 'general' && props && <GeneralSection {...props} />}
             {section === 'diagnostics' && <DiagnosticsSection guildId={guildId} onOpenSection={setSection} />}
         </section>
     );
