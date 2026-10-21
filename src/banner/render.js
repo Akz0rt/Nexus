@@ -112,4 +112,13 @@ ${glass ? `<g clip-path="url(#panel)"><g filter="url(#blur)">${bg}</g></g>` : ''
     return { png, rect: card.rect };
 }
 
-module.exports = { RendererUnavailable, renderCard, renderScrim, renderFrame, panelRect, imageType, DEFAULT_BACKGROUND };
+/**
+ * The panel's shape for ffmpeg's alphamerge: white rounded rectangle on black,
+ * the size of the panel.
+ */
+function renderMask(width, height, radius = PANEL_RADIUS) {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}"><rect width="${width}" height="${height}" fill="#000"/><rect width="${width}" height="${height}" rx="${radius}" fill="#fff"/></svg>`;
+    return resvg(svg).asPng();
+}
+
+module.exports = { RendererUnavailable, renderMask, renderCard, renderScrim, renderFrame, panelRect, imageType, DEFAULT_BACKGROUND };
