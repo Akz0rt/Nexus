@@ -1486,3 +1486,104 @@ body:has(.action-bar) .toasts, body:has(.selection-bar.is-floating) .toasts { bo
 .command-text > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .command-enter { flex: none; }
 .channel.is-flash, .empty-chip.is-flash { box-shadow: inset 0 0 0 2px var(--ink), 0 0 0 1px var(--outline); transition: box-shadow .3s; }
+
+/* ---------- server banner ---------- */
+.status-ok { border-color: color-mix(in srgb, var(--ok) 55%, transparent); color: var(--ok); }
+.banner-head { gap: 12px; }
+.banner-head h1 { margin-right: 0; }
+.banner-layout { display: grid; grid-template-columns: minmax(0, 704px) minmax(320px, 400px); gap: 16px; align-items: start; }
+.banner-main { display: grid; gap: 12px; min-width: 0; }
+.banner-subhead { margin: 0; font-size: 13px; font-weight: 600; color: var(--muted); }
+.banner-segmented { justify-self: start; }
+.banner-safe-toggle {
+    height: 28px; padding: 0 12px; border-radius: 999px; font-size: 13px; cursor: pointer;
+    border: 1px solid var(--line); background: transparent; color: var(--text-3);
+}
+.banner-safe-toggle.is-on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent-text); }
+.banner-preview { position: relative; width: 100%; aspect-ratio: 16 / 9; border-radius: 8px; overflow: hidden; background: #0a1628; box-shadow: 0 0 0 1px var(--outline); }
+.banner-preview img { display: block; width: 100%; height: 100%; }
+.banner-preview.is-loading img { opacity: .75; transition: opacity .15s; }
+.banner-safe {
+    position: absolute; left: 0; top: 0; width: 100%; height: calc(130 / 540 * 100%); box-sizing: border-box;
+    display: flex; align-items: center; padding-left: 3%; border: 2px dashed var(--accent);
+    background: rgba(255, 122, 26, .12); color: #ffb27a; font-weight: 700; font-size: clamp(11px, 1.9vw, 18px); pointer-events: none;
+}
+.banner-preview-error { position: absolute; inset: auto 12px 12px; margin: 0; padding: 8px 12px; border-radius: 6px; background: var(--danger-bg); color: var(--danger-text); }
+.banner-discord { display: flex; align-items: flex-start; gap: 20px; }
+.banner-discord-side { width: 240px; flex: none; border-radius: 8px; overflow: hidden; background: #2b2d31; box-shadow: 0 0 0 1px var(--outline); }
+.banner-discord-top { position: relative; height: 135px; background: #0a1628; }
+.banner-discord-top img { display: block; width: 240px; height: 135px; }
+.banner-discord-name { position: absolute; left: 12px; right: 12px; top: 10px; color: #fff; font-weight: 700; font-size: 15px; text-shadow: 0 1px 3px rgba(0, 0, 0, .7); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.banner-discord-channels { display: grid; gap: 2px; padding: 10px 8px 14px; color: #949ba4; font-size: 14px; }
+.banner-discord-channels span { padding: 4px 8px; border-radius: 4px; }
+.banner-discord-channels .is-active { background: #404249; color: #f2f3f5; }
+.banner-discord-channels .banner-discord-cat { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; padding-top: 10px; }
+.banner-discord p { max-width: 36ch; }
+.banner-race { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.banner-race li { display: flex; align-items: center; gap: 10px; min-height: 30px; }
+.banner-race-name { width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.banner-race-bar { flex: 1; height: 8px; border-radius: 4px; background: var(--raised); overflow: hidden; }
+.banner-race-bar span { display: block; height: 100%; border-radius: 4px; background: color-mix(in srgb, var(--ink) 45%, var(--raised)); }
+.banner-race-bar .is-first { background: var(--ink); }
+.banner-race-score { width: 70px; text-align: right; }
+.banner-race-note { width: 150px; }
+.banner-history-block { display: grid; gap: 8px; }
+.banner-history { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.banner-history-item { display: grid; gap: 4px; padding: 0; border: 0; background: transparent; color: var(--text-3); text-align: left; cursor: pointer; min-width: 0; }
+.banner-history-item:disabled { cursor: default; }
+.banner-history-thumb { display: block; width: 100%; aspect-ratio: 16 / 9; border-radius: 6px; overflow: hidden; background: var(--raised); box-shadow: 0 0 0 1px var(--line); }
+.banner-history-thumb img { display: block; width: 100%; height: 100%; }
+.banner-history-item.is-current .banner-history-thumb { box-shadow: 0 0 0 1px var(--ink); }
+.banner-history-item:not(:disabled):hover .banner-history-thumb { box-shadow: 0 0 0 1px var(--focus); }
+.banner-history-item > .small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.banner-settings { gap: 10px; }
+.banner-settings h3 { margin: 6px 0 0; font-size: 13px; font-weight: 600; color: var(--muted); }
+.banner-settings h3:first-child { margin-top: 0; }
+.banner-modes { display: grid; gap: 4px; }
+.banner-mode {
+    display: flex; align-items: center; gap: 10px; padding: 7px 12px; border-radius: 8px; cursor: pointer;
+    background: var(--raised); box-shadow: inset 0 0 0 1px var(--line);
+}
+.banner-mode > span:nth-of-type(1) { flex: 1; color: var(--text); }
+.banner-mode.is-active { background: var(--selected-bg); box-shadow: inset 0 0 0 1px var(--selected-line); }
+.banner-hours { width: 52px; padding: 2px 6px; }
+.banner-layout-title { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.banner-layout-title select { font-size: 13px; padding: 2px 6px; }
+.banner-layouts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.banner-layout-option {
+    display: grid; justify-items: center; gap: 6px; padding: 10px 6px 8px; border-radius: 8px; cursor: pointer;
+    background: var(--raised); border: 0; color: var(--text-3); box-shadow: inset 0 0 0 1px var(--line);
+}
+.banner-layout-option.is-active { color: var(--text); background: var(--selected-bg); box-shadow: inset 0 0 0 1px var(--selected-line); }
+.banner-layout-icon { position: relative; width: 64px; height: 36px; border-radius: 4px; background: #0a1628; overflow: hidden; box-shadow: 0 0 0 1px var(--outline); }
+.banner-layout-safe { position: absolute; left: 0; right: 0; top: 0; height: 9px; background: rgba(255, 122, 26, .45); }
+.banner-layout-card { position: absolute; top: 15px; width: 24px; height: 12px; border-radius: 2px; background: var(--muted-2); }
+.banner-layout-icon.is-left .banner-layout-card { left: 5px; }
+.banner-layout-icon.is-center .banner-layout-card { left: 20px; }
+.banner-layout-icon.is-right .banner-layout-card { right: 5px; }
+.banner-layout-option.is-active .banner-layout-card { background: var(--ink); }
+.banner-background { display: flex; align-items: center; gap: 10px; }
+.banner-background-thumb { width: 76px; height: 43px; flex: none; border-radius: 4px; overflow: hidden; background: var(--raised); box-shadow: 0 0 0 1px var(--line); }
+.banner-background-thumb img { display: block; width: 100%; height: 100%; }
+.banner-background-info { flex: 1; min-width: 0; display: grid; }
+.banner-background-info strong { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.banner-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.banner-row-label { width: 92px; color: var(--text-2); }
+.banner-row input[type="range"] { flex: 1; min-width: 120px; accent-color: var(--ink); }
+.banner-row-value { width: 44px; text-align: right; }
+.banner-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.banner-chip {
+    border: 1px solid var(--line); border-radius: 999px; padding: 4px 12px; font-size: 13px; cursor: pointer;
+    background: transparent; color: var(--text);
+}
+.banner-chip.is-active { border-color: var(--selected-line); background: var(--selected-bg); color: var(--info-text); }
+.banner-chip:disabled { opacity: .5; cursor: default; }
+.banner-boost { margin: 4px 0 0; padding: 8px 12px; border-radius: 8px; background: var(--warn-bg); color: var(--warn-text); }
+.banner-boost.is-ok { background: color-mix(in srgb, var(--ok) 12%, var(--surface)); color: var(--ok); }
+.banner-restore-thumb { display: block; width: 320px; max-width: 100%; border-radius: 6px; box-shadow: 0 0 0 1px var(--line); }
+.banner-crop { position: relative; display: grid; place-items: center; max-width: 420px; border-radius: 6px; overflow: hidden; background: #000; }
+.banner-crop img { display: block; max-width: 100%; max-height: 260px; opacity: .55; }
+.banner-crop-frame { position: absolute; box-shadow: 0 0 0 2px var(--ink); pointer-events: none; }
+@media (max-width: 1180px) {
+    .banner-layout { grid-template-columns: minmax(0, 1fr); }
+}

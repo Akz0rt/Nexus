@@ -187,6 +187,54 @@ ipcMain.handle('file:saveCsv', async (event, { fileName, content }) => {
     return { saved: true, filePath };
 });
 
+// The banner screen: pictures from the API, and its background picked here and sent as is.
+// Only the banner's own paths, so the renderer can't reach anything else this way
+const BANNER_IMAGE_PATH = /^\/guilds\/\d{17,20}\/banner\/(preview|background\/image|history\/[\w-]+\/image)(\?[\w=&%.-]*)?$/;
+const BANNER_UPLOAD_PATH = /^\/guilds\/\d{17,20}\/banner\/background$/;
+const MAX_UPLOAD_BYTES = 15 * 1024 * 1024;
+const IMAGE_TYPES = { '.gif': 'image/gif', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp' };
+let pickedImage = null; // { buffer, type, name } — read once in the main process, never handed back
+
+ipcMain.handle('api:image', async (event, apiPath) => {
+    if (!BANNER_IMAGE_PATH.test(String(apiPath))) return { ok: false, status: 0, error: 'bad_path' };
+    try {
+        return { ok: true, ...(await api.image(apiPath)) };
+    } catch (error) {
+        return { ok: false, status: error.status || 0, error: error.body?.error || error.message };
+    }
+});
+
+// Pick a picture: its preview and size come back, the bytes stay here until upload
+ipcMain.handle('file:pickImage', async () => {
+    const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow, {
+        properties: ['openFile'],
+        filters: [{ name: 'Картинки', extensions: ['gif', 'png', 'jpg', 'jpeg', 'webp'] }]
+    });
+    if (canceled || !filePaths[0]) return { canceled: true };
+    const filePath = filePaths[0];
+    const size = fs.statSync(filePath).size;
+    const name = path.basename(filePath);
+    if (size > MAX_UPLOAD_BYTES) return { error: 'file_too_large', name, size };
+    const type = IMAGE_TYPES[path.extname(filePath).toLowerCase()];
+    if (!type) return { error: 'bad_background', name, size };
+    const buffer = fs.readFileSync(filePath);
+    pickedImage = { buffer, type, name };
+    return { name, size, type, dataUrl: `data:${type};base64,${buffer.toString('base64')}` };
+});
+
+ipcMain.handle('api:uploadPicked', async (event, apiPath) => {
+    if (!BANNER_UPLOAD_PATH.test(String(apiPath))) return { ok: false, status: 0, error: 'bad_path' };
+    if (!pickedImage) return { ok: false, status: 0, error: 'nothing_picked' };
+    const { buffer, type, name } = pickedImage;
+    try {
+        const data = await api.upload(apiPath, buffer, type, name);
+        pickedImage = null;
+        return { ok: true, data };
+    } catch (error) {
+        return { ok: false, status: error.status || 0, error: error.body?.error || error.message, body: error.body || null };
+    }
+});
+
 ipcMain.handle('update:install', () => {
     quitting = true;
     updater?.quitAndInstall();

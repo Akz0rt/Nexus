@@ -67,6 +67,32 @@ class ApiClient {
         return data;
     }
 
+    /** A picture from the API (the banner's preview, history, background) as a data URL */
+    async image(path) {
+        const res = await fetch(this.url(path), { headers: this.headers() });
+        if (res.status === 401) this.onUnauthorized();
+        if (!res.ok) {
+            const data = await res.json().catch(() => null);
+            throw new ApiError(res.status, data);
+        }
+        const type = res.headers.get('content-type') || 'image/png';
+        const buffer = Buffer.from(await res.arrayBuffer());
+        return { dataUrl: `data:${type};base64,${buffer.toString('base64')}`, sample: res.headers.get('x-banner-sample') === '1' };
+    }
+
+    /** A file sent as the raw request body (the banner background) */
+    async upload(path, buffer, type, name) {
+        const res = await fetch(this.url(path), {
+            method: 'POST',
+            headers: this.headers({ 'Content-Type': type || 'application/octet-stream', 'X-File-Name': encodeURIComponent(name || 'file') }),
+            body: buffer
+        });
+        const data = await res.json().catch(() => null);
+        if (res.status === 401) this.onUnauthorized();
+        if (!res.ok) throw new ApiError(res.status, data);
+        return data;
+    }
+
     /**
      * Subscribe to a guild's live events. Reconnects until close() is called.
      * @param {(event: string, data: any) => void} onEvent

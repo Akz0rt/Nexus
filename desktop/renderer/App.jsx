@@ -10,6 +10,7 @@ import RolesView from './RolesView.jsx';
 import OverviewView from './OverviewView.jsx';
 import StatsView from './StatsView.jsx';
 import SettingsView from './SettingsView.jsx';
+import BannerView from './BannerView.jsx';
 import EventsView from './EventsView.jsx';
 import BirthdaysView from './BirthdaysView.jsx';
 import ActivityView from './ActivityView.jsx';
@@ -362,6 +363,9 @@ export default function App() {
                     )}
                     {guildId && view === 'stats' && (
                         <StatsView key={guildId} guildId={guildId} revision={revision} onOpenMember={setDrawerUserId} onOpenJournal={openJournal} />
+                    )}
+                    {guildId && view === 'banner' && senior && (
+                        <BannerView key={guildId} guildId={guildId} guildName={guild?.name} toast={toast} />
                     )}
                     {guildId && view === 'settings' && senior && (
                         <SettingsView key={guildId} guildId={guildId} requestedSection={settingsSection} toast={toast} />

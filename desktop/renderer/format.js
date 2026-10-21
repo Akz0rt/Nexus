@@ -44,6 +44,7 @@ export const ACTION_LABELS = {
     'banner.settings_updated': 'Настройки баннера изменены',
     'banner.published': 'Баннер обновлён',
     'banner.restored': 'Баннер возвращён из истории',
+    'banner.background_changed': 'Фон баннера заменён',
     'report.created': 'Жалоба',
     'report.taken': 'Жалоба взята',
     'report.resolved': 'Жалоба решена',
@@ -228,6 +229,14 @@ export function describeMessage(entry) {
 
 /** Why one member was skipped in a group action. */
 export const FAILURE_LABELS = {
+    // The server banner («Обновить сейчас»)
+    no_background: 'фон не загружен',
+    boost_level: 'нужен 2-й уровень буста',
+    missing_permission: 'у бота нет права «Управлять сервером»',
+    rejected: 'Discord не принял баннер',
+    no_data: 'нечего показать — оставлен текущий',
+    busy: 'баннер уже собирается',
+    too_soon: 'не чаще раза в минуту',
     has_permanent: 'роль уже есть навсегда',
     not_in_voice: 'не в голосе',
     target_higher: 'роль не ниже вашей',

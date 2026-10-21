@@ -1,4 +1,5 @@
 const fs = require('fs/promises');
+const syncFs = require('fs');
 const os = require('os');
 const path = require('path');
 const { execFile, spawn } = require('child_process');
@@ -35,19 +36,61 @@ class ComposeError extends Error {
     }
 }
 
+let resolvedFfmpeg = null;
+
+/**
+ * The ffmpeg binary, made runnable: the deploy's artifact upload doesn't keep file
+ * permissions, so the execute bit may be gone. Then chmod it, or (read-only package)
+ * run a chmodded copy from the temp folder.
+ */
 function ffmpegPath() {
+    if (resolvedFfmpeg) return resolvedFfmpeg;
+    let binary = null;
     try {
-        const binary = require('ffmpeg-static');
-        if (binary) return binary;
+        binary = require('ffmpeg-static');
     } catch {
         // falls through
     }
-    throw new ComposeError('ffmpeg_unavailable', 'ffmpeg binary not found');
+    if (!binary || !syncFs.existsSync(binary)) throw new ComposeError('ffmpeg_unavailable', 'ffmpeg binary not found');
+    if (process.platform === 'win32') return (resolvedFfmpeg = binary);
+    const runnable = file => {
+        try {
+            syncFs.accessSync(file, syncFs.constants.X_OK);
+            return true;
+        } catch {
+            return false;
+        }
+    };
+    if (runnable(binary)) return (resolvedFfmpeg = binary);
+    try {
+        syncFs.chmodSync(binary, 0o755);
+        if (runnable(binary)) return (resolvedFfmpeg = binary);
+    } catch {
+        // read-only: copy it below
+    }
+    try {
+        const copy = path.join(os.tmpdir(), 'nexus-ffmpeg');
+        if (!runnable(copy)) {
+            syncFs.copyFileSync(binary, copy);
+            syncFs.chmodSync(copy, 0o755);
+        }
+        if (runnable(copy)) return (resolvedFfmpeg = copy);
+    } catch (error) {
+        throw new ComposeError('ffmpeg_unavailable', `ffmpeg is not runnable: ${error.message}`);
+    }
+    throw new ComposeError('ffmpeg_unavailable', 'ffmpeg is not runnable');
 }
 
 function run(args) {
     return new Promise((resolve, reject) => {
-        execFile(ffmpegPath(), args, { timeout: FFMPEG_TIMEOUT_MS, maxBuffer: 4 * 1024 * 1024 }, (error, stdout, stderr) => {
+        let binary;
+        try {
+            binary = ffmpegPath();
+        } catch (error) {
+            reject(error);
+            return;
+        }
+        execFile(binary, args, { timeout: FFMPEG_TIMEOUT_MS, maxBuffer: 4 * 1024 * 1024 }, (error, stdout, stderr) => {
             if (error) {
                 const tail = String(stderr || '').trim().split('\n').slice(-3).join(' | ');
                 reject(new ComposeError('ffmpeg_failed', `${error.killed ? 'ffmpeg timed out' : 'ffmpeg failed'}: ${tail}`));
@@ -59,7 +102,14 @@ function run(args) {
 /** Frames and seconds of a GIF (decoded once, nothing written), for its real frame rate */
 function probe(file) {
     return new Promise((resolve, reject) => {
-        const child = spawn(ffmpegPath(), ['-hide_banner', '-i', file, '-map', '0:v:0', '-f', 'null', '-']);
+        let binary;
+        try {
+            binary = ffmpegPath();
+        } catch (error) {
+            reject(error);
+            return;
+        }
+        const child = spawn(binary, ['-hide_banner', '-i', file, '-map', '0:v:0', '-f', 'null', '-']);
         let log = '';
         const timer = setTimeout(() => child.kill(), FFMPEG_TIMEOUT_MS);
         child.stderr.on('data', chunk => { log += chunk; });

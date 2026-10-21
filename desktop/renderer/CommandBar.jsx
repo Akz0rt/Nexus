@@ -27,6 +27,7 @@ const SCREENS = [
     { view: 'activity', label: 'Активность' },
     { view: 'stats', label: 'Статистика' },
     { view: 'journal', label: 'Журнал', words: 'лог' },
+    { view: 'banner', label: 'Баннер', words: 'баннер сервера фон гиф', senior: true },
     { view: 'settings', label: 'Настройки', senior: true }
 ];
 

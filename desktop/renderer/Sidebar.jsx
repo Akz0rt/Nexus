@@ -14,7 +14,8 @@ const GROUPS = [
         { id: 'roles', label: 'Роли', needs: 'roles' },
         { id: 'events', label: 'Ивенты' },
         { id: 'birthdays', label: 'Дни рождения' },
-        { id: 'economy', label: 'Экономика' }
+        { id: 'economy', label: 'Экономика' },
+        { id: 'banner', label: 'Баннер', needs: 'settings' }
     ] },
     { label: 'Данные', items: [
         { id: 'activity', label: 'Активность' },
