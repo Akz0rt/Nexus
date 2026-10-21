@@ -28,7 +28,7 @@ const SAVE_ERRORS = {
 };
 
 const LEVEL_MARK = { ok: '✓', warn: '!', bad: '✕' };
-const GROUPS = { intents: 'Intents', permissions: 'Права бота', verification: 'Пропуск', lockdown: 'Lockdown', birthdays: 'Дни рождения', system: 'Система' };
+const GROUPS = { intents: 'Intents', permissions: 'Права бота', verification: 'Пропуск', lockdown: 'Lockdown', birthdays: 'Дни рождения', banner: 'Баннер', system: 'Система' };
 const SECTION_NAMES = { verification: 'Пропуск', lockdown: 'Lockdown', birthdays: 'Дни рождения', general: 'Общие' };
 
 function slowmodeLabel(seconds) {

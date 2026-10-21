@@ -33,9 +33,9 @@ function eventWhen(startsAt, timeZone, now = Date.now()) {
     return `${date} · ${time}`.toUpperCase();
 }
 
-async function leaderData(guild, banner, limit) {
-    return cached(`${guild.id}:${banner.period}:${banner.calc}:${JSON.stringify(banner.exclude)}:${limit}`,
-        () => getLeaders(guild, { period: banner.period, calc: banner.calc, exclude: banner.exclude, limit }));
+async function leaderData(guild, banner, limit, yesterdayLeaderId = null) {
+    return cached(`${guild.id}:${banner.period}:${banner.calc}:${JSON.stringify(banner.exclude)}:${limit}:${yesterdayLeaderId}`,
+        () => getLeaders(guild, { period: banner.period, calc: banner.calc, exclude: banner.exclude, yesterdayLeaderId, limit }));
 }
 
 /**
@@ -45,10 +45,10 @@ async function leaderData(guild, banner, limit) {
  * @param {object} settings - GuildSettingsService.get() result
  * @param {'leader'|'podium'|'birthday'|'event'} mode
  */
-async function collect(guild, settings, mode, { now = Date.now() } = {}) {
+async function collect(guild, settings, mode, { now = Date.now(), yesterdayLeaderId = null } = {}) {
     const banner = settings.banner;
     if (mode === 'leader') {
-        const [top] = await leaderData(guild, banner, 1);
+        const [top] = await leaderData(guild, banner, 1, yesterdayLeaderId);
         if (!top) return null;
         return {
             // No status line for now (it would need the Presence intent)
@@ -57,7 +57,7 @@ async function collect(guild, settings, mode, { now = Date.now() } = {}) {
         };
     }
     if (mode === 'podium') {
-        const top = await leaderData(guild, banner, 3);
+        const top = await leaderData(guild, banner, 3, yesterdayLeaderId);
         if (!top.length) return null;
         return { period: banner.period, places: await Promise.all(top.map(row => person(row.member, { score: row.score }))) };
     }
@@ -109,4 +109,4 @@ function sampleData(mode, banner) {
     }[mode];
 }
 
-module.exports = { collect, sampleData, eventWhen };
+module.exports = { collect, sampleData, eventWhen, dayKey };

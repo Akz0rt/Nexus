@@ -9,7 +9,7 @@ const os = require('os');
 const path = require('path');
 const { execFileSync, spawnSync } = require('child_process');
 const ffmpeg = require('ffmpeg-static');
-const { composeBanner, firstFrame, filterGraph, ladderFor, ComposeError } = require('../src/banner/compose');
+const { composeBanner, firstFrame, thumbnail, normalizeBackground, filterGraph, ladderFor, ComposeError } = require('../src/banner/compose');
 const { renderCard } = require('../src/banner/render');
 const { sampleData } = require('../src/banner/data');
 const { resolveBanner } = require('../src/banner/settings');
@@ -129,8 +129,30 @@ async function still() {
     assert.strictEqual(empty.type, 'image/png');
 }
 
+async function uploads() {
+    // An animated upload of any shape → 960×540, still animated
+    const square = await normalizeBackground(testGif('600x600', 1));
+    assert.deepStrictEqual([square.type, square.animated, square.frames], ['image/gif', true, 10]);
+    assert.strictEqual(frame(square.buffer, 0).length, W * H * 3);
+    assert.strictEqual(countFrames(square.buffer), 10);
+    // A still picture → PNG 960×540
+    const still = await normalizeBackground(await firstFrame(testGif('1920x1080', 1)));
+    assert.deepStrictEqual([still.type, still.animated, still.buffer.readUInt32BE(16), still.buffer.readUInt32BE(20)], ['image/png', false, W, H]);
+    await assert.rejects(normalizeBackground(Buffer.from('not an image')), error => error.code === 'bad_background');
+
+    // «Только фон»: the background as is (no card, no darkening)
+    const gif = testGif();
+    const bare = await composeBanner({ spec: { mode: 'background', layout: 'left', backing: 'glass', blur: 20, dim: 0.85, data: null }, background: gif });
+    assert.ok(diff(frame(gif, 3), frame(bare.buffer, 3), 0, 0, W, H) < 10, 'only the background');
+
+    // The history's small picture
+    const thumb = await thumbnail(bare.buffer);
+    assert.deepStrictEqual([thumb.readUInt32BE(16), thumb.readUInt32BE(20)], [320, 180]);
+}
+
 (async () => {
     graph();
+    await uploads();
     await animated();
     await sizeLimit();
     await still();

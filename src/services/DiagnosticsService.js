@@ -17,7 +17,7 @@ const BOT_PERMISSIONS = [
     { flag: PermissionFlagsBits.MuteMembers, label: 'Отключать участникам микрофон', hint: 'нужно для выключения микрофона' },
     { flag: PermissionFlagsBits.DeafenMembers, label: 'Отключать участникам звук', hint: 'нужно для выключения звука' },
     { flag: PermissionFlagsBits.ManageChannels, label: 'Управлять каналами', hint: 'нужно для лимита и названия голосовых и для slowmode в Lockdown' },
-    { flag: PermissionFlagsBits.ManageGuild, label: 'Управлять сервером', hint: 'без него Lockdown не может поставить инвайты на паузу, а в Пропуске не видно, по чьему инвайту зашёл новичок' },
+    { flag: PermissionFlagsBits.ManageGuild, label: 'Управлять сервером', hint: 'без него Lockdown не может поставить инвайты на паузу, в Пропуске не видно, по чьему инвайту зашёл новичок, и бот не может менять баннер' },
     { flag: PermissionFlagsBits.ViewAuditLog, label: 'Просматривать журнал аудита', hint: 'без него в логе сообщений не видно, какой модератор удалил сообщение' }
 ];
 
@@ -155,6 +155,32 @@ async function run(guild, { database = pingDatabase } = {}) {
             const can = [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.EmbedLinks].every(flag => perms?.has(flag));
             checks.push(check('birthdays', `Бот поздравляет в #${channel.name}`, can ? 'ok' : 'bad',
                 can ? null : 'боту не хватает прав в этом канале', FIX.channelPermissions(channel.name, SEND_PERMISSIONS)));
+        }
+    }
+
+    // Server banner: only once it is turned on — otherwise the bot doesn't touch it
+    if (settings.banner?.enabled) {
+        const BannerStore = require('../banner/store');
+        const [state, background] = await Promise.all([
+            BannerStore.getState(guild.id).catch(() => ({})),
+            BannerStore.readDoc(guild.id, 'background').catch(() => null)
+        ]);
+        const features = guild.features || [];
+        checks.push(check('banner', 'Баннер сервера доступен', features.includes('BANNER') ? 'ok' : 'bad',
+            'нужен 2-й уровень буста — до него Discord не даёт ставить баннер', { steps: ['Наберите 2-й уровень буста сервера (7 бустов).'] }));
+        if (!background) {
+            checks.push(check('banner', 'Фон баннера', 'bad', 'не загружен — бот не меняет баннер', { steps: ['Откройте экран «Баннер» и загрузите фон.'] }));
+        } else {
+            checks.push(check('banner', `Фон «${background.name}»`, 'ok'));
+            if (background.animated) {
+                const animated = features.includes('ANIMATED_BANNER');
+                checks.push(check('banner', 'Анимированный баннер', animated ? 'ok' : 'warn',
+                    animated ? null : 'нужен 3-й уровень буста — пока ставится первый кадр', { steps: ['Наберите 3-й уровень буста сервера (14 бустов).'] }));
+            }
+        }
+        if (state.lastError) {
+            checks.push(check('banner', 'Последнее обновление баннера', 'bad', state.lastError.message || state.lastError.code,
+                { steps: ['Исправьте причину и нажмите «Обновить сейчас» на экране «Баннер».'] }));
         }
     }
 

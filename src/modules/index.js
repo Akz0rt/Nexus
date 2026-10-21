@@ -18,7 +18,8 @@ const modules = [
     require('./reports'),
     require('./events'),
     require('./rolemenus'),
-    require('./economy')
+    require('./economy'),
+    require('./banner')
 ];
 
 function registerModules(client) {

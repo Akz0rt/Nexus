@@ -105,6 +105,52 @@ async function firstFrame(background) {
     }
 }
 
+/** A small PNG of a published banner for the panel's «История» (first frame, 320×180) */
+async function thumbnail(buffer) {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'nexus-thumb-'));
+    try {
+        const input = path.join(dir, 'banner');
+        const output = path.join(dir, 'thumb.png');
+        await fs.writeFile(input, buffer);
+        await run(['-hide_banner', '-loglevel', 'error', '-y', '-i', input, '-frames:v', '1', '-vf', 'scale=320:180', output]);
+        return await fs.readFile(output);
+    } finally {
+        await fs.rm(dir, { recursive: true, force: true }).catch(() => {});
+    }
+}
+
+/**
+ * An uploaded background brought to 960×540 (cover-cropped to 16:9 around the center):
+ * a GIF stays animated, a still picture becomes PNG. Done once on upload, so every
+ * publish works on a small file.
+ * @returns {Promise<{ buffer: Buffer, type: string, animated: boolean, frames: number }>}
+ */
+async function normalizeBackground(buffer) {
+    const type = imageType(buffer);
+    if (!type) throw new ComposeError('bad_background', 'not an image (GIF, PNG, JPG or WebP)');
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'nexus-bg-'));
+    try {
+        const input = path.join(dir, 'upload');
+        await fs.writeFile(input, buffer);
+        const fit = `scale=${WIDTH}:${HEIGHT}:force_original_aspect_ratio=increase,crop=${WIDTH}:${HEIGHT},setsar=1`;
+        if (type === 'image/gif') {
+            const { frames } = await probe(input);
+            if (frames > 1) {
+                const output = path.join(dir, 'background.gif');
+                await run(['-hide_banner', '-loglevel', 'error', '-y', '-i', input, '-filter_complex',
+                    `[0:v]${fit},split[a][b];[b]palettegen=stats_mode=diff[p];[a][p]paletteuse=dither=sierra2_4a:diff_mode=rectangle`,
+                    '-loop', '0', '-f', 'gif', output]);
+                return { buffer: await fs.readFile(output), type: 'image/gif', animated: true, frames };
+            }
+        }
+        const output = path.join(dir, 'background.png');
+        await run(['-hide_banner', '-loglevel', 'error', '-y', '-i', input, '-frames:v', '1', '-vf', fit, output]);
+        return { buffer: await fs.readFile(output), type: 'image/png', animated: false, frames: 1 };
+    } finally {
+        await fs.rm(dir, { recursive: true, force: true }).catch(() => {});
+    }
+}
+
 /**
  * The ffmpeg filter graph. Inputs: 0 background, 1 darkening, 2 card, 3 panel mask
  * (only with glass). Pure, so tests read it without running ffmpeg.
@@ -195,4 +241,4 @@ async function composeBanner({ spec, background, animated = true, maxBytes = MAX
     }
 }
 
-module.exports = { composeBanner, firstFrame, filterGraph, ladderFor, ComposeError, MAX_BANNER_BYTES, LADDER };
+module.exports = { composeBanner, firstFrame, thumbnail, normalizeBackground, filterGraph, ladderFor, ComposeError, MAX_BANNER_BYTES, LADDER };

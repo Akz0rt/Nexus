@@ -314,6 +314,8 @@ const BODIES = { leader, podium, birthday, event };
  * @param {{ mode: string, layout: string, backing: string, data: object }} spec
  */
 function buildCard({ mode, layout, backing, data = {} }) {
+    // «Только фон»: nothing over the background
+    if (mode === 'background') return h('div', { display: 'flex', width: WIDTH, height: HEIGHT });
     const panel = backing !== 'none';
     const tone = backing === 'solid' ? 'rgba(10,18,32,0.86)' : 'rgba(10,18,32,0.42)';
     const margin = panel ? PANEL_MARGIN : BARE_MARGIN;
@@ -340,7 +342,8 @@ function buildCard({ mode, layout, backing, data = {} }) {
 }
 
 /** The darkening behind the card; with a panel it is lighter (×0.45) */
-function buildScrim({ layout, backing, dim = 0.85 }) {
+function buildScrim({ mode, layout, backing, dim = 0.85 }) {
+    if (mode === 'background') return h('div', { display: 'flex', width: WIDTH, height: HEIGHT });
     const d = Math.max(0, Math.min(1, Number(dim))) * (backing !== 'none' ? 0.45 : 1);
     const m = Math.round(d * 65) / 100;
     const c = alpha => `rgba(5,8,14,${alpha})`;

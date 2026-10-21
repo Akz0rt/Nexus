@@ -42,6 +42,8 @@ export const ACTION_LABELS = {
     'server.lockdown_off': 'Lockdown снят',
     'settings.updated': 'Настройки изменены',
     'banner.settings_updated': 'Настройки баннера изменены',
+    'banner.published': 'Баннер обновлён',
+    'banner.restored': 'Баннер возвращён из истории',
     'report.created': 'Жалоба',
     'report.taken': 'Жалоба взята',
     'report.resolved': 'Жалоба решена',
