@@ -74,7 +74,12 @@ function setup({ banner = {}, data = { user: { id: 'u1', name: 'maks' }, message
     const publisher = createPublisher({
         store,
         settings: { get: async () => settings },
-        collect: async (guild, s, mode, options) => { calls.collect.push({ mode, ...options }); return current.data; },
+        collect: async (guild, s, mode, options) => {
+            calls.collect.push({ mode, ...options });
+            if (mode === 'birthday') return current.birthday || null;
+            if (mode === 'event') return current.event || null;
+            return current.data;
+        },
         dayKey,
         composeBanner: async options => { calls.compose.push(options); return { buffer: Buffer.from('GIF89a-banner'), type: 'image/gif', bytes: 13 }; },
         thumbnail: async () => Buffer.from('thumb'),
@@ -191,7 +196,7 @@ async function yesterdayLeader() {
     const yesterday = dayKey(NOW - 24 * 60 * MINUTE, 'Europe/Moscow');
     await store.updateState(guild.id, { leadersByDay: { [yesterday]: 'old-leader' } });
     await publisher.publish(guild, { now: NOW });
-    assert.strictEqual(calls.collect[0].yesterdayLeaderId, 'old-leader');
+    assert.strictEqual(calls.collect.find(c => c.mode === 'leader').yesterdayLeaderId, 'old-leader');
 }
 
 async function restoring() {
@@ -209,6 +214,45 @@ async function restoring() {
     assert.strictEqual((await store.getState(guild.id)).current.historyId, first.historyId);
     assert.strictEqual(calls.audit.at(-1).action, 'banner.restored');
     assert.strictEqual((await publisher.restore(guild, 'nope', {})).code, 'not_found');
+}
+
+async function autoModes() {
+    const HOUR = 60 * MINUTE;
+    const { store, calls, current, publisher } = setup({ banner: { intervalMin: 15, autoEventHours: 3, layouts: { birthday: 'center', event: 'right' } } });
+    await withBackground(store);
+    const guild = fakeGuild();
+
+    // An event in 5 hours: not yet — the leader
+    current.event = { title: 'Мафия', when: 'СЕГОДНЯ · 21:00', startsAt: new Date(NOW + 5 * HOUR).toISOString(), count: 6 };
+    assert.ok((await publisher.publish(guild, { now: NOW })).ok);
+    assert.strictEqual(calls.compose.at(-1).spec.mode, 'leader');
+
+    // 2.5 hours before: the event, in its own layout
+    let result = await publisher.publish(guild, { now: NOW + 2.5 * HOUR });
+    assert.ok(result.ok);
+    assert.deepStrictEqual([calls.compose.at(-1).spec.mode, calls.compose.at(-1).spec.layout], ['event', 'right']);
+    assert.strictEqual(result.entry.auto, 'event');
+    assert.strictEqual(calls.audit.at(-1).details.auto, 'event');
+
+    // A birthday comes first, even with an event coming
+    current.birthday = { user: { id: 'b1', name: 'Вика' }, more: 0, channelName: 'поздравления' };
+    await publisher.publish(guild, { now: NOW + 3 * HOUR });
+    assert.deepStrictEqual([calls.compose.at(-1).spec.mode, calls.compose.at(-1).spec.layout], ['birthday', 'center']);
+
+    // The day and the event are over: back to the chosen mode by itself
+    current.birthday = null;
+    current.event = null;
+    await publisher.publish(guild, { now: NOW + 9 * HOUR });
+    assert.strictEqual(calls.compose.at(-1).spec.mode, 'leader');
+
+    // Switched off: the chosen mode only
+    const off = setup({ banner: { autoBirthday: false, autoEventHours: 0 } });
+    await withBackground(off.store);
+    off.current.birthday = { user: { id: 'b1', name: 'Вика' } };
+    off.current.event = { title: 'Мафия', startsAt: new Date(NOW + HOUR).toISOString() };
+    await off.publisher.publish(fakeGuild(), { now: NOW });
+    assert.strictEqual(off.calls.compose.at(-1).spec.mode, 'leader');
+    assert.deepStrictEqual(off.calls.collect.map(c => c.mode), ['leader']);
 }
 
 async function storeFiles() {
@@ -247,6 +291,7 @@ async function storeFiles() {
     await boostAndErrors();
     await yesterdayLeader();
     await restoring();
+    await autoModes();
     await storeFiles();
     console.log('banner-publish.test.js: all passed');
 })().catch(error => {

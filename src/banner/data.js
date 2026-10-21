@@ -83,6 +83,7 @@ async function collect(guild, settings, mode, { now = Date.now(), yesterdayLeade
         const going = (next.going || []).map(id => guild.members.cache.get(id)).filter(Boolean);
         return {
             title: next.title,
+            startsAt: next.startsAt,
             when: eventWhen(next.startsAt, settings.timezone, now),
             host: guild.members.cache.get(next.createdBy)?.displayName || null,
             place: (next.voiceChannelId && guild.channels.cache.get(next.voiceChannelId)?.name) || null,

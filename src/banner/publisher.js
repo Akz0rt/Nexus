@@ -11,7 +11,8 @@ const { PermissionFlagsBits } = require('discord.js');
  */
 
 const MANUAL_EVERY_MS = 60 * 1000;
-const DAY_MS = 24 * 60 * 60 * 1000;
+const HOUR_MS = 60 * 60 * 1000;
+const DAY_MS = 24 * HOUR_MS;
 // Kept leaders by day: today and yesterday are all «вчерашний лидер» needs
 const LEADER_DAYS_KEPT = 3;
 
@@ -77,7 +78,19 @@ function createPublisher(deps) {
     /** What the banner should show now: { mode, layout, data } or { skip } */
     async function plan(guild, settings, state, now) {
         const banner = settings.banner;
-        // Step 6 adds the birthday / event switch here; until then the chosen mode
+        // On someone's birthday (the server's day) the birthday person; shortly before an
+        // event (and while it goes on) the event; otherwise the chosen mode — so the banner
+        // switches by itself and comes back
+        if (banner.autoBirthday) {
+            const data = await collect(guild, settings, 'birthday', { now });
+            if (data) return { mode: 'birthday', layout: banner.layouts.birthday, data, auto: 'birthday' };
+        }
+        if (banner.autoEventHours > 0 && banner.mode !== 'event') {
+            const data = await collect(guild, settings, 'event', { now });
+            if (data?.startsAt && Date.parse(data.startsAt) - now <= banner.autoEventHours * HOUR_MS) {
+                return { mode: 'event', layout: banner.layouts.event, data, auto: 'event' };
+            }
+        }
         const mode = banner.mode;
         if (mode === 'background') return { mode, layout: null, data: null };
         const yesterday = dayKey(now - DAY_MS, settings.timezone);
@@ -164,7 +177,7 @@ function createPublisher(deps) {
             const entry = await store.addHistory(guild.id, {
                 buffer: composed.buffer, type: composed.type, thumbnail: thumb,
                 mode: planned.mode, layout: planned.layout, backing: banner.backing, blur: banner.blur, dim: banner.dim,
-                caption: caption(planned.mode, planned.data), leaderId, manual, actorId: actor?.id || null,
+                caption: caption(planned.mode, planned.data), leaderId, manual, actorId: actor?.id || null, auto: planned.auto || null,
                 downgraded: composed.downgraded || null, createdAt: new Date(now).toISOString()
             });
 
@@ -181,7 +194,7 @@ function createPublisher(deps) {
             await audit.log({
                 guildId: guild.id, action: 'banner.published', actorId: actor?.id || null, actorTag: actor?.tag || null,
                 source: manual ? 'panel' : 'bot',
-                details: { mode: planned.mode, caption: entry.caption, type: composed.type, bytes: composed.bytes, downgraded: composed.downgraded || null }
+                details: { mode: planned.mode, auto: planned.auto || null, caption: entry.caption, type: composed.type, bytes: composed.bytes, downgraded: composed.downgraded || null }
             }).catch(error => log.error('Banner: journal entry failed:', error.message || error));
             return { ok: true, entry, downgraded: composed.downgraded || null };
         } finally {
