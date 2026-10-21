@@ -1,6 +1,7 @@
 const OpenAI = require('openai');
 const config = require('../config');
 const CosmosDBService = require('./CosmosDBService');
+const GuildSettingsService = require('./GuildSettingsService');
 const { getDaysUntilBirthday } = require('../utils/dateUtils');
 
 const MAX_ITERATIONS = 5;
@@ -168,9 +169,13 @@ OUTPUT FORMAT:
 
     async executeTool(toolName, args, guild, authorId) {
         try {
+            // Birthdays are per server: the assistant only knows the list of the server it's asked on
+            if (!guild && toolName !== 'find_user_by_name') {
+                return JSON.stringify({ error: 'No guild context' });
+            }
             switch (toolName) {
                 case 'get_birthday': {
-                    const birthday = await CosmosDBService.getBirthday(args.user_id);
+                    const birthday = await CosmosDBService.getBirthday(guild.id, args.user_id);
                     if (!birthday) {
                         return JSON.stringify({ found: false, user_id: args.user_id });
                     }
@@ -184,7 +189,7 @@ OUTPUT FORMAT:
                 }
 
                 case 'get_all_birthdays': {
-                    const all = await CosmosDBService.getAllBirthdays();
+                    const all = await CosmosDBService.getAllBirthdays(guild.id);
                     const enriched = {};
                     for (const [userId, data] of Object.entries(all)) {
                         enriched[userId] = {
@@ -197,7 +202,7 @@ OUTPUT FORMAT:
 
                 case 'get_upcoming_birthdays': {
                     const days = args.days || 7;
-                    const all = await CosmosDBService.getAllBirthdays();
+                    const all = await CosmosDBService.getAllBirthdays(guild.id);
                     const upcoming = Object.entries(all)
                         .map(([userId, data]) => ({
                             user_id: userId,
@@ -211,7 +216,8 @@ OUTPUT FORMAT:
                 }
 
                 case 'get_todays_birthdays': {
-                    const userIds = await CosmosDBService.getTodaysBirthdays();
+                    const { timezone } = await GuildSettingsService.get(guild.id);
+                    const userIds = await CosmosDBService.getTodaysBirthdays(guild.id, timezone);
                     return JSON.stringify({ user_ids: userIds, count: userIds.length });
                 }
 
@@ -223,7 +229,7 @@ OUTPUT FORMAT:
                             message: 'You can only set your own birthday'
                         });
                     }
-                    await CosmosDBService.setBirthday(args.user_id, args.month, args.day);
+                    await CosmosDBService.setBirthday(guild.id, args.user_id, args.month, args.day);
                     return JSON.stringify({ success: true, user_id: args.user_id, month: args.month, day: args.day });
                 }
 

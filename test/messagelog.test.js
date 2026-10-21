@@ -143,7 +143,11 @@ function visibility() {
 
     // Live stream: the staff-channel entry reaches only MOD's stream
     const bus = new EventEmitter();
-    const hub = new SseHub({ canSee: (guildId, userId, entry) => canSeeEntry(guild, guild.members.cache.get(userId), entry) }).attach(bus);
+    const hub = new SseHub({
+        canSee: (guildId, userId, entry) => canSeeEntry(guild, guild.members.cache.get(userId), entry),
+        // Only MOD may manage roles here: role jobs reach only MOD's stream
+        canManageRoles: (guildId, userId) => userId === MOD
+    }).attach(bus);
     const stream = () => {
         const res = new EventEmitter();
         res.frames = [];
@@ -161,7 +165,8 @@ function visibility() {
     assert.strictEqual(audits(modStream), 2);
     assert.strictEqual(audits(peerStream), 1);
     bus.emit('job', { guildId: guild.id, status: 'running' });
-    assert.ok(peerStream.frames.at(-1).startsWith('event: job'));
+    assert.ok(modStream.frames.at(-1).startsWith('event: job'));
+    assert.ok(!peerStream.frames.some(f => f.startsWith('event: job')), 'role jobs only to who may manage roles');
     hub.stopHeartbeat();
 }
 

@@ -1,5 +1,6 @@
-const { SlashCommandBuilder } = require('@discordjs/builders');
 const { 
+    SlashCommandBuilder,
+    InteractionContextType,
     ComponentType, 
     ActionRowBuilder, 
     ButtonBuilder, 
@@ -15,7 +16,8 @@ const NotificationService = require('../services/NotificationService');
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('birthday-set')
-        .setDescription('Указать свой день рождения'),
+        .setDescription('Указать свой день рождения')
+        .setContexts(InteractionContextType.Guild),
 
     async execute(interaction) {
         const row = new ActionRowBuilder()
@@ -72,7 +74,8 @@ module.exports = {
                 return;
             }
 
-            await CosmosDBService.setBirthday(interaction.user.id, inputMonth, inputDay);
+            // Saved for this server only: every server keeps its own list
+            await CosmosDBService.setBirthday(interaction.guildId, interaction.user.id, inputMonth, inputDay);
             
             // Send confirmation to the user
             await modalSubmit.reply({
@@ -80,8 +83,8 @@ module.exports = {
                 flags: ['Ephemeral']
             });
 
-            // Announce it in the channel from Settings → «Дни рождения»
-            const birthdayChannel = NotificationService.announceChannel;
+            // Announce it in this server's channel from Settings → «Дни рождения»
+            const birthdayChannel = await NotificationService.announceChannel(interaction.guild).catch(() => null);
             if (birthdayChannel) {
                 // Saved already: a channel the bot can't write to only loses the announcement
                 await birthdayChannel.send({

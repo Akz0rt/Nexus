@@ -1,5 +1,5 @@
 const express = require('express');
-const config = require('../../../config');
+const GuildSettingsService = require('../../../services/GuildSettingsService');
 const VerificationService = require('../../../modules/verification/VerificationService');
 const QueueCardService = require('../../../modules/verification/QueueCardService');
 const InviteTracker = require('../../../modules/invites/InviteTracker');
@@ -82,7 +82,7 @@ router.get('/', async (req, res, next) => {
         if (tab === 'waiting') {
             // Member cache is complete (startup fetch + GuildMembers intent); fetch once if not
             if (guild.members.cache.size < guild.memberCount) await guild.members.fetch();
-            const since = startOfToday(config.timezone).toISOString();
+            const since = startOfToday((await GuildSettingsService.get(guild.id)).timezone).toISOString();
             const [cards, handledToday] = await Promise.all([
                 QueueCardService.listPending(guild.id),
                 QueueCardService.listHandled(guild.id, ['approved', 'kicked'], since)
@@ -117,7 +117,7 @@ router.get('/', async (req, res, next) => {
 
         if (tab === 'handled' || tab === 'rejected') {
             const statuses = tab === 'handled' ? ['approved'] : ['kicked'];
-            const since = startOfToday(config.timezone).toISOString();
+            const since = startOfToday((await GuildSettingsService.get(guild.id)).timezone).toISOString();
             const cards = await QueueCardService.listHandled(guild.id, statuses, since);
             const items = cards.map(card => {
                 const member = guild.members.cache.get(card.userId);

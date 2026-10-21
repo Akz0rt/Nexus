@@ -13,7 +13,8 @@ function createV2Router({ hub = new SseHub().attach() } = {}) {
     const router = express.Router();
     router.use(express.json({ limit: '100kb' }));
 
-    router.use('/auth', createAuthRouter());
+    // Logging out closes that session's live streams at once
+    router.use('/auth', createAuthRouter(undefined, { onLogout: token => hub.closeSession(token) }));
 
     // Everything below requires a session
     router.use(async (req, res, next) => {
@@ -58,7 +59,7 @@ function createV2Router({ hub = new SseHub().attach() } = {}) {
             id: req.session.userId,
             displayName: ref.displayName || req.session.globalName || req.session.username,
             avatarURL: ref.avatarURL
-        });
+        }, bearerToken(req));
     });
     // Which member card this moderator has open ({ userId } or { userId: null }): «Смотрит Kira» for the others
     guildRouter.post('/presence/viewing', (req, res) => {

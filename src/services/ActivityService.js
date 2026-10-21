@@ -64,34 +64,22 @@ class ActivityService {
     }
 
     /**
-     * Record a user message
-     * @param {string} userId - Discord user ID
-     * @param {string} displayName - User display name
-     * @param {string} avatarURL - User avatar URL
-     */
-    async recordMessage(userId, displayName, avatarURL) {
-        return this.recordMessageById({
-            userId,
-            displayName,
-            avatarURL,
-            timestamp: Date.now()
-        });
-    }
-
-    /**
      * Record activity for a message id. Returns false when the same message was already counted.
-     * @param {{ userId: string, displayName: string, avatarURL: string|null, messageId?: string, channelId?: string, timestamp?: number }} params
+     * Every server counts on its own: one document per server, member and day.
+     * @param {{ guildId: string, userId: string, displayName: string, avatarURL: string|null, messageId?: string, channelId?: string, timestamp?: number }} params
      * @returns {Promise<boolean>}
      */
     async recordMessageById(params) {
+        if (!params.guildId) throw new Error('recordMessageById: guildId is required');
         await this.initialize();
 
         const timestamp = params.timestamp || Date.now();
         const date = new Date(timestamp).toISOString().split('T')[0];
-        const docId = `${params.userId}-${date}`;
+        const docId = `${params.guildId}-${params.userId}-${date}`;
 
         if (params.messageId && params.channelId) {
             const dedupInserted = await this._insertDedupMessage({
+                guildId: params.guildId,
                 channelId: params.channelId,
                 messageId: params.messageId,
                 userId: params.userId,
@@ -107,6 +95,7 @@ class ActivityService {
             const { resource } = await this.container.item(docId, params.userId).read();
             const base = resource || {
                 id: docId,
+                guildId: params.guildId,
                 userId: params.userId,
                 date,
                 displayName: params.displayName,
@@ -133,6 +122,7 @@ class ActivityService {
             if (error.code === 404) {
                 const newRecord = {
                     id: docId,
+                    guildId: params.guildId,
                     userId: params.userId,
                     date,
                     displayName: params.displayName,
@@ -151,10 +141,11 @@ class ActivityService {
         }
     }
 
-    async _insertDedupMessage({ channelId, messageId, userId, date }) {
+    async _insertDedupMessage({ guildId, channelId, messageId, userId, date }) {
         try {
             await this.messagesContainer.items.create({
                 id: `${channelId}-${messageId}`,
+                guildId,
                 channelId,
                 messageId,
                 userId,
@@ -172,11 +163,12 @@ class ActivityService {
     }
 
     /**
-     * Get top active users for a period
+     * Get top active users of a server for a period
+     * @param {string} guildId
      * @param {number|string} periodOrDays - Number of days or period key: day|week|month
      * @returns {Array} Array of { userId, displayName, avatarURL, messageCount }
      */
-    async getTopUsersByPeriod(periodOrDays = 'week') {
+    async getTopUsersByPeriod(guildId, periodOrDays = 'week') {
         await this.initialize();
         const cutoffString = this._getCutoffDateString(periodOrDays);
 
@@ -184,17 +176,17 @@ class ActivityService {
             const query = `
                 SELECT c.userId, c.displayName, c.avatarURL, c.messageCount, c.lastMessageTime
                 FROM c
-                WHERE c.date >= @cutoffDate
+                WHERE c.guildId = @guildId AND c.date >= @cutoffDate
             `;
 
             const { resources } = await this.container.items
-                .query({ query, parameters: [{ name: '@cutoffDate', value: cutoffString }] })
+                .query({ query, parameters: [{ name: '@guildId', value: guildId }, { name: '@cutoffDate', value: cutoffString }] })
                 .fetchAll();
 
             const aggregated = this._aggregateTopUsers(resources);
             if (aggregated.length > 0) return aggregated;
 
-            return this._getTopUsersFromDedup(cutoffString);
+            return this._getTopUsersFromDedup(guildId, cutoffString);
         } catch (error) {
             console.error('ActivityService.getTopUsersByPeriod error:', error?.message || error);
             throw error;
@@ -202,27 +194,27 @@ class ActivityService {
     }
 
     /**
-     * Messages per day for the last N days (for the server chart), summed here
+     * Messages per day of a server for the last N days (for the server chart), summed here
      * rather than with GROUP BY. Days without messages are missing.
      * @returns {Promise<Array<{ date: string, messages: number }>>}
      */
-    async getDailyTotals(days = 30) {
+    async getDailyTotals(guildId, days = 30) {
         await this.initialize();
         const { resources } = await this.container.items.query({
-            query: 'SELECT c.date, c.messageCount FROM c WHERE c.date >= @cutoffDate',
-            parameters: [{ name: '@cutoffDate', value: this._getCutoffDateString(days) }]
+            query: 'SELECT c.date, c.messageCount FROM c WHERE c.guildId = @guildId AND c.date >= @cutoffDate',
+            parameters: [{ name: '@guildId', value: guildId }, { name: '@cutoffDate', value: this._getCutoffDateString(days) }]
         }).fetchAll();
         const byDate = new Map();
         for (const { date, messageCount } of resources) byDate.set(date, (byDate.get(date) || 0) + Number(messageCount || 0));
         return [...byDate].map(([date, messages]) => ({ date, messages })).sort((a, b) => a.date.localeCompare(b.date));
     }
 
-    /** When the member last wrote (kept 35 days), or null */
-    async lastMessageAt(userId) {
+    /** When the member last wrote on this server (kept 35 days), or null */
+    async lastMessageAt(guildId, userId) {
         await this.initialize();
         const { resources } = await this.container.items.query({
-            query: 'SELECT TOP 1 c.lastMessageTime FROM c WHERE c.userId = @userId ORDER BY c.date DESC',
-            parameters: [{ name: '@userId', value: userId }]
+            query: 'SELECT TOP 1 c.lastMessageTime FROM c WHERE c.userId = @userId AND c.guildId = @guildId ORDER BY c.date DESC',
+            parameters: [{ name: '@userId', value: userId }, { name: '@guildId', value: guildId }]
         }, { partitionKey: userId }).fetchAll();
         const at = resources[0]?.lastMessageTime;
         return at ? new Date(at).toISOString() : null;
@@ -254,22 +246,23 @@ class ActivityService {
     }
 
     /**
-     * Get top users for an exact recent time window using per-message dedup docs.
+     * Get top users of a server for an exact recent time window using per-message dedup docs.
+     * @param {string} guildId
      * @param {number} windowMs
      * @returns {Promise<Array<{userId:string, displayName:null, avatarURL:null, totalMessages:number}>>}
      */
-    async getTopUsersByRecentWindow(windowMs) {
+    async getTopUsersByRecentWindow(guildId, windowMs) {
         await this.initialize();
 
         const cutoffTs = Date.now() - windowMs;
         const query = `
             SELECT c.userId
             FROM c
-            WHERE c.createdAt >= @cutoffTs
+            WHERE c.guildId = @guildId AND c.createdAt >= @cutoffTs
         `;
 
         const { resources } = await this.messagesContainer.items
-            .query({ query, parameters: [{ name: '@cutoffTs', value: cutoffTs }] })
+            .query({ query, parameters: [{ name: '@guildId', value: guildId }, { name: '@cutoffTs', value: cutoffTs }] })
             .fetchAll();
 
         if (!resources || resources.length === 0) {
@@ -317,15 +310,15 @@ class ActivityService {
         return Array.from(byUser.values()).sort((a, b) => b.totalMessages - a.totalMessages);
     }
 
-    async _getTopUsersFromDedup(cutoffString) {
+    async _getTopUsersFromDedup(guildId, cutoffString) {
         const dedupQuery = `
             SELECT c.userId
             FROM c
-            WHERE c.date >= @cutoffDate
+            WHERE c.guildId = @guildId AND c.date >= @cutoffDate
         `;
 
         const { resources } = await this.messagesContainer.items
-            .query({ query: dedupQuery, parameters: [{ name: '@cutoffDate', value: cutoffString }] })
+            .query({ query: dedupQuery, parameters: [{ name: '@guildId', value: guildId }, { name: '@cutoffDate', value: cutoffString }] })
             .fetchAll();
 
         if (!resources || resources.length === 0) {
@@ -347,7 +340,7 @@ class ActivityService {
             .sort((a, b) => b.totalMessages - a.totalMessages);
     }
 
-    async getPeriodDebugStats(periodOrDays = 'week') {
+    async getPeriodDebugStats(guildId, periodOrDays = 'week') {
         await this.initialize();
         const cutoffString = this._getCutoffDateString(periodOrDays);
 
@@ -361,18 +354,19 @@ class ActivityService {
         const activityQuery = `
             SELECT c.userId, c.messageCount
             FROM c
-            WHERE c.date >= @cutoffDate
+            WHERE c.guildId = @guildId AND c.date >= @cutoffDate
         `;
 
         const dedupQuery = `
             SELECT c.userId
             FROM c
-            WHERE c.date >= @cutoffDate
+            WHERE c.guildId = @guildId AND c.date >= @cutoffDate
         `;
 
+        const parameters = [{ name: '@guildId', value: guildId }, { name: '@cutoffDate', value: cutoffString }];
         const [{ resources: activityRows }, { resources: dedupRows }] = await Promise.all([
-            this.container.items.query({ query: activityQuery, parameters: [{ name: '@cutoffDate', value: cutoffString }] }).fetchAll(),
-            this.messagesContainer.items.query({ query: dedupQuery, parameters: [{ name: '@cutoffDate', value: cutoffString }] }).fetchAll()
+            this.container.items.query({ query: activityQuery, parameters }).fetchAll(),
+            this.messagesContainer.items.query({ query: dedupQuery, parameters }).fetchAll()
         ]);
 
         const activityUsers = new Set();
@@ -396,6 +390,42 @@ class ActivityService {
             distinctUsersFromDedup: dedupUsers.size,
             totalActivityMessages
         };
+    }
+
+    /**
+     * Counts collected before servers were told apart carry no server. They all came from
+     * the one server the channel sync records name, and go to it. Nothing is guessed: if
+     * those records name several servers, or not GUILD_ID, the old counts stay unassigned
+     * (shown nowhere) until they expire. Safe to repeat: only unassigned documents are touched.
+     * Per-message dedup docs aren't touched: they expire in 35 days and only back a fallback.
+     * @param {string[]} sourceGuildIds servers named by the channel sync records
+     * @param {string|null} mainGuildId GUILD_ID
+     */
+    async migrateLegacy(sourceGuildIds, mainGuildId) {
+        await this.initialize();
+        const { resources } = await this.container.items
+            .query('SELECT c.id, c.userId FROM c WHERE NOT IS_DEFINED(c.guildId)')
+            .fetchAll();
+        if (resources.length === 0) return { migrated: 0 };
+
+        const unique = [...new Set(sourceGuildIds)];
+        const target = unique.length === 1 && (!mainGuildId || unique[0] === mainGuildId) ? unique[0] : null;
+        if (!target) {
+            console.warn(`ActivityService: ${resources.length} old activity record(s) left unassigned — collected from ${unique.join(', ') || 'unknown'}, GUILD_ID ${mainGuildId || 'not set'}`);
+            return { migrated: 0, skipped: resources.length };
+        }
+
+        let migrated = 0;
+        for (const doc of resources) {
+            try {
+                await this.container.item(doc.id, doc.userId).patch([{ op: 'add', path: '/guildId', value: target }]);
+                migrated++;
+            } catch (error) {
+                if (error.code !== 404) console.error(`ActivityService: migrating ${doc.id} failed:`, error.message || error);
+            }
+        }
+        console.log(`ActivityService: assigned ${migrated} old activity record(s) to ${target}`);
+        return { migrated };
     }
 
     /**

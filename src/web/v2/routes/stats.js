@@ -1,6 +1,7 @@
 const express = require('express');
 const config = require('../../../config');
 const AuditLogService = require('../../../services/AuditLogService');
+const GuildSettingsService = require('../../../services/GuildSettingsService');
 const QueueCardService = require('../../../modules/verification/QueueCardService');
 const { startOfToday } = require('../../../utils/dateUtils');
 const { userRef } = require('../serialize');
@@ -93,8 +94,10 @@ function buildStats(counts, cards) {
 router.get('/', async (req, res, next) => {
     try {
         const period = PERIODS[req.query.period] !== undefined ? req.query.period : '7d';
+        // «Today» and the daily bars by this server's calendar
+        const { timezone } = await GuildSettingsService.get(req.guild.id);
         const since = period === 'today'
-            ? startOfToday(config.timezone).toISOString()
+            ? startOfToday(timezone).toISOString()
             : new Date(Date.now() - PERIODS[period] * DAY_MS).toISOString();
         const [counts, cards] = await Promise.all([
             AuditLogService.countByActor(req.guild.id, since),
@@ -105,7 +108,7 @@ router.get('/', async (req, res, next) => {
             period,
             since,
             ...stats,
-            daily: dailyDecisions(cards, PERIODS[period] || 1),
+            daily: dailyDecisions(cards, PERIODS[period] || 1, timezone),
             moderators: stats.moderators.map(m => ({ ...m, user: userRef(req.guild, m.actorId) }))
         });
     } catch (error) {

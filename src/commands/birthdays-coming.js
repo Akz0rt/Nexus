@@ -1,15 +1,16 @@
-const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder, InteractionContextType } = require('discord.js');
 const CosmosDBService = require('../services/CosmosDBService');
 const { formatDate, getDaysUntilBirthday } = require('../utils/dateUtils');
 
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('birthdays-coming')
-        .setDescription('List birthdays coming up in the next 7 days'),
+        .setDescription('List birthdays coming up in the next 7 days')
+        .setContexts(InteractionContextType.Guild),
 
     async execute(interaction) {
         try {
-            const birthdays = await CosmosDBService.getAllBirthdays();
+            const birthdays = await CosmosDBService.getAllBirthdays(interaction.guildId);
             const birthdayList = Object.entries(birthdays);
             
             // Filter birthdays within next 7 days
@@ -34,7 +35,9 @@ module.exports = {
             for (const birthday of upcomingBirthdays) {
                 const date = new Date(2000, birthday.month - 1, birthday.day);
                 const formattedDate = formatDate(date);
-                const member = await interaction.guild.members.fetch(birthday.userId);
+                // Someone who left the server is skipped instead of failing the whole list
+                const member = await interaction.guild.members.fetch(birthday.userId).catch(() => null);
+                if (!member) continue;
                 const displayName = member.displayName || member.user.username;
                 
                 let description = `${formattedDate}`;
@@ -50,6 +53,10 @@ module.exports = {
                     name: `${displayName}`,
                     value: `<@${birthday.userId}> - ${description}`
                 });
+            }
+
+            if (!embed.data.fields?.length) {
+                return await interaction.reply('No birthdays coming up in the next 7 days! 🎂');
             }
 
             await interaction.reply({ embeds: [embed] });

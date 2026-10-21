@@ -2,7 +2,6 @@ const { GatewayIntentBits, PermissionFlagsBits } = require('discord.js');
 const GuildSettingsService = require('./GuildSettingsService');
 const AuditLogService = require('./AuditLogService');
 const InviteTracker = require('../modules/invites/InviteTracker');
-const { birthdayGuildId } = require('../modules/birthdays');
 const config = require('../config');
 
 const DB_TIMEOUT_MS = 5000;
@@ -133,16 +132,18 @@ async function run(guild, { database = pingDatabase } = {}) {
         }
     }
 
-    // Birthdays: the main server only (one list for the bot)
-    if (!config.guildId && (client?.guilds?.cache.size || 0) > 1) {
-        checks.push(check('birthdays', 'Основной сервер бота', 'warn', 'GUILD_ID не задан — дни рождения привязаны к самому старому серверу',
+    // Azure variables (and the old shared birthday list) belong to GUILD_ID; without it they go
+    // to the oldest server and the old list isn't copied anywhere. Shown on that server only
+    if (!config.guildId && (client?.guilds?.cache.size || 0) > 1 && guild.id === GuildSettingsService.mainGuildId(client)) {
+        checks.push(check('birthdays', 'Основной сервер бота', 'warn', 'GUILD_ID не задан — настройки из Azure действуют на самый старый сервер, старый список дней рождения не перенесён',
             { steps: ['Azure → App Service → Configuration → GUILD_ID: укажите ID основного сервера.', 'Перезапустите бота: App Service → Restart.'] }));
     }
-    if (guild.id === birthdayGuildId(client)) {
+    {
+        // Every server has its own birthdays; without a channel they just aren't congratulated
         const channelId = settings.birthdayCongratsChannelId || settings.birthdayAnnounceChannelId;
         const channel = channelId ? guild.channels.cache.get(channelId) : null;
         if (!channelId) {
-            checks.push(check('birthdays', 'Канал поздравлений', 'bad', 'не выбран — поздравлять некуда', FIX.pick('выберите канал поздравлений', 'birthdays')));
+            checks.push(check('birthdays', 'Канал поздравлений', 'warn', 'не выбран — дни рождения не поздравляются', FIX.pick('выберите канал поздравлений', 'birthdays')));
         } else if (!channel) {
             checks.push(check('birthdays', 'Канал поздравлений', 'bad', 'канал удалён — выберите другой', FIX.pick('выберите другой канал поздравлений', 'birthdays')));
         } else {
@@ -158,7 +159,9 @@ async function run(guild, { database = pingDatabase } = {}) {
         dbMs = await database();
         checks.push(check('system', 'База данных', 'ok'));
     } catch (error) {
-        checks.push(check('system', 'База данных', 'bad', `недоступна: ${error.message || error}`, { steps: [
+        // The error text is about the bot's own database, not this server: it stays in the log
+        console.error('Diagnostics: database check failed:', error.message || error);
+        checks.push(check('system', 'База данных', 'bad', 'недоступна', { steps: [
             'Azure → Cosmos DB: проверьте, что аккаунт работает и не упёрся в лимит.',
             'Azure → App Service → Configuration: проверьте COSMOS_ENDPOINT и COSMOS_KEY.',
             'Перезапустите бота: App Service → Restart.'

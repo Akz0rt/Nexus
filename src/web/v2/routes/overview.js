@@ -1,5 +1,4 @@
 const express = require('express');
-const config = require('../../../config');
 const AuditLogService = require('../../../services/AuditLogService');
 const CosmosDBService = require('../../../services/CosmosDBService');
 const GuildSettingsService = require('../../../services/GuildSettingsService');
@@ -22,7 +21,7 @@ const BIRTHDAY_DAYS = 7;
 const HOUR_MS = 60 * 60 * 1000;
 
 /** Members of this server with a birthday today or in the next 7 days, soonest first. */
-function upcomingBirthdays(guild, birthdays, todayStr = CosmosDBService.getTodayDateString()) {
+function upcomingBirthdays(guild, birthdays, todayStr) {
     return describeBirthdays(guild, birthdays, todayStr)
         .filter(item => item.inDays <= BIRTHDAY_DAYS)
         .map(item => ({ ...item.user, month: item.month, day: item.day, inDays: item.inDays, done: item.done }));
@@ -47,12 +46,13 @@ router.get('/', async (req, res, next) => {
         if (guild.members.cache.size < guild.memberCount) await guild.members.fetch();
 
         const settings = await VerificationService.getQueueSettings(guild.id);
-        const since = startOfToday(config.timezone).toISOString();
+        const guildSettings = await GuildSettingsService.get(guild.id);
+        const since = startOfToday(guildSettings.timezone).toISOString();
         const [pending, approvedToday, journal, birthdays, reports] = await Promise.all([
             settings ? QueueCardService.listPending(guild.id) : [],
             settings ? QueueCardService.listHandled(guild.id, ['approved'], since) : [],
             AuditLogService.query({ guildId: guild.id, excludePrefix: 'message.' }, { limit: 30 }),
-            CosmosDBService.getAllBirthdays().catch(() => ({})),
+            CosmosDBService.getAllBirthdays(guild.id).catch(() => ({})),
             ReportService.list(guild.id, 'open').catch(() => [])
         ]);
 
@@ -91,8 +91,8 @@ router.get('/', async (req, res, next) => {
             journal: entries,
             users,
             report: fresh ? describeReport(guild, fresh) : null,
-            birthdays: upcomingBirthdays(guild, birthdays),
-            birthdayCheckTime: settings?.birthdayCheckTime || (await GuildSettingsService.get(guild.id)).birthdayCheckTime || config.checkTime
+            birthdays: upcomingBirthdays(guild, birthdays, CosmosDBService.getTodayDateString(guildSettings.timezone)),
+            birthdayCheckTime: guildSettings.birthdayCheckTime
         });
     } catch (error) {
         next(error);

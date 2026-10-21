@@ -71,6 +71,16 @@ module.exports = {
     handleInteraction,
 
     register(client) {
+        // Back on a server the bot was on before: its saved queue settings apply again
+        client.on(Events.GuildCreate, async guild => {
+            try {
+                const result = await VerificationService.reconcile(guild);
+                if (!result.skipped) console.log(`Verification queue rebuilt for ${guild.name}:`, result);
+            } catch (error) {
+                console.error(`Verification reconcile failed for ${guild.id}:`, error.message || error);
+            }
+        });
+
         client.on(Events.GuildMemberUpdate, async (oldMember, newMember) => {
             try {
                 const settings = await VerificationService.getQueueSettings(newMember.guild.id);

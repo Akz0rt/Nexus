@@ -7,6 +7,7 @@ const assert = require('assert');
 
 const CosmosDBService = require('../src/services/CosmosDBService');
 const NotificationService = require('../src/services/NotificationService');
+const GuildSettingsService = require('../src/services/GuildSettingsService');
 const { nextBirthday, describeBirthdays } = require('../src/web/v2/routes/birthdays');
 const { mergeTop, dailySeries, CHART_DAYS } = require('../src/web/v2/routes/activity');
 const { makeGuild, makeMember } = require('./fake-voice-guild');
@@ -32,22 +33,42 @@ function onlyMembers() {
 }
 
 async function congratulateOnce() {
-    const marked = new Map();
+    // Each server has its own list and «congratulated» marks
+    const marked = new Map(); // `${guildId}:${userId}` -> date
     CosmosDBService.getTodayDateString = () => '2026-10-18';
-    CosmosDBService.wasCongratulatedOn = async (userId, date) => marked.get(userId) === date;
-    CosmosDBService.markCongratulated = async (userId, date) => { marked.set(userId, date); };
-    const posts = [];
-    const guild = makeGuild();
-    makeMember(guild, 'a', {});
-    NotificationService.setChannels(null, { guild, send: async payload => posts.push(payload) });
+    CosmosDBService.wasCongratulatedOn = async (guildId, userId, date) => marked.get(`${guildId}:${userId}`) === date;
+    CosmosDBService.markCongratulated = async (guildId, userId, date) => { marked.set(`${guildId}:${userId}`, date); };
+    const channels = {};
+    GuildSettingsService.get = async guildId => ({ guildId, timezone: 'UTC', birthdayCongratsChannelId: channels[guildId] || '' });
 
-    assert.strictEqual((await NotificationService.congratulate('a')).ok, true);
-    assert.strictEqual((await NotificationService.congratulate('a')).code, 'already_congratulated');
-    assert.strictEqual(posts.length, 1);
-    assert.ok(posts[0].content.includes('<@a>'));
-    assert.strictEqual((await NotificationService.congratulate('ghost')).code, 'member_not_found');
-    NotificationService.setChannels(null, null);
-    assert.strictEqual((await NotificationService.congratulate('a')).code, 'no_channel');
+    const makeServer = (id, channelId) => {
+        const guild = makeGuild();
+        guild.id = id;
+        makeMember(guild, 'a', {});
+        const posts = [];
+        guild.channels.cache.set(channelId, { id: channelId, guild, isTextBased: () => true, send: async payload => posts.push(payload) });
+        channels[id] = channelId;
+        return { guild, posts };
+    };
+    const one = makeServer('g1', 'c1');
+    const two = makeServer('g2', 'c2');
+
+    assert.strictEqual((await NotificationService.congratulate(one.guild, 'a')).ok, true);
+    assert.strictEqual((await NotificationService.congratulate(one.guild, 'a')).code, 'already_congratulated');
+    assert.strictEqual(one.posts.length, 1);
+    assert.ok(one.posts[0].content.includes('<@a>'));
+    // Congratulated on server 1 doesn't count on server 2; each posts in its own channel
+    assert.strictEqual((await NotificationService.congratulate(two.guild, 'a')).ok, true);
+    assert.strictEqual(two.posts.length, 1);
+    assert.strictEqual(one.posts.length, 1);
+
+    assert.strictEqual((await NotificationService.congratulate(one.guild, 'ghost')).code, 'member_not_found');
+    // A channel of another server is never used
+    channels.g1 = 'c2';
+    marked.clear();
+    assert.strictEqual((await NotificationService.congratulate(one.guild, 'a')).code, 'no_channel');
+    channels.g1 = '';
+    assert.strictEqual((await NotificationService.congratulate(one.guild, 'a')).code, 'no_channel');
 }
 
 function activity() {

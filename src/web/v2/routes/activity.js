@@ -1,5 +1,4 @@
 const express = require('express');
-const config = require('../../../config');
 const ActivityService = require('../../../services/ActivityService');
 const VoiceActivityService = require('../../../services/VoiceActivityService');
 const ActivitySyncService = require('../../../services/ActivitySyncService');
@@ -46,25 +45,20 @@ function dailySeries(textDays, voiceDays, days = 30, today = new Date()) {
     return series;
 }
 
-// Activity is collected only for the main server (GUILD_ID)
-function supported(guild) {
-    return !config.guildId || config.guildId === guild.id;
-}
-
 // GET /activity?period=day|week|month&mode=text|voice|both
 router.get('/', async (req, res, next) => {
     try {
         const guild = req.guild;
-        if (!supported(guild)) return res.json({ supported: false });
         const period = PERIODS.has(req.query.period) ? req.query.period : 'week';
         const mode = MODES.has(req.query.mode) ? req.query.mode : 'both';
         const days = CHART_DAYS[period];
         const [textRows, voiceRows, textDays, voiceDays, sync] = await Promise.all([
-            mode === 'voice' ? [] : ActivityService.getTopUsersByPeriod(period),
-            mode === 'text' ? [] : VoiceActivityService.getTopUsersByPeriod(period),
-            ActivityService.getDailyTotals(days),
-            VoiceActivityService.getDailyTotals(days),
-            ActivitySyncService.getStatus().catch(() => null)
+            // Every server's own counts only
+            mode === 'voice' ? [] : ActivityService.getTopUsersByPeriod(guild.id, period),
+            mode === 'text' ? [] : VoiceActivityService.getTopUsersByPeriod(guild.id, period),
+            ActivityService.getDailyTotals(guild.id, days),
+            VoiceActivityService.getDailyTotals(guild.id, days),
+            ActivitySyncService.getStatus(guild.id).catch(() => null)
         ]);
         const top = mergeTop(textRows, voiceRows, mode).slice(0, TOP).map(r => {
             const ref = userRef(guild, r.userId);

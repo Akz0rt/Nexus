@@ -2,7 +2,8 @@ const { CosmosClient } = require('@azure/cosmos');
 const config = require('../config');
 
 const SYNC_METADATA_CONTAINER = 'activity_sync_metadata';
-const SUMMARY_DOC_ID = 'summary';
+// One sync summary per server: `summary-<guildId>`
+const summaryId = guildId => `summary-${guildId}`;
 
 class SyncMetadataService {
     constructor() {
@@ -62,12 +63,13 @@ class SyncMetadataService {
         return payload;
     }
 
-    async upsertSummary(summary) {
+    async upsertSummary(guildId, summary) {
         await this.initialize();
 
         const payload = {
-            id: SUMMARY_DOC_ID,
-            channelId: SUMMARY_DOC_ID,
+            id: summaryId(guildId),
+            channelId: summaryId(guildId),
+            guildId,
             type: 'summary',
             lastRunAt: summary.lastRunAt || null,
             lastSuccessAt: summary.lastSuccessAt || null,
@@ -84,16 +86,25 @@ class SyncMetadataService {
         return payload;
     }
 
-    async getSummary() {
+    async getSummary(guildId) {
         await this.initialize();
 
         try {
-            const { resource } = await this.container.item(SUMMARY_DOC_ID, SUMMARY_DOC_ID).read();
+            const { resource } = await this.container.item(summaryId(guildId), summaryId(guildId)).read();
             return resource || null;
         } catch (error) {
             if (error.code === 404) return null;
             throw error;
         }
+    }
+
+    /** Servers whose channels the sync has gone through (channel records carry the server) */
+    async listSyncedGuildIds() {
+        await this.initialize();
+        const { resources } = await this.container.items
+            .query('SELECT DISTINCT VALUE c.guildId FROM c WHERE IS_DEFINED(c.guildId) AND NOT IS_DEFINED(c.type)')
+            .fetchAll();
+        return resources.filter(Boolean);
     }
 }
 

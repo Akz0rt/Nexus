@@ -8,7 +8,7 @@ const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
 class ActivitySyncService {
     constructor() {
-        this.isRunning = false;
+        this.running = new Set(); // guildIds being synced: servers sync side by side, each once at a time
         this.activeVoiceSessions = null;
     }
 
@@ -21,11 +21,11 @@ class ActivitySyncService {
             return { skipped: true, reason: 'no_guild' };
         }
 
-        if (this.isRunning) {
+        if (this.running.has(guild.id)) {
             return { skipped: true, reason: 'already_running' };
         }
 
-        this.isRunning = true;
+        this.running.add(guild.id);
         const runStartedAt = new Date().toISOString();
         let channelsProcessed = 0;
         let messagesProcessed = 0;
@@ -33,7 +33,7 @@ class ActivitySyncService {
         let errorsCount = 0;
 
         try {
-            await SyncMetadataService.upsertSummary({
+            await SyncMetadataService.upsertSummary(guild.id, {
                 lastRunAt: runStartedAt,
                 isRunning: true,
                 runReason: reason
@@ -68,7 +68,7 @@ class ActivitySyncService {
                 }
             }
 
-            await SyncMetadataService.upsertSummary({
+            await SyncMetadataService.upsertSummary(guild.id, {
                 lastRunAt: runStartedAt,
                 lastSuccessAt: new Date().toISOString(),
                 isRunning: false,
@@ -88,7 +88,7 @@ class ActivitySyncService {
                 errorsCount
             };
         } catch (error) {
-            await SyncMetadataService.upsertSummary({
+            await SyncMetadataService.upsertSummary(guild.id, {
                 lastRunAt: runStartedAt,
                 isRunning: false,
                 runReason: reason,
@@ -100,12 +100,12 @@ class ActivitySyncService {
             });
             throw error;
         } finally {
-            this.isRunning = false;
+            this.running.delete(guild.id);
         }
     }
 
-    async getStatus() {
-        const summary = await SyncMetadataService.getSummary();
+    async getStatus(guildId) {
+        const summary = await SyncMetadataService.getSummary(guildId);
         return {
             isRunning: Boolean(summary?.isRunning),
             lastRunAt: summary?.lastRunAt || null,
@@ -199,6 +199,7 @@ class ActivitySyncService {
 
                 foundWithinWindow = true;
                 const ok = await ActivityService.recordMessageById({
+                    guildId: channel.guild.id,
                     userId: msg.author.id,
                     displayName: msg.member?.displayName || msg.author.username,
                     avatarURL: msg.author.displayAvatarURL({ size: 128, extension: 'png' }),
@@ -245,6 +246,7 @@ class ActivitySyncService {
                 if (!this._isTrackableMessage(msg)) continue;
 
                 const ok = await ActivityService.recordMessageById({
+                    guildId: channel.guild.id,
                     userId: msg.author.id,
                     displayName: msg.member?.displayName || msg.author.username,
                     avatarURL: msg.author.displayAvatarURL({ size: 128, extension: 'png' }),

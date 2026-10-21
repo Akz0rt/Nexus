@@ -50,10 +50,14 @@ function requireGuildAccess(minRole = 'admin') {
             if (!client?.isReady?.()) {
                 return res.status(503).json({ error: 'bot_offline' });
             }
+            // A server the user isn't on looks the same as one the bot isn't on:
+            // nobody can probe which servers the bot is in
             const guild = client.guilds.cache.get(req.params.guildId);
-            if (!guild) return res.status(404).json({ error: 'guild_not_found' });
+            const member = guild && (guild.members.cache.get(req.session.userId)
+                || await guild.members.fetch(req.session.userId).catch(() => null));
+            if (!member) return res.status(404).json({ error: 'guild_not_found' });
 
-            const role = await getPanelRole(guild, req.session.userId);
+            const role = panelRoleFromPermissions(member.permissions);
             if (!hasRole(role, minRole)) return res.status(403).json({ error: 'forbidden' });
 
             req.guild = guild;

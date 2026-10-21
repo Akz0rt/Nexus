@@ -1,6 +1,6 @@
 const { Events } = require('discord.js');
-const config = require('../../config');
 const AIService = require('../../services/AIService');
+const GuildSettingsService = require('../../services/GuildSettingsService');
 
 function isAddressedToBot(message, botId) {
     if (message.mentions.users.has(botId)) return true;
@@ -16,12 +16,13 @@ module.exports = {
             if (message.author.bot) return;
             if (!message.guild) return;
 
-            // Only respond in the dedicated AI channel — ignore everything else,
-            // even direct @mentions. Slash commands are unaffected (handled separately).
-            if (!config.aiChannelId || message.channelId !== config.aiChannelId) return;
-            // ...and there only to an @mention or a reply to the bot: with the Message Content
+            // Only to an @mention or a reply to the bot: with the Message Content
             // intent the bot sees every message, and answering all of them would cost OpenAI calls
             if (!isAddressedToBot(message, client.user.id)) return;
+            // ...and only in this server's AI channel (Settings) — ignore everything else,
+            // even direct @mentions. Slash commands are unaffected (handled separately).
+            const settings = await GuildSettingsService.get(message.guild.id).catch(() => null);
+            if (!settings?.aiChannelId || message.channelId !== settings.aiChannelId) return;
 
             let userContent = message.content
                 .replace(`<@${client.user.id}>`, '')
@@ -40,9 +41,9 @@ module.exports = {
                 const displayName = member.displayName || message.author.username;
 
                 let authorGender = null;
-                if (config.maleRoleId && member.roles.cache.has(config.maleRoleId)) {
+                if (settings.maleRoleId && member.roles.cache.has(settings.maleRoleId)) {
                     authorGender = 'male';
-                } else if (config.femaleRoleId && member.roles.cache.has(config.femaleRoleId)) {
+                } else if (settings.femaleRoleId && member.roles.cache.has(settings.femaleRoleId)) {
                     authorGender = 'female';
                 }
 

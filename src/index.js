@@ -8,6 +8,7 @@ const fs = require('fs');
 const path = require('path');
 const config = require('./config');
 const state = require('./state');
+const GuildSettingsService = require('./services/GuildSettingsService');
 const { registerModules, runReadyHooks, findInteractionHandler } = require('./modules');
 const { startServer } = require('./server');
 
@@ -50,9 +51,9 @@ registerModules(client);
 
 // Slash commands are registered per guild on every start, so new commands
 // appear without running `npm run deploy` by hand (guild commands update instantly).
-async function registerCommands() {
+async function registerCommands(guilds = client.guilds.cache.values()) {
     const body = client.commands.map(command => command.data.toJSON());
-    for (const guild of client.guilds.cache.values()) {
+    for (const guild of guilds) {
         try {
             await guild.commands.set(body);
             console.log(`Registered ${body.length} slash command(s) in ${guild.name}`);
@@ -62,12 +63,29 @@ async function registerCommands() {
     }
 }
 
+function refreshMainGuild() {
+    const mainId = GuildSettingsService.mainGuildId(client);
+    state.guild = (mainId && client.guilds.cache.get(mainId)) || null;
+}
+
+// Added to a server while running: commands there at once (the modules start their own work)
+client.on(Events.GuildCreate, async guild => {
+    console.log(`Joined server ${guild.name} (${guild.id})`);
+    refreshMainGuild();
+    await registerCommands([guild]);
+});
+
+client.on(Events.GuildDelete, guild => {
+    console.log(`Left server ${guild.name || guild.id} (${guild.id})`);
+    refreshMainGuild();
+});
+
 client.once(Events.ClientReady, async () => {
     console.log('Discord bot is ready! 🎉');
 
-    // Expose guild to the web dashboard and sync services
-    state.guild = client.guilds.cache.first() || null;
+    // The old web dashboard shows the main server (GUILD_ID, or the oldest one)
     state.client = client;
+    refreshMainGuild();
 
     await registerCommands();
     await runReadyHooks(client);

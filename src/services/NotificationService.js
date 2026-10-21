@@ -1,69 +1,76 @@
 const { EmbedBuilder } = require('discord.js');
-const config = require('../config');
 const CosmosDBService = require('./CosmosDBService');
+const GuildSettingsService = require('./GuildSettingsService');
+
+/**
+ * A text channel of this server from Settings → «Дни рождения» (Azure variables on the
+ * main server until saved there), or null. Never a channel of another server.
+ */
+async function channelOf(guild, channelId) {
+    if (!channelId) return null;
+    let channel = guild.channels.cache.get(channelId);
+    if (!channel) {
+        try {
+            channel = await guild.channels.fetch(channelId);
+        } catch {
+            return null;
+        }
+    }
+    return channel?.guild?.id === guild.id && channel.isTextBased?.() ? channel : null;
+}
 
 class NotificationService {
-    constructor() {
-        // channel used for announcements when users set birthdays (legacy)
-        this.announceChannel = null;
-        // separate channel used for daily congratulation messages
-        this.congratsChannel = null;
+    /** Where this server announces a newly set birthday, or null */
+    async announceChannel(guild) {
+        const settings = await GuildSettingsService.get(guild.id);
+        return channelOf(guild, settings.birthdayAnnounceChannelId);
     }
 
-    // Backwards-compatible setter for single channel
-    setChannel(channel) {
-        this.announceChannel = channel;
-        // default congratsChannel to announceChannel if not set separately
-        if (!this.congratsChannel) this.congratsChannel = channel;
+    /** Where this server posts the daily congratulations (the announce channel if unset), or null */
+    async congratsChannel(guild) {
+        const settings = await GuildSettingsService.get(guild.id);
+        return await channelOf(guild, settings.birthdayCongratsChannelId)
+            || channelOf(guild, settings.birthdayAnnounceChannelId);
     }
 
-    // New API: set both announce and congrats channels explicitly
-    setChannels(announceChannel, congratsChannel) {
-        this.announceChannel = announceChannel || null;
-        this.congratsChannel = congratsChannel || announceChannel || null;
-    }
+    /** The daily run for one server: its own list, channel and calendar */
+    async sendBirthdayNotifications(guild) {
+        const { timezone } = await GuildSettingsService.get(guild.id);
+        const birthdayUsers = await CosmosDBService.getTodaysBirthdays(guild.id, timezone);
+        console.log(`Found ${birthdayUsers.length} birthday user(s) for today in ${guild.id}`);
 
-    async sendBirthdayNotifications() {
-        const birthdayUsers = await CosmosDBService.getTodaysBirthdays();
-        console.log(`Found ${birthdayUsers.length} birthday user(s) for today`);
-
-        // Use congratsChannel for sending congratulations; fall back to announceChannel
-        const targetChannel = this.congratsChannel || this.announceChannel;
-        if (!targetChannel) {
+        if (!(await this.congratsChannel(guild))) {
             if (birthdayUsers.length > 0) {
-                console.warn(
-                    `Found ${birthdayUsers.length} birthdays today, but no notification channel is configured/reachable.`
-                );
-            } else {
-                console.log('No birthdays today and no notification channel configured.');
+                console.warn(`Found ${birthdayUsers.length} birthdays today in ${guild.id}, but no notification channel is configured/reachable.`);
             }
             return;
         }
 
         for (const userId of birthdayUsers) {
             try {
-                const result = await this.congratulate(userId);
-                if (result.code === 'already_congratulated') console.log(`Already congratulated ${userId} today, skipping`);
+                const result = await this.congratulate(guild, userId);
+                if (result.code === 'already_congratulated') console.log(`Already congratulated ${userId} in ${guild.id} today, skipping`);
             } catch (error) {
-                console.error(`Error sending birthday notification for user ${userId}:`, error);
+                console.error(`Error sending birthday notification for user ${userId} in ${guild.id}:`, error);
             }
         }
     }
 
     /**
-     * Congratulate one member today (the daily run, or «Поздравить сейчас» in the app).
-     * Idempotent: anyone already congratulated today is skipped, so restarts, the
+     * Congratulate one member of this server today (the daily run, or «Поздравить сейчас» in the app).
+     * Idempotent: anyone already congratulated here today is skipped, so restarts, the
      * startup catch-up check, the scheduled run and the app button never duplicate.
      * @returns {Promise<{ ok: true } | { ok: false, code: 'no_channel'|'already_congratulated'|'member_not_found' }>}
      */
-    async congratulate(userId) {
-        const targetChannel = this.congratsChannel || this.announceChannel;
+    async congratulate(guild, userId) {
+        const targetChannel = await this.congratsChannel(guild);
         if (!targetChannel) return { ok: false, code: 'no_channel' };
 
-        const todayStr = CosmosDBService.getTodayDateString();
-        if (await CosmosDBService.wasCongratulatedOn(userId, todayStr)) return { ok: false, code: 'already_congratulated' };
+        const { timezone } = await GuildSettingsService.get(guild.id);
+        const todayStr = CosmosDBService.getTodayDateString(timezone);
+        if (await CosmosDBService.wasCongratulatedOn(guild.id, userId, todayStr)) return { ok: false, code: 'already_congratulated' };
 
-        const member = await targetChannel.guild.members.fetch(userId).catch(() => null);
+        const member = await guild.members.fetch(userId).catch(() => null);
         if (!member) return { ok: false, code: 'member_not_found' };
         const displayName = member.displayName || member.user.username;
 
@@ -97,7 +104,7 @@ class NotificationService {
 
         // Mark only after a successful send so a send failure is retried,
         // not silently swallowed.
-        await CosmosDBService.markCongratulated(userId, todayStr);
+        await CosmosDBService.markCongratulated(guild.id, userId, todayStr);
         return { ok: true };
     }
 }

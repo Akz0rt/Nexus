@@ -122,7 +122,7 @@ async function exchangeCode(code) {
     return userRes.json();
 }
 
-function createAuthRouter(store = new LoginFlowStore()) {
+function createAuthRouter(store = new LoginFlowStore(), { onLogout = () => {} } = {}) {
     const router = express.Router();
 
     router.get('/login', (req, res) => {
@@ -183,7 +183,9 @@ function createAuthRouter(store = new LoginFlowStore()) {
 
     router.post('/logout', async (req, res, next) => {
         try {
-            await PanelSessionService.delete(bearerToken(req));
+            const token = bearerToken(req);
+            await PanelSessionService.delete(token);
+            onLogout(token);
             res.json({ ok: true });
         } catch (error) {
             next(error);

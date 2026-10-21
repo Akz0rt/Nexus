@@ -5,9 +5,7 @@ const AuditLogService = require('../../../services/AuditLogService');
 const DiagnosticsService = require('../../../services/DiagnosticsService');
 const { MUTE_DURATIONS, WARN_TTL_DAYS } = require('../../../modules/moderation/templates');
 const { actorOf } = require('../result');
-const config = require('../../../config');
-const state = require('../../../state');
-const { birthdayGuildId, applySettings } = require('../../../modules/birthdays');
+const { applySettings } = require('../../../modules/birthdays');
 
 // Mounted behind requireGuildAccess('senior'): administrators only
 const router = express.Router({ mergeParams: true });
@@ -17,6 +15,14 @@ const MAX_REASONS = 15;
 const MAX_RULES = 6;
 const MAX_LOCKDOWN_CHANNELS = 10;
 const TEXT_TYPES = new Set([ChannelType.GuildText, ChannelType.GuildAnnouncement, ChannelType.GuildForum]);
+// Every IANA zone this Node knows, for the «Часовой пояс» picker
+const TIMEZONES = (() => {
+    try {
+        return Intl.supportedValuesOf('timeZone');
+    } catch {
+        return ['UTC'];
+    }
+})();
 
 /** «9:00» from Azure → «09:00», which <input type="time"> understands */
 function hhmm(time) {
@@ -124,7 +130,6 @@ function sanitize(guild, body, current) {
 
     const BIRTHDAY_KEYS = ['birthdayCheckTime', 'birthdayCongratsChannelId', 'birthdayAnnounceChannelId'];
     if (BIRTHDAY_KEYS.some(key => key in body)) {
-        if (guild.id !== birthdayGuildId(state.client)) return fail('birthdayCheckTime', 'not_birthday_guild');
         if ('birthdayCheckTime' in body) {
             const time = String(body.birthdayCheckTime || '');
             if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) return fail('birthdayCheckTime', 'invalid_time');
@@ -142,6 +147,22 @@ function sanitize(guild, body, current) {
         }
     }
 
+    // The server's calendar: birthdays and «today» in stats
+    if ('timezone' in body) {
+        const zone = String(body.timezone || '');
+        if (!GuildSettingsService.isValidTimezone(zone)) return fail('timezone', 'invalid_timezone');
+        patch.timezone = zone;
+        fields.push('timezone');
+    }
+
+    // Where the AI assistant answers ('' = nowhere)
+    if ('aiChannelId' in body) {
+        const id = String(body.aiChannelId || '');
+        if (id && id !== current.aiChannelId && !guild.channels.cache.get(id)?.isTextBased?.()) return fail('aiChannelId', 'channel_not_found');
+        patch.aiChannelId = id;
+        fields.push('aiChannelId');
+    }
+
     if (fields.length === 0) return fail(null, 'nothing_to_save');
     return { ok: true, patch, fields };
 }
@@ -156,7 +177,8 @@ function describeSettings(settings) {
         birthdayCheckTime: hhmm(settings.birthdayCheckTime),
         birthdayCongratsChannelId: settings.birthdayCongratsChannelId || '',
         birthdayAnnounceChannelId: settings.birthdayAnnounceChannelId || '',
-        timezone: config.timezone,
+        timezone: settings.timezone,
+        aiChannelId: settings.aiChannelId || '',
         verificationEnabled: Boolean(settings.modules.verification),
         assignUnverifiedOnJoin: Boolean(settings.assignUnverifiedOnJoin),
         youngAccountDays: settings.verification.youngAccountDays,
@@ -181,6 +203,7 @@ function describeOptions(guild) {
             .map(channel => ({ id: channel.id, name: channel.name, category: channel.parent?.name || null, forum: channel.type === ChannelType.GuildForum })),
         muteDurations: Object.entries(MUTE_DURATIONS).map(([id, { label, ms }]) => ({ id, label, ms })),
         slowmodeChoices: SLOWMODE_CHOICES,
+        timezones: TIMEZONES,
         warnTtlDays: WARN_TTL_DAYS
     };
 }
@@ -188,7 +211,8 @@ function describeOptions(guild) {
 router.get('/', async (req, res, next) => {
     try {
         const settings = await GuildSettingsService.get(req.guild.id);
-        res.json({ values: { ...describeSettings(settings), birthdayGuild: req.guild.id === birthdayGuildId(state.client) }, options: describeOptions(req.guild) });
+        // Every server has its own birthdays now; birthdayGuild stays for older apps
+        res.json({ values: { ...describeSettings(settings), birthdayGuild: true }, options: describeOptions(req.guild) });
     } catch (error) {
         next(error);
     }
@@ -205,8 +229,8 @@ router.patch('/', async (req, res, next) => {
         await GuildSettingsService.update(guild.id, result.patch);
         // The daily check moves to the new time, the channels switch — no restart
         let warning = null;
-        if (result.fields.some(field => field.startsWith('birthday'))) {
-            await applySettings(state.client).catch(error => {
+        if (result.fields.some(field => field.startsWith('birthday') || field === 'timezone')) {
+            await applySettings(guild).catch(error => {
                 console.error('Settings: applying birthday settings failed:', error.message || error);
                 warning = 'birthday_apply_failed';
             });
@@ -220,7 +244,7 @@ router.patch('/', async (req, res, next) => {
             source: 'panel',
             details: { fields: result.fields }
         });
-        res.json({ ok: true, warning, values: { ...describeSettings(await GuildSettingsService.get(guild.id)), birthdayGuild: guild.id === birthdayGuildId(state.client) } });
+        res.json({ ok: true, warning, values: { ...describeSettings(await GuildSettingsService.get(guild.id)), birthdayGuild: true } });
     } catch (error) {
         next(error);
     }

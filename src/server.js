@@ -349,7 +349,7 @@ function createApp() {
                 }[resolvedPeriod] ?? 60 * 60 * 1000;
 
                 try {
-                    const status = await ActivitySyncService.getStatus();
+                    const status = await ActivitySyncService.getStatus(state.guild.id);
                     const lastSuccessTs = status?.lastSuccessAt ? Date.parse(status.lastSuccessAt) : NaN;
                     const isStale = Number.isNaN(lastSuccessTs) || (Date.now() - lastSuccessTs >= syncIntervalMs);
                     if (isStale && state.guild) {
@@ -363,11 +363,11 @@ function createApp() {
                 }
 
                 const textTopUsers = resolvedPeriod === 'hour'
-                    ? await ActivityService.getTopUsersByRecentWindow(60 * 60 * 1000)
-                    : await ActivityService.getTopUsersByPeriod(resolvedPeriod);
+                    ? await ActivityService.getTopUsersByRecentWindow(state.guild.id, 60 * 60 * 1000)
+                    : await ActivityService.getTopUsersByPeriod(state.guild.id, resolvedPeriod);
                 const voiceTopUsers = resolvedPeriod === 'hour'
-                    ? await VoiceActivityService.getTopUsersByRecentWindow(60 * 60 * 1000)
-                    : await VoiceActivityService.getTopUsersByPeriod(resolvedPeriod);
+                    ? await VoiceActivityService.getTopUsersByRecentWindow(state.guild.id, 60 * 60 * 1000)
+                    : await VoiceActivityService.getTopUsersByPeriod(state.guild.id, resolvedPeriod);
 
                 let selectedUser = null;
                 let stat = '';
@@ -428,8 +428,8 @@ function createApp() {
 
                 if (!selectedUser) {
                     const [textDebug, voiceDebug] = await Promise.all([
-                        ActivityService.getPeriodDebugStats(resolvedPeriod),
-                        VoiceActivityService.getPeriodDebugStats(resolvedPeriod)
+                        ActivityService.getPeriodDebugStats(state.guild.id, resolvedPeriod),
+                        VoiceActivityService.getPeriodDebugStats(state.guild.id, resolvedPeriod)
                     ]);
                     const debug = { text: textDebug, voice: voiceDebug, calcMode };
                     console.warn('featured-user no_activity debug:', { period: resolvedPeriod, ...debug });
@@ -479,7 +479,7 @@ function createApp() {
     // GET /api/activity-sync-status — sync health and freshness
     app.get('/api/activity-sync-status', async (req, res) => {
         try {
-            const status = await ActivitySyncService.getStatus();
+            const status = await ActivitySyncService.getStatus(state.guild?.id);
             res.json(status);
         } catch (err) {
             console.error('GET /api/activity-sync-status error:', err);
@@ -491,7 +491,7 @@ function createApp() {
     app.get('/api/activity-debug', async (req, res) => {
         try {
             const period = String(req.query.period || 'week');
-            const debug = await ActivityService.getPeriodDebugStats(period);
+            const debug = await ActivityService.getPeriodDebugStats(state.guild?.id, period);
             res.json({ period, ...debug });
         } catch (err) {
             console.error('GET /api/activity-debug error:', err);

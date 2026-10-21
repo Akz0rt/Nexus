@@ -60,6 +60,8 @@ async function challenge(guildId, challenger, opponent, bet, now = Date.now()) {
 async function answer(guild, duelId, member, accept, now = Date.now()) {
     const duel = duels.get(duelId);
     if (!duel || duel.expiresAt <= now) { duels.delete(duelId); return { ok: false, code: 'duel_gone' }; }
+    // A duel belongs to the server it was started on
+    if (duel.guildId !== guild.id) return { ok: false, code: 'duel_gone' };
     if (member.id !== duel.opponentId) return { ok: false, code: 'not_opponent' };
     duels.delete(duelId);
     if (!accept) return { ok: true, declined: true, duel };

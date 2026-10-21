@@ -1,5 +1,6 @@
 const { CosmosClient } = require('@azure/cosmos');
 const config = require('../config');
+const state = require('../state');
 const { DEFAULT_REASONS, DEFAULT_ESCALATION, DEFAULT_PUNISH_TEMPLATES } = require('../modules/moderation/templates');
 
 const GUILD_SETTINGS_CONTAINER = 'guild_settings';
@@ -13,14 +14,38 @@ const ENV_DEFAULTS = {
     maleRoleId: () => config.maleRoleId,
     femaleRoleId: () => config.femaleRoleId,
     verifyQueueChannelId: () => config.verifyQueueChannelId,
-    // Birthdays (the main server only): when to congratulate and where
+    // Birthdays: when to congratulate and where
     birthdayCheckTime: () => config.checkTime,
     birthdayCongratsChannelId: () => config.congratsChannel,
-    birthdayAnnounceChannelId: () => config.birthdayChannel
+    birthdayAnnounceChannelId: () => config.birthdayChannel,
+    // The channel where the AI assistant answers
+    aiChannelId: () => config.aiChannelId
 };
 
 // Keys the panel may switch off on purpose: a saved '' means «none», not «use Azure»
-const CLEARABLE = new Set(['birthdayCongratsChannelId', 'birthdayAnnounceChannelId']);
+const CLEARABLE = new Set(['birthdayCongratsChannelId', 'birthdayAnnounceChannelId', 'aiChannelId']);
+const DEFAULT_CHECK_TIME = '00:00';
+
+/** True for an IANA zone this Node knows («Europe/Moscow»), false for anything else */
+function isValidTimezone(zone) {
+    if (!zone || typeof zone !== 'string') return false;
+    try {
+        new Intl.DateTimeFormat('en-US', { timeZone: zone });
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+/**
+ * The main server: GUILD_ID, or without it the lowest server id (the same one after
+ * every restart). Azure variables are its settings; other servers start empty.
+ */
+function mainGuildId(client = state.client) {
+    if (config.guildId) return config.guildId;
+    const ids = [...(client?.guilds?.cache.keys() || [])];
+    return ids.length ? ids.reduce((low, id) => (BigInt(id) < BigInt(low) ? id : low)) : null;
+}
 
 function parseBool(value) {
     if (value === undefined || value === null || value === '') return undefined;
@@ -67,8 +92,8 @@ class GuildSettingsService {
     }
 
     isDefaultGuild(guildId) {
-        // With no GUILD_ID configured the bot is single-server, so env applies everywhere
-        return !config.guildId || config.guildId === guildId;
+        // Azure variables belong to the main server only, never to every server
+        return Boolean(guildId) && mainGuildId() === guildId;
     }
 
     // Resolution order: guild doc → env (default guild only) → undefined
@@ -91,6 +116,11 @@ class GuildSettingsService {
         // Give @unverified on join ourselves (skipped if a third-party bot already did). On by default.
         const envAssign = useEnv ? parseBool(config.assignUnverifiedOnJoin) : undefined;
         result.assignUnverifiedOnJoin = doc?.assignUnverifiedOnJoin ?? envAssign ?? true;
+
+        // Every server has its own calendar: birthdays, «today» in stats. Azure TIMEZONE until set
+        result.timezone = isValidTimezone(doc?.timezone) ? doc.timezone
+            : (isValidTimezone(config.timezone) ? config.timezone : 'UTC');
+        result.birthdayCheckTime = result.birthdayCheckTime || DEFAULT_CHECK_TIME;
 
         // Booster accounts: their marker role (made by the bot on the first booster pass)
         result.boosterRoleId = doc?.boosterRoleId || null;
@@ -136,8 +166,8 @@ class GuildSettingsService {
         };
 
         // Which env-backed keys come from env rather than the guild doc (shown in Settings)
-        result.fromEnv = Object.keys(ENV_DEFAULTS).filter(key =>
-            (doc?.[key] === undefined || (doc[key] === '' && !CLEARABLE.has(key))) && result[key] !== undefined);
+        result.fromEnv = useEnv ? Object.keys(ENV_DEFAULTS).filter(key =>
+            (doc?.[key] === undefined || (doc[key] === '' && !CLEARABLE.has(key))) && ENV_DEFAULTS[key]() && result[key] !== undefined) : [];
 
         return result;
     }
@@ -167,3 +197,5 @@ class GuildSettingsService {
 
 module.exports = new GuildSettingsService();
 module.exports.DEFAULT_SLOWMODE_SECONDS = DEFAULT_SLOWMODE_SECONDS;
+module.exports.mainGuildId = mainGuildId;
+module.exports.isValidTimezone = isValidTimezone;

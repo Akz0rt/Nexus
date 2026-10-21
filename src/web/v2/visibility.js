@@ -30,4 +30,19 @@ function canUserSee(guildId, userId, entry) {
     return canSeeEntry(guild, guild.members.cache.get(userId), entry);
 }
 
-module.exports = { canSeeEntry, canSeeChannel, canUserSee };
+/** Live stream: may this user see who is in this voice channel (the board shows only channels they can view)? */
+function canUserSeeVoice(guildId, userId, channelId) {
+    const guild = state.client?.guilds?.cache.get(guildId);
+    const viewer = guild?.members.cache.get(userId);
+    if (!viewer) return false;
+    const channel = guild.channels.cache.get(channelId);
+    return Boolean(channel?.permissionsFor(viewer)?.has(PermissionFlagsBits.ViewChannel));
+}
+
+/** Live stream: mass role jobs are shown to those who may run them (Manage Roles), as in the REST API */
+function canUserManageRoles(guildId, userId) {
+    const guild = state.client?.guilds?.cache.get(guildId);
+    return Boolean(guild?.members.cache.get(userId)?.permissions.has(PermissionFlagsBits.ManageRoles));
+}
+
+module.exports = { canSeeEntry, canSeeChannel, canUserSee, canUserSeeVoice, canUserManageRoles };

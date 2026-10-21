@@ -1,67 +1,50 @@
+const { Events } = require('discord.js');
 const config = require('../../config');
+const CosmosDBService = require('../../services/CosmosDBService');
 const GuildSettingsService = require('../../services/GuildSettingsService');
 const SchedulerService = require('../../services/SchedulerService');
-const NotificationService = require('../../services/NotificationService');
 
-async function fetchChannelById(client, channelId, label) {
-    if (!channelId) {
-        console.warn(`${label} is not set`);
-        return null;
-    }
-
-    try {
-        const channel = await client.channels.fetch(channelId);
-        if (!channel || !channel.isTextBased?.()) {
-            console.warn(`${label} (${channelId}) is not a text channel`);
-            return null;
-        }
-        return channel;
-    } catch (error) {
-        console.error(`Failed to fetch channel for ${label} (${channelId}):`, error.message || error);
-        return null;
-    }
+/**
+ * Time and timezone from Settings (Azure variables on the main server until saved there).
+ * Called at startup, when the bot joins a server and after Settings are saved — no restart needed.
+ */
+async function applySettings(guild, { initialCheck = false } = {}) {
+    const settings = await GuildSettingsService.get(guild.id);
+    // Always schedule so daily DB checks are not skipped; a server without channels just has nobody to post to
+    SchedulerService.start(guild, { checkTime: settings.birthdayCheckTime, timezone: settings.timezone, initialCheck });
 }
 
 /**
- * Birthdays are one list for the bot: they belong to the main server — GUILD_ID, or
- * without it the lowest server id (the same one after every restart, joins and leaves aside)
+ * The old list was shared by the whole bot; it is copied once to GUILD_ID. Without
+ * GUILD_ID it isn't guessed while the bot is on several servers (Diagnostics says so).
  */
-function birthdayGuildId(client) {
-    if (config.guildId) return config.guildId;
-    const ids = [...(client?.guilds?.cache.keys() || [])];
-    return ids.length ? ids.reduce((low, id) => (BigInt(id) < BigInt(low) ? id : low)) : null;
-}
-
-/**
- * Time and channels from Settings → «Дни рождения» (Azure variables until saved there).
- * Called at startup and again after Settings are saved — no restart needed.
- */
-async function applySettings(client, { initialCheck = false } = {}) {
-    const guildId = birthdayGuildId(client);
-    const settings = guildId ? await GuildSettingsService.get(guildId) : {};
-    // Fetch channels directly from API to avoid cache-miss on startup
-    const announceChannel = await fetchChannelById(client, settings.birthdayAnnounceChannelId, 'Birthday announce channel');
-    const congratsChannel = await fetchChannelById(client, settings.birthdayCongratsChannelId, 'Birthday congrats channel');
-    NotificationService.setChannels(announceChannel, congratsChannel);
-
-    if (announceChannel || congratsChannel) {
-        console.log('Notification channels configured successfully');
-    } else {
-        console.error('No notification channels found. Birthday checks will still run, but messages cannot be sent.');
+async function migrateLegacy(client) {
+    const target = config.guildId || (client.guilds.cache.size === 1 ? client.guilds.cache.firstKey() : null);
+    if (!target || !client.guilds.cache.has(target)) {
+        console.warn('Birthdays: old shared list not copied — set GUILD_ID to the server it belongs to');
+        return;
     }
-
-    // Always schedule so daily DB checks are not skipped
-    SchedulerService.start({ checkTime: settings.birthdayCheckTime || config.checkTime, initialCheck });
+    await CosmosDBService.migrateLegacy(target).catch(error =>
+        console.error('Birthdays: copying the old list failed (will retry on next start):', error.message || error));
 }
 
 module.exports = {
     name: 'birthdays',
-    birthdayGuildId,
     applySettings,
 
-    register() {},
+    register(client) {
+        client.on(Events.GuildCreate, guild => {
+            applySettings(guild, { initialCheck: true }).catch(error =>
+                console.error(`Birthdays: scheduling ${guild.id} failed:`, error.message || error));
+        });
+        client.on(Events.GuildDelete, guild => SchedulerService.stop(guild.id));
+    },
 
     async onReady(client) {
-        await applySettings(client, { initialCheck: true });
+        await migrateLegacy(client);
+        for (const guild of client.guilds.cache.values()) {
+            await applySettings(guild, { initialCheck: true }).catch(error =>
+                console.error(`Birthdays: scheduling ${guild.id} failed:`, error.message || error));
+        }
     }
 };

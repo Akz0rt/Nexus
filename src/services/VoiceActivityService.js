@@ -142,35 +142,35 @@ class VoiceActivityService {
     }
 
 
-    async getTopUsersByRecentWindow(windowMs) {
+    async getTopUsersByRecentWindow(guildId, windowMs) {
         await this.initialize();
 
         const cutoffTs = Date.now() - windowMs;
         const query = `
             SELECT c.userId, c.displayName, c.avatarURL, c.endedAt, c.durationSeconds
             FROM c
-            WHERE c.endedAt >= @cutoffTs
+            WHERE c.guildId = @guildId AND c.endedAt >= @cutoffTs
         `;
 
         const { resources } = await this.container.items
-            .query({ query, parameters: [{ name: '@cutoffTs', value: cutoffTs }] })
+            .query({ query, parameters: [{ name: '@guildId', value: guildId }, { name: '@cutoffTs', value: cutoffTs }] }, { partitionKey: guildId })
             .fetchAll();
 
         return this._aggregateUsers(resources || []);
     }
 
-    async getTopUsersByPeriod(periodOrDays = 'week') {
+    async getTopUsersByPeriod(guildId, periodOrDays = 'week') {
         await this.initialize();
 
         const cutoffString = this._getCutoffDateString(periodOrDays);
         const query = `
             SELECT c.userId, c.displayName, c.avatarURL, c.endedAt, c.durationSeconds
             FROM c
-            WHERE c.date >= @cutoffDate
+            WHERE c.guildId = @guildId AND c.date >= @cutoffDate
         `;
 
         const { resources } = await this.container.items
-            .query({ query, parameters: [{ name: '@cutoffDate', value: cutoffString }] })
+            .query({ query, parameters: [{ name: '@guildId', value: guildId }, { name: '@cutoffDate', value: cutoffString }] }, { partitionKey: guildId })
             .fetchAll();
 
         return this._aggregateUsers(resources || []);
@@ -180,12 +180,12 @@ class VoiceActivityService {
      * Voice minutes per day (by the day a session ended) for the last N days.
      * @returns {Promise<Array<{ date: string, minutes: number }>>}
      */
-    async getDailyTotals(days = 30) {
+    async getDailyTotals(guildId, days = 30) {
         await this.initialize();
         const { resources } = await this.container.items.query({
-            query: 'SELECT c.date, c.durationSeconds FROM c WHERE c.date >= @cutoffDate',
-            parameters: [{ name: '@cutoffDate', value: this._getCutoffDateString(days) }]
-        }).fetchAll();
+            query: 'SELECT c.date, c.durationSeconds FROM c WHERE c.guildId = @guildId AND c.date >= @cutoffDate',
+            parameters: [{ name: '@guildId', value: guildId }, { name: '@cutoffDate', value: this._getCutoffDateString(days) }]
+        }, { partitionKey: guildId }).fetchAll();
         const byDate = new Map();
         for (const { date, durationSeconds } of resources) {
             if (!date) continue;
@@ -196,18 +196,18 @@ class VoiceActivityService {
             .sort((a, b) => a.date.localeCompare(b.date));
     }
 
-    async getPeriodDebugStats(periodOrDays = 'week') {
+    async getPeriodDebugStats(guildId, periodOrDays = 'week') {
         await this.initialize();
 
         const cutoffDate = this._getCutoffDateString(periodOrDays);
         const query = `
             SELECT c.userId, c.durationSeconds
             FROM c
-            WHERE c.date >= @cutoffDate
+            WHERE c.guildId = @guildId AND c.date >= @cutoffDate
         `;
 
         const { resources } = await this.container.items
-            .query({ query, parameters: [{ name: '@cutoffDate', value: cutoffDate }] })
+            .query({ query, parameters: [{ name: '@guildId', value: guildId }, { name: '@cutoffDate', value: cutoffDate }] }, { partitionKey: guildId })
             .fetchAll();
 
         const docs = resources.length;

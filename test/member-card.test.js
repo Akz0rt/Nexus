@@ -58,8 +58,8 @@ WarningService.listActive = async () => [];
 QueueCardService.get = async () => null;
 TempRoleService.listForUser = async () => [];
 const lastMessage = '2026-10-19T08:00:00.000Z';
-ActivityService.lastMessageAt = async userId => (userId === BORIS ? lastMessage : null);
-CosmosDBService.getBirthday = async userId => (userId === BORIS ? { month: 3, day: 3, lastCongratulatedOn: null } : null);
+ActivityService.lastMessageAt = async (guildId, userId) => (userId === BORIS ? lastMessage : null);
+CosmosDBService.getBirthday = async (guildId, userId) => (userId === BORIS ? { month: 3, day: 3, lastCongratulatedOn: null } : null);
 
 const guild = makeGuild();
 guild.iconURL = () => null;

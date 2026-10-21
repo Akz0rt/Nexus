@@ -1,6 +1,5 @@
 const express = require('express');
 const { PermissionFlagsBits } = require('discord.js');
-const config = require('../../../config');
 const AuditLogService = require('../../../services/AuditLogService');
 const ActivityService = require('../../../services/ActivityService');
 const CosmosDBService = require('../../../services/CosmosDBService');
@@ -106,16 +105,14 @@ router.get('/:userId', async (req, res, next) => {
             }
             : null;
 
-        // Messages are collected for the main server only
-        const activityHere = !config.guildId || config.guildId === guild.id;
         const [history, card, warnings, notes, lastMessageAt, birthday, boosterPass] = await Promise.all([
             AuditLogService.query({ guildId: guild.id, targetId: userId }, { limit: 50 })
                 .then(r => r.items.filter(entry => canSeeEntry(guild, viewer, entry))),
             QueueCardService.get(guild.id, userId),
             WarningService.listActive(guild.id, userId),
             quiet(MemberNoteService.list(guild.id, userId)),
-            activityHere ? quiet(ActivityService.lastMessageAt(userId)) : null,
-            quiet(CosmosDBService.getBirthday(userId)),
+            quiet(ActivityService.lastMessageAt(guild.id, userId)),
+            quiet(CosmosDBService.getBirthday(guild.id, userId)),
             BoosterPassService.has(guild.id, userId) ? quiet(BoosterPassService.get(guild.id, userId)) : null
         ]);
 

@@ -1,12 +1,13 @@
-﻿const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder, InteractionContextType, MessageFlags } = require('discord.js');
 const CosmosDBService = require('../services/CosmosDBService');
+const GuildSettingsService = require('../services/GuildSettingsService');
 const { formatDate, getDaysUntilBirthday } = require('../utils/dateUtils');
-const config = require('../config');
 
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('birthday')
         .setDescription("Check a user's birthday")
+        .setContexts(InteractionContextType.Guild)
         .addUserOption(option => 
             option
                 .setName('user')
@@ -16,26 +17,28 @@ module.exports = {
     async execute(interaction) {
         try {
             const targetUser = interaction.options.getUser('user');
-            const birthday = await CosmosDBService.getBirthday(targetUser.id);
+            // This server's list only: a date set on another server isn't shown here
+            const birthday = await CosmosDBService.getBirthday(interaction.guildId, targetUser.id);
 
             if (!birthday) {
                 return await interaction.reply({
                     content: `${targetUser.username} has not set their birthday yet.`,
-                    ephemeral: true
+                    flags: MessageFlags.Ephemeral
                 });
             }
 
             const date = new Date(2000, birthday.month - 1, birthday.day);
             const formattedDate = formatDate(date);
             const daysUntil = getDaysUntilBirthday(birthday.month, birthday.day);
-            const member = await interaction.guild.members.fetch(targetUser.id);
-            const displayName = member.displayName || targetUser.username;
+            const member = await interaction.guild.members.fetch(targetUser.id).catch(() => null);
+            const displayName = member?.displayName || targetUser.username;
             
-            // Determine pronoun based on roles
+            // Determine pronoun based on this server's roles
+            const { maleRoleId, femaleRoleId } = await GuildSettingsService.get(interaction.guildId);
             let pronoun = "their"; // default pronoun
-            if (member.roles.cache.has(config.maleRoleId)) {
+            if (maleRoleId && member?.roles.cache.has(maleRoleId)) {
                 pronoun = "his";
-            } else if (member.roles.cache.has(config.femaleRoleId)) {
+            } else if (femaleRoleId && member?.roles.cache.has(femaleRoleId)) {
                 pronoun = "her";
             }
 
@@ -74,7 +77,7 @@ module.exports = {
             console.error('Error in birthday command:', error);
             await interaction.reply({
                 content: 'There was an error fetching the birthday information!',
-                ephemeral: true
+                flags: MessageFlags.Ephemeral
             });
         }
     },

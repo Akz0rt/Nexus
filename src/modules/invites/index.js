@@ -8,6 +8,8 @@ module.exports = {
     register(client) {
         client.on(Events.InviteCreate, invite => { if (invite.guild?.invites) InviteTracker.refresh(invite.guild).catch(() => {}); });
         client.on(Events.InviteDelete, invite => { if (invite.guild?.invites) InviteTracker.refresh(invite.guild).catch(() => {}); });
+        // A server the bot just joined: remember its invites, so the first newcomers are traced too
+        client.on(Events.GuildCreate, guild => InviteTracker.snapshot(guild).catch(() => {}));
 
         client.on(Events.GuildMemberAdd, async member => {
             if (member.user.bot) return;
